@@ -1,0 +1,48 @@
+-- ==============================================================================
+-- SISTEMA DE PROGRAMACIÓN ACADÉMICA - MIGRACIÓN INICIAL FLYWAY
+-- ==============================================================================
+
+-- 1. Tabla de Facultades
+CREATE TABLE IF NOT EXISTS public."Facultad" (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    descripcion TEXT
+);
+
+-- 2. Tabla de Asignaturas
+CREATE TABLE IF NOT EXISTS public.asignaturas (
+    code_course VARCHAR(50) PRIMARY KEY,
+    name_course VARCHAR(150) NOT NULL,
+    credits INT DEFAULT 0,
+    is_elective BOOLEAN DEFAULT false,
+    es_complementaria BOOLEAN DEFAULT false,
+    es_basica BOOLEAN DEFAULT false,
+    facultad VARCHAR(150),
+    id_facultad INT
+);
+
+-- 3. Tabla de Programas Académicos (Carreras)
+CREATE TABLE IF NOT EXISTS public.programas (
+    code_program VARCHAR(50) PRIMARY KEY,
+    name_program VARCHAR(150) NOT NULL,
+    numero_semestre INT NOT NULL DEFAULT 10,
+    id_facultad_programa INT
+);
+
+-- 4. Tabla Intermedia: Pensum Académico (Malla Curricular)
+CREATE TABLE IF NOT EXISTS public.pensum_academico (
+    code_program VARCHAR(50) NOT NULL,
+    code_course VARCHAR(50) NOT NULL,
+    semestre INT NOT NULL,
+    is_elective BOOLEAN DEFAULT false,
+    facultad VARCHAR(150),
+    
+    PRIMARY KEY (code_program, code_course),
+    CONSTRAINT fk_pensum_programa FOREIGN KEY (code_program) REFERENCES public.programas(code_program) ON DELETE CASCADE,
+    CONSTRAINT fk_pensum_asignatura FOREIGN KEY (code_course) REFERENCES public.asignaturas(code_course) ON DELETE CASCADE
+);
+
+-- 5. Índices de optimización
+CREATE INDEX IF NOT EXISTS idx_pensum_program ON public.pensum_academico(code_program);
+CREATE INDEX IF NOT EXISTS idx_pensum_course ON public.pensum_academico(code_course);
+CREATE INDEX IF NOT EXISTS idx_pensum_semestre ON public.pensum_academico(code_program, semestre);

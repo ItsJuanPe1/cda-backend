@@ -1,3 +1,6 @@
+server:
+  port: ${PORT:8080}
+
 spring:
   application:
     name: cda-backend
@@ -11,5 +14,18 @@ spring:
     hibernate:
       ddl-auto: validate
     open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
   flyway:
     enabled: true
+    baseline-on-migrate: true
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGIN:http://localhost:5173,http://localhost:3000}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
