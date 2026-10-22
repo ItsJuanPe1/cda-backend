@@ -4,6 +4,11 @@ WORKDIR /app
 COPY gradle gradle
 COPY gradlew build.gradle settings.gradle ./
 COPY src src
+
+# Dar permisos de ejecución a gradlew
+RUN chmod +x gradlew
+
+# Compilar el JAR ignorando tests
 RUN ./gradlew bootJar --no-daemon -x test
 
 # 2. Fase de ejecución (Runtime) con JRE 21
