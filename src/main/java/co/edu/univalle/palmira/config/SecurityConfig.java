@@ -1,6 +1,7 @@
 package co.edu.univalle.palmira.config;
 
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,6 +25,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -32,87 +34,88 @@ import java.util.List;
 @EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
+
+    private static final String[] ADMIN = {"ROLE_ADMIN", "ADMIN"};
+    private static final String[] ADMIN_Y_COORDINADOR =
+            {"ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR"};
+    private static final String[] ADMIN_Y_DOCENTE =
+        {"ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE"};
+
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private String allowedOrigins;
 
-    @Value("${auth.jwt.secret:cda-backend-secret-key-univalle-palmira-2026-secure-token-32b}")
+    @Value("${auth.jwt.secret:}")
     private String jwtSecret;
+
+    private static void escribirError(HttpServletResponse res, int status, String message)
+            throws IOException {
+        res.setStatus(status);
+        res.setContentType("application/json;charset=UTF-8");
+        res.getWriter().write("{\"message\":\"" + message + "\"}");
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
         authoritiesConverter.setAuthoritiesClaimName("authorities");
         authoritiesConverter.setAuthorityPrefix("");
+
         JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
         authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
-        http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                        http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Rutas públicas de autenticación y documentación Swagger
+                        // Rutas públicas: autenticación, Swagger y health
                         .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
-                                "/v3/api-docs/**", "/actuator/health", "/error")
-                        .permitAll()
+                                "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
 
-                        // 0. Mi perfil: cualquier usuario autenticado (Admin, Coordinador o Docente)
-                        // puede consultar SU perfil de docente. Debe ir ANTES de la regla general
-                        // de /api/docentes/** porque se evalúa en orden y gana la primera que coincide.
+                        // 0. Mi perfil (GET): cualquier usuario autenticado (Admin, Coordinador o Docente).
+                        // DEBE ir antes de las reglas /** porque gana la primera que coincide.
                         .requestMatchers(HttpMethod.GET, "/api/docentes/me", "/api/coordinadores/me").authenticated()
 
-                        // Perfiles propios autenticados (/me)
-                        .requestMatchers("/api/coordinadores/me")
-                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR")
-                        .requestMatchers("/api/docentes/me")
-                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE")
+                        // Otros métodos sobre el perfil propio (p. ej. PUT): según el rol
+                        .requestMatchers("/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers("/api/docentes/me").hasAnyAuthority(ADMIN_Y_DOCENTE)
 
-                        // Perfiles propios autenticados (/me)
-                        .requestMatchers("/api/coordinadores/me")
-                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR")
-                        .requestMatchers("/api/docentes/me")
-                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE")
+                        // Períodos: exclusivo Administrador
+                        .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
 
-                        // 1. Módulo Plantilla (Docentes y Coordinadores):
-                        // Exclusivo para Administrador (Rol 1). Coordinadores y Docentes NO pueden ver
-                        // ni modificar la plantilla.
-                        .requestMatchers("/api/coordinadores/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
-                        .requestMatchers("/api/docentes/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
+                        .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
-                        // 2. Asignaturas y Mallas Curriculares (Pensum / Programas / Facultades /
-                        // Catálogos):
-                        // Coordinadores (Rol 2) SOLO pueden VER (GET) asignaturas y mallas
-                        // curriculares.
-                        // Docentes (Rol 3) NO tienen permiso de lectura ni escritura sobre las
-                        // funciones actuales.
-                        .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**", "/api/programas/**",
-                                "/api/facultades/**", "/api/catalogos/**")
-                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR")
+                        // 2. Asignaturas, mallas, programas, facultades y catálogos:
+                        // Coordinadores solo pueden consultar (GET)
+                        .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
+                                "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
+                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
-                        // 3. Creaciones y Modificaciones (POST, PUT, PATCH, DELETE) sobre cualquier
-                        // recurso:
-                        // Exclusivo para Administrador (Rol 1).
-                        .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
-                        .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
-                        .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
-                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        // 3. Creaciones y modificaciones: exclusivo Administrador
+                        .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority(ADMIN)
 
-                        // 4. Cualquier otra petición a la API: Exclusivo para Administrador (Rol 1)
-                        .requestMatchers("/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        // 4. Cualquier otra petición a la API: exclusivo Administrador
+                        .requestMatchers("/api/**").hasAnyAuthority(ADMIN)
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(
-                        oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));
+                .oauth2ResourceServer(oauth -> oauth
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
+                        .authenticationEntryPoint((req, res, ex) ->
+                                escribirError(res, 401, "Sesión no válida o expirada"))
+                        .accessDeniedHandler((req, res, ex) ->
+                                escribirError(res, 403, "No tiene permisos para esta acción")));
+
         return http.build();
     }
 
     @Bean
     public SecretKey jwtSecretKey() {
-        String secret = (jwtSecret != null && !jwtSecret.isBlank())
-                ? jwtSecret
-                : "cda-backend-secret-key-univalle-palmira-2026-secure-token-32b";
-        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
-            secret = "cda-backend-secret-key-univalle-palmira-2026-secure-token-32b";
-            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+            throw new IllegalStateException("JWT_SECRET debe tener al menos 32 bytes (256 bits)");
         }
         return new SecretKeySpec(keyBytes, "HmacSHA256");
     }
@@ -130,11 +133,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        List<String> origins = Arrays.stream(allowedOrigins.split(",")).map(String::trim).toList();
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim).toList();
         configuration.setAllowedOrigins(origins);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
