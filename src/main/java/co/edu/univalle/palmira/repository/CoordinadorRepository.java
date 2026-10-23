@@ -43,9 +43,27 @@ public interface CoordinadorRepository extends JpaRepository<Coordinador, Intege
                      "WHERE LOWER(c.correoInstitucional) = LOWER(:correo)")
        Optional<Coordinador> findByCorreoInstitucionalWithDetails(@Param("correo") String correo);
 
+       @Query("SELECT c FROM Coordinador c " +
+                     "LEFT JOIN FETCH c.programa " +
+                     "LEFT JOIN FETCH c.categoria " +
+                     "LEFT JOIN FETCH c.tipoContrato " +
+                     "WHERE c.programa.codeProgram = :codeProgram " +
+                     "ORDER BY c.nombreCompleto ASC")
+       List<Coordinador> findByProgramaCodeProgram(@Param("codeProgram") String codeProgram);
+
+       @Query("SELECT c FROM Coordinador c " +
+                     "LEFT JOIN FETCH c.programa " +
+                     "LEFT JOIN FETCH c.categoria " +
+                     "LEFT JOIN FETCH c.tipoContrato " +
+                     "WHERE LOWER(c.correoInstitucional) = LOWER(:correoInstitucional)")
+       Optional<Coordinador> findByCorreoInstitucionalWithDetails(
+                     @Param("correoInstitucional") String correoInstitucional);
+
        boolean existsByIdentificacion(String identificacion);
 
        boolean existsByCorreoInstitucionalIgnoreCase(String correoInstitucional);
 
        Optional<Coordinador> findByIdentificacion(String identificacion);
+
+       Optional<Coordinador> findByCorreoInstitucionalIgnoreCase(String correoInstitucional);
 }

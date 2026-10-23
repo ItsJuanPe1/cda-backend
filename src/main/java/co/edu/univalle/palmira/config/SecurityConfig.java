@@ -60,6 +60,18 @@ public class SecurityConfig {
                         // de /api/docentes/** porque se evalúa en orden y gana la primera que coincide.
                         .requestMatchers(HttpMethod.GET, "/api/docentes/me", "/api/coordinadores/me").authenticated()
 
+                        // Perfiles propios autenticados (/me)
+                        .requestMatchers("/api/coordinadores/me")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR")
+                        .requestMatchers("/api/docentes/me")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE")
+
+                        // Perfiles propios autenticados (/me)
+                        .requestMatchers("/api/coordinadores/me")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR")
+                        .requestMatchers("/api/docentes/me")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE")
+
                         // 1. Módulo Plantilla (Docentes y Coordinadores):
                         // Exclusivo para Administrador (Rol 1). Coordinadores y Docentes NO pueden ver
                         // ni modificar la plantilla.
