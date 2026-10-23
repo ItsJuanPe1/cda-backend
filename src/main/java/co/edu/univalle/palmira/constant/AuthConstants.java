@@ -17,5 +17,6 @@ public final class AuthConstants {
     public static final String ERROR_CUENTA_NO_REGISTRADA = "Su cuenta no está registrada. Contacte al administrador";
     public static final String ERROR_CUENTA_DESACTIVADA = "Su cuenta está desactivada";
     public static final String ERROR_SIN_PERMISOS_ADMIN = "No tiene permisos de administrador";
+    public static final String ERROR_SIN_PERMISOS_DOCENTE = "No tiene permisos de Docente";
     public static final String LOGIN_SUCCESS_MESSAGE = "Inicio de sesión exitoso";
 }

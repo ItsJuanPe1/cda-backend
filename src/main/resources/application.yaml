@@ -43,3 +43,7 @@ auth:
   jwt:
     secret: ${JWT_SECRET:${AUTH_JWT_SECRET:cda-backend-secret-key-univalle-palmira-2026-secure-token-32b}}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
+
+disponibilidad:
+  hora-inicio: ${DISPONIBILIDAD_HORA_INICIO:06:00}
+  hora-fin: ${DISPONIBILIDAD_HORA_FIN:22:00}

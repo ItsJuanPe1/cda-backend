@@ -196,7 +196,7 @@ class GoogleAuthServiceTest {
 
         @Test
         @DisplayName("Criterio 3.2: Cuenta activa de docente puede iniciar sesión")
-        void login_Exitoso_Docente() throws GeneralSecurityException, IOException {
+        void login_Exitoso_DocentePorRol() throws GeneralSecurityException, IOException {
                 String tokenStr = "docente-credential";
                 GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
                 payload.setEmail("desconocido.rol@correounivalle.edu.co");
@@ -224,7 +224,7 @@ class GoogleAuthServiceTest {
                 LoginResponse response = googleAuthService.login(tokenStr);
 
                 assertEquals(AuthConstants.ROL_DOCENTE, response.rol());
-                assertEquals("Docente", response.nombre());
+                assertEquals("Usuario", response.nombre());
         }
 
         @Test

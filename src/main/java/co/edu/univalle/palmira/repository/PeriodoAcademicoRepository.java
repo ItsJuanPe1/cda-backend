@@ -19,6 +19,6 @@ public interface PeriodoAcademicoRepository extends JpaRepository<PeriodoAcademi
 
     @Modifying
     @Transactional
-    @Query("update PeriodoAcademico p set p.vigente = false where p.vigente = true")
+    @Query("update PeriodoAcademico p set p.vigente = false, p.estado = 'HISTORIAL' where p.vigente = true")
     int marcarVigenteComoHistorial();
 }

@@ -122,7 +122,8 @@ public class GoogleAuthService {
                 || (usuario.getRol() != AuthConstants.ROL_ADMIN
                 && usuario.getRol() != AuthConstants.ROL_COORDINADOR
                 && usuario.getRol() != AuthConstants.ROL_DOCENTE)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    AuthConstants.ERROR_SIN_PERMISOS_DOCENTE);
         }
 
         // 6. Todo correcto: emitir las autoridades correspondientes al rol.

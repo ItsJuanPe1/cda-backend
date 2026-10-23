@@ -62,6 +62,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/periodos/**")
                                 .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers("/api/periodos/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.POST, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
 
                         // 3. Asignaturas y Mallas: el coordinador puede consultar.
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**", "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")

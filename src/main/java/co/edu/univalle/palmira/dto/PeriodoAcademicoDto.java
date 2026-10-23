@@ -36,6 +36,6 @@ public final class PeriodoAcademicoDto {
             LocalDate fechaCancelacionInicio, LocalDate fechaCancelacionFin,
             Instant plazoDocenteInicio, Instant plazoDocenteFin,
             Instant plazoCoordinadorInicio, Instant plazoCoordinadorFin,
-            String enlaceResolucion, boolean vigente, long version
+            String enlaceResolucion, boolean vigente, String estado, long version
     ) {}
 }

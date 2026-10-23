@@ -33,6 +33,7 @@ public class PeriodoAcademicoService {
         repository.marcarVigenteComoHistorial();
         PeriodoAcademico periodo = fromRequest(request);
         periodo.setVigente(true);
+        periodo.setEstado("VIGENTE");
         return toResponse(repository.save(periodo));
     }
 
@@ -49,6 +50,18 @@ public class PeriodoAcademicoService {
         validar(request, id);
         copy(request, periodo);
         return toResponse(repository.save(periodo));
+    }
+
+    @Transactional
+    public void desactivar(Long id) {
+        PeriodoAcademico periodo = repository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado"));
+        if (!periodo.isVigente()) {
+            throw new BadRequestException("Solo el período vigente se puede eliminar");
+        }
+        periodo.setVigente(false);
+        periodo.setEstado("DESACTIVADO");
+        repository.save(periodo);
     }
 
     private void validar(PeriodoAcademicoDto.Request r, Long id) {
@@ -119,6 +132,7 @@ public class PeriodoAcademicoService {
         return new PeriodoAcademicoDto.Response(p.getId(), p.getNombre(), p.getNumeroResolucion(), p.getFechaResolucion(),
                 p.getFechaInicioSemestre(), p.getFechaFinSemestre(), p.getFechaAdicionInicio(), p.getFechaAdicionFin(),
                 p.getFechaCancelacionInicio(), p.getFechaCancelacionFin(), p.getPlazoDocenteInicio(), p.getPlazoDocenteFin(),
-                p.getPlazoCoordinadorInicio(), p.getPlazoCoordinadorFin(), p.getEnlaceResolucion(), p.isVigente(), p.getVersion());
+                p.getPlazoCoordinadorInicio(), p.getPlazoCoordinadorFin(), p.getEnlaceResolucion(),
+                p.isVigente(), p.getEstado(), p.getVersion());
     }
 }

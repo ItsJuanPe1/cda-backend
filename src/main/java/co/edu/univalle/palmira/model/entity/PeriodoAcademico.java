@@ -50,6 +50,8 @@ public class PeriodoAcademico {
     private String enlaceResolucion;
     @Column(nullable = false)
     private boolean vigente;
+    @Column(nullable = false, length = 20)
+    private String estado;
     @Version
     private long version;
     @Column(name = "created_at", nullable = false, updatable = false)

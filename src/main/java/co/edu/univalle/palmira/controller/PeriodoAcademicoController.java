@@ -31,7 +31,14 @@ public class PeriodoAcademicoController {
     }
 
     @PutMapping("/{id}")
-    public PeriodoAcademicoDto.Response actualizar(@PathVariable Long id, @Valid @RequestBody PeriodoAcademicoDto.Request request) {
+    public PeriodoAcademicoDto.Response actualizar(@PathVariable("id") Long id,
+            @Valid @RequestBody PeriodoAcademicoDto.Request request) {
         return service.actualizar(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void desactivar(@PathVariable("id") Long id) {
+        service.desactivar(id);
     }
 }
