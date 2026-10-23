@@ -4,6 +4,7 @@ import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.GoogleLoginRequest;
 import co.edu.univalle.palmira.dto.LoginResponse;
 import co.edu.univalle.palmira.model.entity.Coordinador;
+import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.Usuario;
 import co.edu.univalle.palmira.repository.CoordinadorRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
@@ -25,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -153,10 +155,12 @@ public class GoogleAuthService {
                 return resolverLoginCoordinador(cleanEmail);
             } else if (rolEsperado == AuthConstants.ROL_ADMIN) {
                 return resolverLoginAdmin(cleanEmail);
+            } else if (rolEsperado == AuthConstants.ROL_DOCENTE) {
+                return resolverLoginDocente(cleanEmail);
             }
         }
 
-        // 4. Si no se especificó rol, auto-detectar: Coordinador -> Administrador
+        // 4. Si no se especificó rol, auto-detectar: Coordinador -> Administrador -> Docente
         if (coordinadorRepository != null) {
             Optional<Coordinador> coordinadorOpt = coordinadorRepository.findByCorreoInstitucionalWithDetails(cleanEmail);
             if (coordinadorOpt.isPresent()) {
@@ -168,6 +172,13 @@ public class GoogleAuthService {
             Optional<Usuario> usuarioOpt = usuarioRepository.buscarPorCorreoInstitucional(cleanEmail);
             if (usuarioOpt.isPresent()) {
                 return emitirSesionAdmin(usuarioOpt.get());
+            }
+        }
+
+        if (docenteRepository != null) {
+            Optional<Docente> docenteOpt = docenteRepository.findByCorreoInstitucional(cleanEmail);
+            if (docenteOpt.isPresent()) {
+                return emitirSesionDocente(docenteOpt.get());
             }
         }
 
@@ -184,12 +195,31 @@ public class GoogleAuthService {
             return emitirSesionCoordinador(coordinadorOpt.get());
         }
 
-        // Si no es coordinador, verificar si existe en otro rol del sistema (Criterio 3.3)
         boolean existeEnOtroRol = (usuarioRepository != null && usuarioRepository.buscarPorCorreoInstitucional(email).isPresent())
                 || (docenteRepository != null && docenteRepository.existsByCorreoInstitucional(email));
 
         if (existeEnOtroRol) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_COORDINADOR);
+        }
+
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA);
+    }
+
+    private LoginResponse resolverLoginDocente(String email) {
+        if (docenteRepository == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Repositorio de docentes no disponible");
+        }
+
+        Optional<Docente> docenteOpt = docenteRepository.findByCorreoInstitucional(email);
+        if (docenteOpt.isPresent()) {
+            return emitirSesionDocente(docenteOpt.get());
+        }
+
+        boolean existeEnOtroRol = (usuarioRepository != null && usuarioRepository.buscarPorCorreoInstitucional(email).isPresent())
+                || (coordinadorRepository != null && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email));
+
+        if (existeEnOtroRol) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_DOCENTE);
         }
 
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA);
@@ -219,6 +249,13 @@ public class GoogleAuthService {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 
+        List<String> authorities = new ArrayList<>(List.of("ROLE_COORDINADOR", "COORDINADOR"));
+        // RN-07: Si el coordinador también está registrado como docente, hereda perfil docente
+        if (docenteRepository != null && docenteRepository.existsByCorreoInstitucional(coordinador.getCorreoInstitucional())) {
+            authorities.add("ROLE_DOCENTE");
+            authorities.add("DOCENTE");
+        }
+
         JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
                 .issuer("cda-backend")
                 .subject(String.valueOf(coordinador.getId()))
@@ -228,7 +265,7 @@ public class GoogleAuthService {
                 .claim("nombre", nombre)
                 .claim("apellido", apellido)
                 .claim("rol", AuthConstants.ROL_COORDINADOR)
-                .claim("authorities", List.of("ROLE_COORDINADOR", "COORDINADOR"));
+                .claim("authorities", authorities);
 
         if (codeProgram != null) {
             claimsBuilder.claim("codeProgram", codeProgram);
@@ -249,6 +286,52 @@ public class GoogleAuthService {
                 codeProgram,
                 nombrePrograma,
                 mensaje
+        );
+    }
+
+    private LoginResponse emitirSesionDocente(Docente docente) {
+        if (Boolean.FALSE.equals(docente.getEstado())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO);
+        }
+
+        String codeProgram = docente.getPrograma() != null ? docente.getPrograma().getCodeProgram() : null;
+        String nombrePrograma = docente.getPrograma() != null ? docente.getPrograma().getNameProgram() : null;
+
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
+
+        List<String> authorities = List.of("ROLE_DOCENTE", "DOCENTE");
+
+        JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
+                .issuer("cda-backend")
+                .subject(String.valueOf(docente.getId()))
+                .issuedAt(now)
+                .expiresAt(expiresAt)
+                .claim("email", docente.getCorreoInstitucional())
+                .claim("nombre", docente.getNombres())
+                .claim("apellido", docente.getApellidos())
+                .claim("rol", AuthConstants.ROL_DOCENTE)
+                .claim("authorities", authorities);
+
+        if (codeProgram != null) {
+            claimsBuilder.claim("codeProgram", codeProgram);
+        }
+
+        String token = jwtEncoder.encode(JwtEncoderParameters.from(
+                JwsHeader.with(MacAlgorithm.HS256).build(), claimsBuilder.build())).getTokenValue();
+
+        return new LoginResponse(
+                token,
+                "Bearer",
+                expirationMinutes * 60,
+                docente.getId().intValue(),
+                docente.getNombres(),
+                docente.getApellidos(),
+                docente.getCorreoInstitucional(),
+                AuthConstants.ROL_DOCENTE,
+                codeProgram,
+                nombrePrograma,
+                AuthConstants.LOGIN_SUCCESS_MESSAGE
         );
     }
 
@@ -283,6 +366,14 @@ public class GoogleAuthService {
 
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
+
+        List<String> authorities = new ArrayList<>(List.of("ROLE_ADMIN", "ADMIN"));
+        // RN-07: Si el administrador también dicta clase, tiene perfil docente
+        if (docenteRepository != null && docenteRepository.existsByCorreoInstitucional(usuario.getEmailInstitucional())) {
+            authorities.add("ROLE_DOCENTE");
+            authorities.add("DOCENTE");
+        }
+
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("cda-backend")
                 .subject(String.valueOf(usuario.getId()))
@@ -292,7 +383,7 @@ public class GoogleAuthService {
                 .claim("nombre", usuario.getNombre())
                 .claim("apellido", usuario.getApellido())
                 .claim("rol", usuario.getRol())
-                .claim("authorities", List.of("ROLE_ADMIN", "ADMIN"))
+                .claim("authorities", authorities)
                 .build();
 
         String token = jwtEncoder.encode(JwtEncoderParameters.from(
