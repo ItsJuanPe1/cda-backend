@@ -28,7 +28,7 @@ public class PensumController {
 
     @GetMapping("/programa/{codeProgram}")
     @Operation(summary = "Obtener la malla curricular completa de un programa con detalles de asignaturas")
-    public ResponseEntity<List<PensumItemDto.Response>> getByProgram(@PathVariable String codeProgram) {
+    public ResponseEntity<List<PensumItemDto.Response>> getByProgram(@PathVariable("codeProgram") String codeProgram) {
         return ResponseEntity.ok(pensumService.getByProgram(codeProgram));
     }
 
@@ -46,11 +46,20 @@ public class PensumController {
         return ResponseEntity.ok(pensumService.updateCourseSemester(request));
     }
 
+    @PatchMapping("/{codeProgram}/{codeCourse}/estado")
+    @Operation(summary = "Habilitar o deshabilitar una asignatura en el pensum")
+    public ResponseEntity<PensumItemDto.Response> cambiarEstado(
+            @PathVariable("codeProgram") String codeProgram,
+            @PathVariable("codeCourse") String codeCourse,
+            @RequestParam("activo") Boolean activo) {
+        return ResponseEntity.ok(pensumService.cambiarEstado(codeProgram, codeCourse, activo));
+    }
+
     @DeleteMapping("/{codeProgram}/{codeCourse}")
     @Operation(summary = "Eliminar una asignatura del pensum de un programa")
     public ResponseEntity<Void> removeCourseFromPensum(
-            @PathVariable String codeProgram,
-            @PathVariable String codeCourse) {
+            @PathVariable("codeProgram") String codeProgram,
+            @PathVariable("codeCourse") String codeCourse) {
         pensumService.removeCourseFromPensum(codeProgram, codeCourse);
         return ResponseEntity.noContent().build();
     }

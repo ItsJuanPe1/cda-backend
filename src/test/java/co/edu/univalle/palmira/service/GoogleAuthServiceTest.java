@@ -215,9 +215,11 @@ class GoogleAuthServiceTest {
         String tokenStr = "invalid-token";
         when(tokenVerifier.verify(tokenStr)).thenReturn(null);
 
+
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
                 googleAuthService.login(tokenStr)
         );
+
 
         assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
         assertEquals(AuthConstants.ERROR_LOGIN_FALLIDO, ex.getReason());

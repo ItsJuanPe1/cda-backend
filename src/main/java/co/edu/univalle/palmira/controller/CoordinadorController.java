@@ -49,13 +49,13 @@ public class CoordinadorController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Obtener un coordinador por ID")
-    public ResponseEntity<CoordinadorDto.Response> getById(@PathVariable Integer id) {
+    public ResponseEntity<CoordinadorDto.Response> getById(@PathVariable("id") Integer id) {
         return ResponseEntity.ok(coordinadorService.getById(id));
     }
 
     @GetMapping("/programa/{codeProgram}")
     @Operation(summary = "Listar coordinadores de un programa académico específico")
-    public ResponseEntity<List<CoordinadorDto.Response>> getByPrograma(@PathVariable String codeProgram) {
+    public ResponseEntity<List<CoordinadorDto.Response>> getByPrograma(@PathVariable("codeProgram") String codeProgram) {
         return ResponseEntity.ok(coordinadorService.getByPrograma(codeProgram));
     }
 
@@ -68,7 +68,7 @@ public class CoordinadorController {
     @PutMapping("/{id}")
     @Operation(summary = "Actualizar información de un coordinador existente")
     public ResponseEntity<CoordinadorDto.Response> update(
-            @PathVariable Integer id,
+            @PathVariable("id") Integer id,
             @Valid @RequestBody CoordinadorDto.UpdateRequest request) {
         return ResponseEntity.ok(coordinadorService.update(id, request));
     }
@@ -76,14 +76,14 @@ public class CoordinadorController {
     @PatchMapping("/{id}/estado")
     @Operation(summary = "Cambiar estado activo/inactivo de un coordinador")
     public ResponseEntity<CoordinadorDto.Response> cambiarEstado(
-            @PathVariable Integer id,
+            @PathVariable("id") Integer id,
             @RequestParam("activo") Boolean activo) {
         return ResponseEntity.ok(coordinadorService.cambiarEstado(id, activo));
     }
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar un coordinador")
-    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+    public ResponseEntity<Void> delete(@PathVariable("id") Integer id) {
         coordinadorService.delete(id);
         return ResponseEntity.noContent().build();
     }

@@ -69,6 +69,7 @@ public class PensumService {
                 .semestre(semestre)
                 .isElective(asignatura.getIsElective())
                 .facultad(asignatura.getFacultad())
+                .activo(true)
                 .build();
 
         PensumAcademico saved = pensumRepository.save(pensum);
@@ -91,6 +92,21 @@ public class PensumService {
                         "Asignación no encontrada para programa " + progCode + " y asignatura " + courseCode));
 
         pensum.setSemestre(semestre);
+        PensumAcademico updated = pensumRepository.save(pensum);
+        return toResponse(updated);
+    }
+
+    @Transactional
+    public PensumItemDto.Response cambiarEstado(String codeProgram, String codeCourse, Boolean activo) {
+        String progCode = codeProgram.trim().toUpperCase();
+        String courseCode = codeCourse.trim().toUpperCase();
+        PensumId id = new PensumId(progCode, courseCode);
+
+        PensumAcademico pensum = pensumRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Asignación no encontrada para programa " + progCode + " y asignatura " + courseCode));
+
+        pensum.setActivo(Boolean.TRUE.equals(activo));
         PensumAcademico updated = pensumRepository.save(pensum);
         return toResponse(updated);
     }
@@ -120,7 +136,8 @@ public class PensumService {
                 a != null ? a.getIsElective() : p.getIsElective(),
                 a != null ? a.getEsComplementaria() : false,
                 a != null ? a.getEsBasica() : false,
-                a != null ? a.getFacultad() : p.getFacultad()
+                a != null ? a.getFacultad() : p.getFacultad(),
+                p.getActivo() != null ? p.getActivo() : true
         );
     }
 }

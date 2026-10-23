@@ -40,4 +40,8 @@ public class Asignatura {
 
     @Column(name = "id_facultad")
     private Integer idFacultad;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean activo = true;
 }
