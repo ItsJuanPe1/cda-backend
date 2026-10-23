@@ -1,12 +1,17 @@
 package co.edu.univalle.palmira.service;
 
+import co.edu.univalle.palmira.dto.CatalogoItemDto;
 import co.edu.univalle.palmira.dto.CoordinadorDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
+import co.edu.univalle.palmira.model.entity.Categoria;
 import co.edu.univalle.palmira.model.entity.Coordinador;
 import co.edu.univalle.palmira.model.entity.Programa;
+import co.edu.univalle.palmira.model.entity.TipoContrato;
+import co.edu.univalle.palmira.repository.CategoriaRepository;
 import co.edu.univalle.palmira.repository.CoordinadorRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
+import co.edu.univalle.palmira.repository.TipoContratoRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,10 +24,12 @@ public class CoordinadorService {
 
     private final CoordinadorRepository coordinadorRepository;
     private final ProgramaRepository programaRepository;
+    private final CategoriaRepository categoriaRepository;
+    private final TipoContratoRepository tipoContratoRepository;
 
     @Transactional(readOnly = true)
     public List<CoordinadorDto.Response> getAll() {
-        return coordinadorRepository.findAllWithPrograma()
+        return coordinadorRepository.findAllWithDetails()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -30,7 +37,7 @@ public class CoordinadorService {
 
     @Transactional(readOnly = true)
     public CoordinadorDto.Response getById(Integer id) {
-        Coordinador coordinador = coordinadorRepository.findByIdWithPrograma(id)
+        Coordinador coordinador = coordinadorRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
         return toResponse(coordinador);
     }
@@ -41,6 +48,22 @@ public class CoordinadorService {
         return coordinadorRepository.findByProgramaCodeProgram(normalizedCode)
                 .stream()
                 .map(this::toResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CatalogoItemDto> getCategorias() {
+        return categoriaRepository.findAllByOrderByNombreAsc()
+                .stream()
+                .map(cat -> new CatalogoItemDto(cat.getId(), cat.getNombre()))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<CatalogoItemDto> getTiposContrato() {
+        return tipoContratoRepository.findAllByOrderByNombreAsc()
+                .stream()
+                .map(tc -> new CatalogoItemDto(tc.getId(), tc.getNombre()))
                 .toList();
     }
 
@@ -63,6 +86,9 @@ public class CoordinadorService {
                     .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código: " + progCode));
         }
 
+        Categoria categoria = resolveCategoria(request.idCategoria(), request.categoria());
+        TipoContrato tipoContrato = resolveTipoContrato(request.idTipoContrato(), request.tipoContrato());
+
         Coordinador coordinador = Coordinador.builder()
                 .identificacion(idDoc)
                 .nombreCompleto(request.nombreCompleto().trim())
@@ -70,8 +96,8 @@ public class CoordinadorService {
                 .correoInstitucional(emailInst)
                 .telefono(request.telefono() != null ? request.telefono().trim() : null)
                 .programa(programa)
-                .categoria(request.categoria() != null && !request.categoria().trim().isEmpty() ? request.categoria().trim() : "Auxiliar")
-                .tipoContrato(request.tipoContrato() != null && !request.tipoContrato().trim().isEmpty() ? request.tipoContrato().trim() : "Nombrado")
+                .categoria(categoria)
+                .tipoContrato(tipoContrato)
                 .activo(request.activo() != null ? request.activo() : true)
                 .build();
 
@@ -80,7 +106,7 @@ public class CoordinadorService {
 
     @Transactional
     public CoordinadorDto.Response update(Integer id, CoordinadorDto.UpdateRequest request) {
-        Coordinador coordinador = coordinadorRepository.findById(id)
+        Coordinador coordinador = coordinadorRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
 
         if (request.nombreCompleto() != null && !request.nombreCompleto().trim().isEmpty()) {
@@ -115,12 +141,12 @@ public class CoordinadorService {
             }
         }
 
-        if (request.categoria() != null && !request.categoria().trim().isEmpty()) {
-            coordinador.setCategoria(request.categoria().trim());
+        if (request.idCategoria() != null || request.categoria() != null) {
+            coordinador.setCategoria(resolveCategoria(request.idCategoria(), request.categoria()));
         }
 
-        if (request.tipoContrato() != null && !request.tipoContrato().trim().isEmpty()) {
-            coordinador.setTipoContrato(request.tipoContrato().trim());
+        if (request.idTipoContrato() != null || request.tipoContrato() != null) {
+            coordinador.setTipoContrato(resolveTipoContrato(request.idTipoContrato(), request.tipoContrato()));
         }
 
         if (request.activo() != null) {
@@ -138,8 +164,37 @@ public class CoordinadorService {
         coordinadorRepository.deleteById(id);
     }
 
+    private Categoria resolveCategoria(Integer idCategoria, String nombreCategoria) {
+        if (idCategoria != null) {
+            return categoriaRepository.findById(idCategoria)
+                    .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con ID: " + idCategoria));
+        }
+        if (nombreCategoria != null && !nombreCategoria.trim().isEmpty()) {
+            return categoriaRepository.findByNombreIgnoreCase(nombreCategoria.trim())
+                    .orElseGet(() -> categoriaRepository.findByNombreIgnoreCase("Auxiliar")
+                            .orElse(null));
+        }
+        return categoriaRepository.findByNombreIgnoreCase("Auxiliar").orElse(null);
+    }
+
+    private TipoContrato resolveTipoContrato(Integer idTipoContrato, String nombreTipoContrato) {
+        if (idTipoContrato != null) {
+            return tipoContratoRepository.findById(idTipoContrato)
+                    .orElseThrow(() -> new ResourceNotFoundException("Tipo de contrato no encontrado con ID: " + idTipoContrato));
+        }
+        if (nombreTipoContrato != null && !nombreTipoContrato.trim().isEmpty()) {
+            return tipoContratoRepository.findByNombreIgnoreCase(nombreTipoContrato.trim())
+                    .orElseGet(() -> tipoContratoRepository.findByNombreIgnoreCase("Nombrado")
+                            .orElse(null));
+        }
+        return tipoContratoRepository.findByNombreIgnoreCase("Nombrado").orElse(null);
+    }
+
     private CoordinadorDto.Response toResponse(Coordinador c) {
         Programa p = c.getPrograma();
+        Categoria cat = c.getCategoria();
+        TipoContrato tc = c.getTipoContrato();
+
         return new CoordinadorDto.Response(
                 c.getId(),
                 c.getIdentificacion(),
@@ -149,8 +204,10 @@ public class CoordinadorService {
                 c.getTelefono(),
                 p != null ? p.getCodeProgram() : null,
                 p != null ? p.getNameProgram() : null,
-                c.getCategoria() != null ? c.getCategoria() : "Auxiliar",
-                c.getTipoContrato() != null ? c.getTipoContrato() : "Nombrado",
+                cat != null ? cat.getId() : null,
+                cat != null ? cat.getNombre() : "Auxiliar",
+                tc != null ? tc.getId() : null,
+                tc != null ? tc.getNombre() : "Nombrado",
                 c.getActivo(),
                 c.getCreatedAt()
         );
