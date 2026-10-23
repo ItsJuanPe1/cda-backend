@@ -1,8 +1,13 @@
 package co.edu.univalle.palmira.service;
 
 import co.edu.univalle.palmira.constant.AuthConstants;
+import co.edu.univalle.palmira.dto.GoogleLoginRequest;
 import co.edu.univalle.palmira.dto.LoginResponse;
+import co.edu.univalle.palmira.model.entity.Coordinador;
+import co.edu.univalle.palmira.model.entity.Programa;
 import co.edu.univalle.palmira.model.entity.Usuario;
+import co.edu.univalle.palmira.repository.CoordinadorRepository;
+import co.edu.univalle.palmira.repository.DocenteRepository;
 import co.edu.univalle.palmira.repository.UsuarioRepository;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
@@ -20,7 +25,6 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
-import java.time.Instant;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -32,6 +36,12 @@ class GoogleAuthServiceTest {
 
     @Mock
     private UsuarioRepository usuarioRepository;
+
+    @Mock
+    private CoordinadorRepository coordinadorRepository;
+
+    @Mock
+    private DocenteRepository docenteRepository;
 
     @Mock
     private JwtEncoder jwtEncoder;
@@ -51,12 +61,18 @@ class GoogleAuthServiceTest {
     void setUp() {
         googleAuthService = new GoogleAuthService(
                 usuarioRepository,
+                coordinadorRepository,
+                docenteRepository,
                 jwtEncoder,
                 CLIENT_ID,
                 EXPIRATION_MINUTES,
                 tokenVerifier
         );
     }
+
+    // =========================================================================
+    // HU-001: TESTS DE LOGIN ADMINISTRADOR
+    // =========================================================================
 
     @Test
     @DisplayName("Criterio 1.3 y 3.1: Admin autenticado con correo institucional activo y rol 1")
@@ -80,6 +96,8 @@ class GoogleAuthServiceTest {
                 .activo(true)
                 .build();
 
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("admin.sistema@correounivalle.edu.co"))
+                .thenReturn(Optional.empty());
         when(usuarioRepository.buscarPorCorreoInstitucional("admin.sistema@correounivalle.edu.co"))
                 .thenReturn(Optional.of(admin));
 
@@ -145,6 +163,8 @@ class GoogleAuthServiceTest {
         when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
         when(googleIdToken.getPayload()).thenReturn(payload);
 
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("desconocido@correounivalle.edu.co"))
+                .thenReturn(Optional.empty());
         when(usuarioRepository.buscarPorCorreoInstitucional("desconocido@correounivalle.edu.co"))
                 .thenReturn(Optional.empty());
 
@@ -157,7 +177,7 @@ class GoogleAuthServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 2.3: Cuenta desactivada")
+    @DisplayName("Criterio 2.3: Cuenta desactivada de administrador")
     void login_Error_CuentaDesactivada() throws GeneralSecurityException, IOException {
         String tokenStr = "deactivated-google-credential";
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
@@ -176,6 +196,8 @@ class GoogleAuthServiceTest {
                 .activo(false)
                 .build();
 
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("inactivo@correounivalle.edu.co"))
+                .thenReturn(Optional.empty());
         when(usuarioRepository.buscarPorCorreoInstitucional("inactivo@correounivalle.edu.co"))
                 .thenReturn(Optional.of(usuarioInactivo));
 
@@ -221,6 +243,8 @@ class GoogleAuthServiceTest {
                 .activo(true)
                 .build();
 
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("docente@correounivalle.edu.co"))
+                .thenReturn(Optional.empty());
         when(usuarioRepository.buscarPorCorreoInstitucional("docente@correounivalle.edu.co"))
                 .thenReturn(Optional.of(docente));
 
@@ -232,34 +256,176 @@ class GoogleAuthServiceTest {
         assertEquals(AuthConstants.ERROR_SIN_PERMISOS_ADMIN, ex.getReason());
     }
 
+    // =========================================================================
+    // HU-010: TESTS DE LOGIN COORDINADOR
+    // =========================================================================
+
     @Test
-    @DisplayName("Orden de validaciones: Cuenta desactivada sin rol de admin debe mostrar 'Su cuenta está desactivada'")
-    void login_Error_DesactivadaGanaASinRol() throws GeneralSecurityException, IOException {
-        String tokenStr = "deactivated-docente-credential";
+    @DisplayName("HU-010 Criterio 1.3 y 3.1: Login exitoso de Coordinador con programa asignado")
+    void login_Exitoso_Coordinador_ConPrograma() throws GeneralSecurityException, IOException {
+        String tokenStr = "valid-coord-token";
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
-        payload.setEmail("inactivo.otro@correounivalle.edu.co");
+        payload.setEmail("coordinador.sistemas@correounivalle.edu.co");
+        payload.setEmailVerified(true);
+        payload.set("hd", "correounivalle.edu.co");
+
+        when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+        when(googleIdToken.getPayload()).thenReturn(payload);
+
+        Programa programa = Programa.builder()
+                .codeProgram("3743")
+                .nameProgram("Tecnología en Desarrollo de Software")
+                .build();
+
+        Coordinador coordinador = Coordinador.builder()
+                .id(10)
+                .identificacion("111222333")
+                .nombreCompleto("Juan Pérez Gómez")
+                .correoInstitucional("coordinador.sistemas@correounivalle.edu.co")
+                .programa(programa)
+                .activo(true)
+                .build();
+
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("coordinador.sistemas@correounivalle.edu.co"))
+                .thenReturn(Optional.of(coordinador));
+
+        Jwt mockJwt = mock(Jwt.class);
+        when(mockJwt.getTokenValue()).thenReturn("coord-jwt-token");
+        when(jwtEncoder.encode(any(JwtEncoderParameters.class))).thenReturn(mockJwt);
+
+        GoogleLoginRequest request = new GoogleLoginRequest(tokenStr, AuthConstants.ROL_COORDINADOR);
+        LoginResponse response = googleAuthService.login(request);
+
+        assertNotNull(response);
+        assertEquals("coord-jwt-token", response.token());
+        assertEquals(AuthConstants.ROL_COORDINADOR, response.rol());
+        assertEquals("3743", response.codeProgram());
+        assertEquals("Tecnología en Desarrollo de Software", response.nombrePrograma());
+        assertEquals("Juan Pérez", response.nombre());
+        assertEquals("Gómez", response.apellido());
+        assertEquals(AuthConstants.LOGIN_SUCCESS_MESSAGE, response.mensaje());
+    }
+
+    @Test
+    @DisplayName("HU-010 Criterio 3.4: Coordinador activo sin programa asignado debe permitir acceso con mensaje de aviso")
+    void login_Exitoso_Coordinador_SinProgramaAsignado() throws GeneralSecurityException, IOException {
+        String tokenStr = "valid-coord-token-sin-prog";
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("coord.nuevo@correounivalle.edu.co");
+        payload.setEmailVerified(true);
+        payload.set("hd", "correounivalle.edu.co");
+
+        when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+        when(googleIdToken.getPayload()).thenReturn(payload);
+
+        Coordinador coordinador = Coordinador.builder()
+                .id(12)
+                .identificacion("999888777")
+                .nombreCompleto("Ana López")
+                .correoInstitucional("coord.nuevo@correounivalle.edu.co")
+                .programa(null) // Sin programa asignado
+                .activo(true)
+                .build();
+
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("coord.nuevo@correounivalle.edu.co"))
+                .thenReturn(Optional.of(coordinador));
+
+        Jwt mockJwt = mock(Jwt.class);
+        when(mockJwt.getTokenValue()).thenReturn("coord-jwt-token-2");
+        when(jwtEncoder.encode(any(JwtEncoderParameters.class))).thenReturn(mockJwt);
+
+        GoogleLoginRequest request = new GoogleLoginRequest(tokenStr, AuthConstants.ROL_COORDINADOR);
+        LoginResponse response = googleAuthService.login(request);
+
+        assertNotNull(response);
+        assertEquals(AuthConstants.ROL_COORDINADOR, response.rol());
+        assertNull(response.codeProgram());
+        assertNull(response.nombrePrograma());
+        assertEquals(AuthConstants.WARN_SIN_PROGRAMA_ASIGNADO, response.mensaje());
+    }
+
+    @Test
+    @DisplayName("HU-010 Criterio 2.3: Perfil de coordinador desactivado")
+    void login_Error_Coordinador_Desactivado() throws GeneralSecurityException, IOException {
+        String tokenStr = "coord-desactivado-token";
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("coord.inactivo@correounivalle.edu.co");
         payload.setEmailVerified(true);
 
         when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
         when(googleIdToken.getPayload()).thenReturn(payload);
 
-        Usuario usuario = Usuario.builder()
-                .id(4)
-                .nombre("Otro")
-                .apellido("Inactivo")
-                .emailInstitucional("inactivo.otro@correounivalle.edu.co")
-                .rol(AuthConstants.ROL_DOCENTE)
-                .activo(false)
+        Coordinador coordinador = Coordinador.builder()
+                .id(15)
+                .identificacion("555444333")
+                .nombreCompleto("Inactivo Coord")
+                .correoInstitucional("coord.inactivo@correounivalle.edu.co")
+                .activo(false) // Desactivado
                 .build();
 
-        when(usuarioRepository.buscarPorCorreoInstitucional("inactivo.otro@correounivalle.edu.co"))
-                .thenReturn(Optional.of(usuario));
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("coord.inactivo@correounivalle.edu.co"))
+                .thenReturn(Optional.of(coordinador));
 
+        GoogleLoginRequest request = new GoogleLoginRequest(tokenStr, AuthConstants.ROL_COORDINADOR);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
-                googleAuthService.login(tokenStr)
+                googleAuthService.login(request)
         );
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
-        assertEquals(AuthConstants.ERROR_CUENTA_DESACTIVADA, ex.getReason());
+        assertEquals(AuthConstants.ERROR_PERFIL_DESACTIVADO, ex.getReason());
+    }
+
+    @Test
+    @DisplayName("HU-010 Criterio 3.3: Cuenta registrada en otro perfil pero sin perfil de coordinador")
+    void login_Error_Coordinador_SinPerfilCoordinador() throws GeneralSecurityException, IOException {
+        String tokenStr = "docente-intentando-coord";
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("docente.registrado@correounivalle.edu.co");
+        payload.setEmailVerified(true);
+
+        when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+        when(googleIdToken.getPayload()).thenReturn(payload);
+
+        // No existe en coordinadores
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("docente.registrado@correounivalle.edu.co"))
+                .thenReturn(Optional.empty());
+        // Pero sí existe en docentes
+        when(docenteRepository.existsByCorreoInstitucional("docente.registrado@correounivalle.edu.co"))
+                .thenReturn(true);
+
+        GoogleLoginRequest request = new GoogleLoginRequest(tokenStr, AuthConstants.ROL_COORDINADOR);
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
+                googleAuthService.login(request)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals(AuthConstants.ERROR_SIN_PERFIL_COORDINADOR, ex.getReason());
+    }
+
+    @Test
+    @DisplayName("HU-010 Criterio 2.2: Coordinador con cuenta institucional no registrada")
+    void login_Error_Coordinador_CuentaNoRegistrada() throws GeneralSecurityException, IOException {
+        String tokenStr = "no-registrado-coord";
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail("no.registrado@correounivalle.edu.co");
+        payload.setEmailVerified(true);
+
+        when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+        when(googleIdToken.getPayload()).thenReturn(payload);
+
+        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("no.registrado@correounivalle.edu.co"))
+                .thenReturn(Optional.empty());
+        when(usuarioRepository.buscarPorCorreoInstitucional("no.registrado@correounivalle.edu.co"))
+                .thenReturn(Optional.empty());
+        when(docenteRepository.existsByCorreoInstitucional("no.registrado@correounivalle.edu.co"))
+                .thenReturn(false);
+
+        GoogleLoginRequest request = new GoogleLoginRequest(tokenStr, AuthConstants.ROL_COORDINADOR);
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
+                googleAuthService.login(request)
+        );
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals(AuthConstants.ERROR_CUENTA_NO_REGISTRADA, ex.getReason());
     }
 }

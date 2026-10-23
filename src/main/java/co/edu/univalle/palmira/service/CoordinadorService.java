@@ -43,6 +43,14 @@ public class CoordinadorService {
     }
 
     @Transactional(readOnly = true)
+    public CoordinadorDto.Response getByEmail(String email) {
+        String cleanEmail = email.trim().toLowerCase();
+        Coordinador coordinador = coordinadorRepository.findByCorreoInstitucionalWithDetails(cleanEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con correo: " + cleanEmail));
+        return toResponse(coordinador);
+    }
+
+    @Transactional(readOnly = true)
     public List<CoordinadorDto.Response> getByPrograma(String codeProgram) {
         String normalizedCode = codeProgram.trim().toUpperCase();
         return coordinadorRepository.findByProgramaCodeProgram(normalizedCode)

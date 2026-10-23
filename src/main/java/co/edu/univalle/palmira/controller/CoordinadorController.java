@@ -8,7 +8,11 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -19,6 +23,23 @@ import java.util.List;
 public class CoordinadorController {
 
     private final CoordinadorService coordinadorService;
+
+    @GetMapping("/me")
+    @PreAuthorize("hasAnyRole('COORDINADOR', 'ADMIN')")
+    @Operation(summary = "Obtener el perfil del coordinador autenticado")
+    public ResponseEntity<CoordinadorDto.Response> getMiPerfil(Authentication authentication) {
+        if (authentication == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No autenticado");
+        }
+        String email = null;
+        if (authentication.getPrincipal() instanceof Jwt jwt) {
+            email = jwt.getClaimAsString("email");
+        }
+        if (email == null) {
+            email = authentication.getName();
+        }
+        return ResponseEntity.ok(coordinadorService.getByEmail(email));
+    }
 
     @GetMapping
     @Operation(summary = "Listar todos los coordinadores con su programa vinculado")
