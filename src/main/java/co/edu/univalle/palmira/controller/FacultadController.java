@@ -28,7 +28,7 @@ public class FacultadController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Obtener facultad por ID")
-    public ResponseEntity<FacultadDto.Response> getById(@PathVariable Integer id) {
+    public ResponseEntity<FacultadDto.Response> getById(@PathVariable("id") Integer id) {
         return ResponseEntity.ok(facultadService.getById(id));
     }
 

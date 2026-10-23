@@ -26,7 +26,7 @@ public class DocenteController {
     // Activar / Inactivar docente
     @PatchMapping("/{id}/estado")
     public ResponseEntity<DocenteDto.Response> cambiarEstado(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @RequestParam("estado") Boolean estado) {
         return ResponseEntity.ok(docenteService.cambiarEstado(id, estado));
     }
@@ -40,7 +40,7 @@ public class DocenteController {
     // actualizar cuando el docente ya existe
     @PutMapping("/{id}")
     public ResponseEntity<DocenteDto.Response> actualizar(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody DocenteDto.UpdateRequest request) {
         return ResponseEntity.ok(docenteService.actualizar(id, request));
     }
