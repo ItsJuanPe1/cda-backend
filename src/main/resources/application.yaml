@@ -9,9 +9,9 @@ spring:
       - optional:file:.env[.properties]
       - optional:file:cda-backend/.env[.properties]
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -35,7 +35,7 @@ springdoc:
 
 auth:
   google:
-    client-id: ${GOOGLE_CLIENT_ID:${AUTH_GOOGLE_CLIENT_ID:}}
+    client-id: ${GOOGLE_CLIENT_ID:${AUTH_GOOGLE_CLIENT_ID:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}}
   jwt:
-    secret: ${JWT_SECRET:${AUTH_JWT_SECRET:}}
+    secret: ${JWT_SECRET:${AUTH_JWT_SECRET:cda-backend-secret-key-univalle-palmira-2026-secure-token-32b}}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}

@@ -15,7 +15,8 @@ public class AsignaturaDto {
             @JsonProperty("es_complementaria") Boolean esComplementaria,
             @JsonProperty("es_basica") Boolean esBasica,
             String facultad,
-            @JsonProperty("id_facultad") Integer idFacultad
+            @JsonProperty("id_facultad") Integer idFacultad,
+            Boolean activo
     ) {}
 
     public record CreateRequest(
@@ -66,6 +67,8 @@ public class AsignaturaDto {
             String facultad,
 
             @JsonProperty("id_facultad")
-            Integer idFacultad
+            Integer idFacultad,
+
+            Boolean activo
     ) {}
 }

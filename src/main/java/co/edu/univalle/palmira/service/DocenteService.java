@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -133,7 +134,29 @@ public class DocenteService {
     }
 
     // ---------------------------------------------------------------
-    // HU-022: Mi perfil (solo lectura)
+    // Listar todos los docentes para Plantilla
+    // ---------------------------------------------------------------
+    @Transactional(readOnly = true)
+    public List<DocenteDto.Response> listarTodos() {
+        return docenteRepository.findAllWithPrograma()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    // ---------------------------------------------------------------
+    // Activar / Inactivar docente
+    // ---------------------------------------------------------------
+    @Transactional
+    public DocenteDto.Response cambiarEstado(Long id, Boolean estado) {
+        Docente docente = docenteRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + id));
+        docente.setEstado(estado != null ? estado : true);
+        return toResponse(docenteRepository.save(docente));
+    }
+
+    // ---------------------------------------------------------------
+    // Mi perfil
     // ---------------------------------------------------------------
     @Transactional(readOnly = true)
     public DocenteDto.Response obtenerPorCorreo(String correo) {
@@ -142,6 +165,17 @@ public class DocenteService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No se encontró un perfil de docente activo para el correo " + correo));
         return toResponse(docente);
+    }
+
+    // ---------------------------------------------------------------
+    // Listado de docentes (ordenado por apellidos y nombres)
+    // ---------------------------------------------------------------
+    @Transactional(readOnly = true)
+    public List<DocenteDto.Response> listar() {
+        return docenteRepository.findAllByOrderByApellidosAscNombresAsc()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     // ---------------------------------------------------------------
@@ -173,8 +207,8 @@ public class DocenteService {
                 d.getTelefono(),
                 d.getTipoDocente(),
                 d.getCategoria(),
-                d.getPrograma().getCodeProgram(),
-                d.getPrograma().getNameProgram(),
+                d.getPrograma() != null ? d.getPrograma().getCodeProgram() : null,
+                d.getPrograma() != null ? d.getPrograma().getNameProgram() : null,
                 d.getFotoUrl(),
                 d.getEvaluacionPeriodo(),
                 d.getEvaluacionValor(),

@@ -157,6 +157,14 @@ public class CoordinadorService {
     }
 
     @Transactional
+    public CoordinadorDto.Response cambiarEstado(Integer id, Boolean activo) {
+        Coordinador coordinador = coordinadorRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
+        coordinador.setActivo(activo != null ? activo : true);
+        return toResponse(coordinadorRepository.save(coordinador));
+    }
+
+    @Transactional
     public void delete(Integer id) {
         if (!coordinadorRepository.existsById(id)) {
             throw new ResourceNotFoundException("Coordinador no encontrado con id: " + id);

@@ -8,6 +8,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/docentes")
 @RequiredArgsConstructor
@@ -15,16 +17,30 @@ public class DocenteController {
 
     private final DocenteService docenteService;
 
-    // HU-026: crear perfil de docente
+    // Listar todos los docentes para Plantilla
+    @GetMapping
+    public ResponseEntity<List<DocenteDto.Response>> listar() {
+        return ResponseEntity.ok(docenteService.listarTodos());
+    }
+
+    // Activar / Inactivar docente
+    @PatchMapping("/{id}/estado")
+    public ResponseEntity<DocenteDto.Response> cambiarEstado(
+            @PathVariable("id") Long id,
+            @RequestParam("estado") Boolean estado) {
+        return ResponseEntity.ok(docenteService.cambiarEstado(id, estado));
+    }
+
+    // crear perfil de docente
     @PostMapping
     public ResponseEntity<DocenteDto.Response> crear(@Valid @RequestBody DocenteDto.CreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(docenteService.crear(request));
     }
 
-    // HU-026 punto 6: actualizar cuando el docente ya existe
+    // actualizar cuando el docente ya existe
     @PutMapping("/{id}")
     public ResponseEntity<DocenteDto.Response> actualizar(
-            @PathVariable Long id,
+            @PathVariable("id") Long id,
             @Valid @RequestBody DocenteDto.UpdateRequest request) {
         return ResponseEntity.ok(docenteService.actualizar(id, request));
     }
