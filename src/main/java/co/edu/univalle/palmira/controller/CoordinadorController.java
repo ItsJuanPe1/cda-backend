@@ -55,7 +55,8 @@ public class CoordinadorController {
 
     @GetMapping("/programa/{codeProgram}")
     @Operation(summary = "Listar coordinadores de un programa académico específico")
-    public ResponseEntity<List<CoordinadorDto.Response>> getByPrograma(@PathVariable("codeProgram") String codeProgram) {
+    public ResponseEntity<List<CoordinadorDto.Response>> getByPrograma(
+            @PathVariable("codeProgram") String codeProgram) {
         return ResponseEntity.ok(coordinadorService.getByPrograma(codeProgram));
     }
 
