@@ -54,25 +54,26 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
                                 "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
 
-                        // 1. Módulo Plantilla (Docentes y Coordinadores):
-                        // Exclusivo para Administrador (Rol 1). Coordinadores y Docentes NO pueden ver ni modificar la plantilla.
+                        // 1. Módulo Plantilla: solo el administrador gestiona usuarios.
                         .requestMatchers("/api/coordinadores/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
                         .requestMatchers("/api/docentes/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
 
-                        // 2. Asignaturas y Mallas Curriculares (Pensum / Programas / Facultades / Catálogos):
-                        // Coordinadores (Rol 2) SOLO pueden VER (GET) asignaturas y mallas curriculares.
-                        // Docentes (Rol 3) NO tienen permiso de lectura ni escritura sobre las funciones actuales.
+                        // 2. Períodos: los tres roles consultan; solo el administrador modifica.
+                        .requestMatchers(HttpMethod.GET, "/api/periodos/**")
+                                .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers("/api/periodos/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+
+                        // 3. Asignaturas y Mallas: el coordinador puede consultar.
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**", "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
                                 .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR")
 
-                        // 3. Creaciones y Modificaciones (POST, PUT, PATCH, DELETE) sobre cualquier recurso:
-                        // Exclusivo para Administrador (Rol 1).
+                        // 4. Creaciones y modificaciones sobre cualquier otro recurso: administrador.
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
 
-                        // 4. Cualquier otra petición a la API: Exclusivo para Administrador (Rol 1)
+                        // 5. Cualquier otra petición a la API: administrador.
                         .requestMatchers("/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));

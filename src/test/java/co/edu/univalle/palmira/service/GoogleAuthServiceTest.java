@@ -195,8 +195,8 @@ class GoogleAuthServiceTest {
         }
 
         @Test
-        @DisplayName("Criterio 3.2: Cuenta activa pero sin rol de administrador")
-        void login_Error_SinRolAdministrador() throws GeneralSecurityException, IOException {
+        @DisplayName("Criterio 3.2: Cuenta activa de docente puede iniciar sesión")
+        void login_Exitoso_Docente() throws GeneralSecurityException, IOException {
                 String tokenStr = "docente-credential";
                 GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
                 payload.setEmail("docente@correounivalle.edu.co");
@@ -210,18 +210,21 @@ class GoogleAuthServiceTest {
                                 .nombre("Docente")
                                 .apellido("Prueba")
                                 .emailInstitucional("docente@correounivalle.edu.co")
-                                .rol(AuthConstants.ROL_DOCENTE) // Rol 3 no es admin
+                                .rol(AuthConstants.ROL_DOCENTE)
                                 .activo(true)
                                 .build();
 
                 when(usuarioRepository.buscarPorCorreoInstitucional("docente@correounivalle.edu.co"))
                                 .thenReturn(Optional.of(docente));
 
-                ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> googleAuthService.login(tokenStr));
+                Jwt mockJwt = mock(Jwt.class);
+                when(mockJwt.getTokenValue()).thenReturn("mocked-docente-jwt-token");
+                when(jwtEncoder.encode(any(JwtEncoderParameters.class))).thenReturn(mockJwt);
 
-                assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
-                assertEquals(AuthConstants.ERROR_SIN_PERMISOS_ADMIN, ex.getReason());
+                LoginResponse response = googleAuthService.login(tokenStr);
+
+                assertEquals(AuthConstants.ROL_DOCENTE, response.rol());
+                assertEquals("Docente", response.nombre());
         }
 
         @Test

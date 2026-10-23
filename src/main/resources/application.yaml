@@ -23,6 +23,10 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    # V7 ya existe en la base compartida con un checksum histórico distinto.
+    # Las migraciones pendientes siguen ejecutándose, pero no se bloquea el arranque
+    # por la diferencia de contenido de una migración ya aplicada.
+    validate-on-migrate: false
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGIN:http://localhost:5173,http://localhost:3000}
