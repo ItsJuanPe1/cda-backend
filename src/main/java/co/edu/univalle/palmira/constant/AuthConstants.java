@@ -8,6 +8,7 @@ public final class AuthConstants {
     public static final String DOMAIN = "@correounivalle.edu.co";
     public static final String HD_CLAIM = "correounivalle.edu.co";
     public static final int ROL_ADMIN = 1;
+    public static final int ROL_COORDINADOR = 2;
     public static final int ROL_DOCENTE = 3;
 
     // Mensajes literales de la HU-001

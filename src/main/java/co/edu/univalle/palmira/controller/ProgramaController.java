@@ -28,7 +28,7 @@ public class ProgramaController {
 
     @GetMapping("/{codeProgram}")
     @Operation(summary = "Obtener un programa académico por código")
-    public ResponseEntity<ProgramaDto.Response> getByCode(@PathVariable String codeProgram) {
+    public ResponseEntity<ProgramaDto.Response> getByCode(@PathVariable("codeProgram") String codeProgram) {
         return ResponseEntity.ok(programaService.getByCode(codeProgram));
     }
 
@@ -41,14 +41,14 @@ public class ProgramaController {
     @PutMapping("/{codeProgram}")
     @Operation(summary = "Actualizar un programa académico existente")
     public ResponseEntity<ProgramaDto.Response> update(
-            @PathVariable String codeProgram,
+            @PathVariable("codeProgram") String codeProgram,
             @Valid @RequestBody ProgramaDto.UpdateRequest request) {
         return ResponseEntity.ok(programaService.update(codeProgram, request));
     }
 
     @DeleteMapping("/{codeProgram}")
     @Operation(summary = "Eliminar un programa académico")
-    public ResponseEntity<Void> delete(@PathVariable String codeProgram) {
+    public ResponseEntity<Void> delete(@PathVariable("codeProgram") String codeProgram) {
         programaService.delete(codeProgram);
         return ResponseEntity.noContent().build();
     }

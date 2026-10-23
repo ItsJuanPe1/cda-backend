@@ -28,7 +28,7 @@ public class AsignaturaController {
 
     @GetMapping("/{codeCourse}")
     @Operation(summary = "Obtener asignatura por código")
-    public ResponseEntity<AsignaturaDto.Response> getByCode(@PathVariable String codeCourse) {
+    public ResponseEntity<AsignaturaDto.Response> getByCode(@PathVariable("codeCourse") String codeCourse) {
         return ResponseEntity.ok(asignaturaService.getByCode(codeCourse));
     }
 
@@ -41,14 +41,22 @@ public class AsignaturaController {
     @PutMapping("/{codeCourse}")
     @Operation(summary = "Actualizar una asignatura existente")
     public ResponseEntity<AsignaturaDto.Response> update(
-            @PathVariable String codeCourse,
+            @PathVariable("codeCourse") String codeCourse,
             @Valid @RequestBody AsignaturaDto.UpdateRequest request) {
         return ResponseEntity.ok(asignaturaService.update(codeCourse, request));
     }
 
+    @PatchMapping("/{codeCourse}/estado")
+    @Operation(summary = "Habilitar o deshabilitar una asignatura")
+    public ResponseEntity<AsignaturaDto.Response> cambiarEstado(
+            @PathVariable("codeCourse") String codeCourse,
+            @RequestParam("activo") Boolean activo) {
+        return ResponseEntity.ok(asignaturaService.cambiarEstado(codeCourse, activo));
+    }
+
     @DeleteMapping("/{codeCourse}")
     @Operation(summary = "Eliminar una asignatura")
-    public ResponseEntity<Void> delete(@PathVariable String codeCourse) {
+    public ResponseEntity<Void> delete(@PathVariable("codeCourse") String codeCourse) {
         asignaturaService.delete(codeCourse);
         return ResponseEntity.noContent().build();
     }
