@@ -4,25 +4,26 @@ import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.LoginResponse;
 import co.edu.univalle.palmira.model.entity.Usuario;
 import co.edu.univalle.palmira.repository.UsuarioRepository;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
-import org.springframework.security.oauth2.jwt.JwsHeader;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 @Service
 public class GoogleAuthService {
@@ -33,39 +34,21 @@ public class GoogleAuthService {
     private final long expirationMinutes;
     private GoogleIdTokenVerifier tokenVerifier;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
             @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
             @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
+        this(usuarioRepository, jwtEncoder, googleClientId, expirationMinutes, null);
+    }
+
+    public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
+            String googleClientId, long expirationMinutes,
+            GoogleIdTokenVerifier tokenVerifier) {
         this.usuarioRepository = usuarioRepository;
         this.jwtEncoder = jwtEncoder;
         this.googleClientId = (googleClientId != null && !googleClientId.isBlank())
                 ? googleClientId
                 : "699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com";
-        this.expirationMinutes = expirationMinutes;
-        this.restClient = RestClient.create();
-    }
-
-    public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
-            String googleClientId, long expirationMinutes,
-            GoogleIdTokenVerifier tokenVerifier) {
-        this.usuarioRepository = usuarioRepository;
-        this.jwtEncoder = jwtEncoder;
-        this.googleClientId = googleClientId;
-        this.expirationMinutes = expirationMinutes;
-        this.tokenVerifier = tokenVerifier;
-    }
-
-    public void setTokenVerifier(GoogleIdTokenVerifier tokenVerifier) {
-        this.tokenVerifier = tokenVerifier;
-    }
-
-    public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
-            String googleClientId, long expirationMinutes,
-            GoogleIdTokenVerifier tokenVerifier) {
-        this.usuarioRepository = usuarioRepository;
-        this.jwtEncoder = jwtEncoder;
-        this.googleClientId = googleClientId;
         this.expirationMinutes = expirationMinutes;
         this.tokenVerifier = tokenVerifier;
     }
@@ -118,8 +101,7 @@ public class GoogleAuthService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
         }
 
-        // Opcional: si existe el claim hd, verificar que coincida con
-        // correounivalle.edu.co
+        // Opcional: si existe el claim hd, verificar que coincida con correounivalle.edu.co
         Object hdClaim = payload.get("hd");
         if (hdClaim != null && !AuthConstants.HD_CLAIM.equalsIgnoreCase(hdClaim.toString().trim())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
@@ -152,7 +134,7 @@ public class GoogleAuthService {
                 .claim("nombre", usuario.getNombre())
                 .claim("apellido", usuario.getApellido())
                 .claim("rol", usuario.getRol())
-                .claim("authorities", Collections.singletonList("ROLE_ADMIN"))
+                .claim("authorities", List.of("ROLE_ADMIN", "ADMIN"))
                 .build();
         String token = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();

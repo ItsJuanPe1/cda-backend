@@ -10,8 +10,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-import java.util.List;
-
 @RestController
 @RequestMapping("/api/docentes")
 @RequiredArgsConstructor
@@ -31,12 +29,6 @@ public class DocenteController {
             @PathVariable Long id,
             @RequestParam("estado") Boolean estado) {
         return ResponseEntity.ok(docenteService.cambiarEstado(id, estado));
-    }
-
-    // Listado de docentes (para la vista con buscador y filtros)
-    @GetMapping
-    public ResponseEntity<List<DocenteDto.Response>> listar() {
-        return ResponseEntity.ok(docenteService.listar());
     }
 
     // crear perfil de docente
