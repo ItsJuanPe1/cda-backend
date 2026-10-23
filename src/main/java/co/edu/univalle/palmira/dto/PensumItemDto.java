@@ -17,7 +17,8 @@ public class PensumItemDto {
             @JsonProperty("is_elective") Boolean isElective,
             @JsonProperty("es_complementaria") Boolean esComplementaria,
             @JsonProperty("es_basica") Boolean esBasica,
-            String facultad
+            String facultad,
+            Boolean activo
     ) {}
 
     public record AddRequest(

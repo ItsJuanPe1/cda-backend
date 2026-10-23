@@ -34,4 +34,8 @@ public class PensumAcademico {
 
     @Column(length = 150)
     private String facultad;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean activo = true;
 }

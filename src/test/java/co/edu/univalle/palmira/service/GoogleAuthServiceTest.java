@@ -195,33 +195,103 @@ class GoogleAuthServiceTest {
         }
 
         @Test
-        @DisplayName("Criterio 3.2: Cuenta activa pero sin rol de administrador")
+        @DisplayName("Criterio 3.2: Cuenta activa pero sin rol autorizado en el sistema")
         void login_Error_SinRolAdministrador() throws GeneralSecurityException, IOException {
-                String tokenStr = "docente-credential";
+                String tokenStr = "unauthorized-role-credential";
                 GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
-                payload.setEmail("docente@correounivalle.edu.co");
+                payload.setEmail("desconocido.rol@correounivalle.edu.co");
                 payload.setEmailVerified(true);
 
                 when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
                 when(googleIdToken.getPayload()).thenReturn(payload);
 
-                Usuario docente = Usuario.builder()
+                Usuario usuarioSinRol = Usuario.builder()
                                 .id(3)
-                                .nombre("Docente")
+                                .nombre("Usuario")
                                 .apellido("Prueba")
-                                .emailInstitucional("docente@correounivalle.edu.co")
-                                .rol(AuthConstants.ROL_DOCENTE) // Rol 3 no es admin
+                                .emailInstitucional("desconocido.rol@correounivalle.edu.co")
+                                .rol(99) // Rol 99 no es admin, coordinador ni docente
                                 .activo(true)
                                 .build();
 
-                when(usuarioRepository.buscarPorCorreoInstitucional("docente@correounivalle.edu.co"))
-                                .thenReturn(Optional.of(docente));
+                when(usuarioRepository.buscarPorCorreoInstitucional("desconocido.rol@correounivalle.edu.co"))
+                                .thenReturn(Optional.of(usuarioSinRol));
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                                 () -> googleAuthService.login(tokenStr));
 
                 assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
                 assertEquals(AuthConstants.ERROR_SIN_PERMISOS_ADMIN, ex.getReason());
+        }
+
+        @Test
+        @DisplayName("Login exitoso para Coordinador de programa (Rol 2)")
+        void login_Exitoso_Coordinador() throws GeneralSecurityException, IOException {
+                String tokenStr = "coord-credential";
+                GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+                payload.setEmail("coordinador@correounivalle.edu.co");
+                payload.setEmailVerified(true);
+                payload.set("hd", "correounivalle.edu.co");
+
+                when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+                when(googleIdToken.getPayload()).thenReturn(payload);
+
+                Usuario coord = Usuario.builder()
+                                .id(20)
+                                .nombre("Coordinador")
+                                .apellido("Academico")
+                                .emailInstitucional("coordinador@correounivalle.edu.co")
+                                .rol(AuthConstants.ROL_COORDINADOR)
+                                .activo(true)
+                                .build();
+
+                when(usuarioRepository.buscarPorCorreoInstitucional("coordinador@correounivalle.edu.co"))
+                                .thenReturn(Optional.of(coord));
+
+                Jwt mockJwt = mock(Jwt.class);
+                when(mockJwt.getTokenValue()).thenReturn("jwt-coord-token");
+                when(jwtEncoder.encode(any(JwtEncoderParameters.class))).thenReturn(mockJwt);
+
+                LoginResponse response = googleAuthService.login(tokenStr);
+
+                assertNotNull(response);
+                assertEquals(AuthConstants.ROL_COORDINADOR, response.rol());
+                assertEquals("jwt-coord-token", response.token());
+        }
+
+        @Test
+        @DisplayName("Login exitoso para Docente (Rol 3)")
+        void login_Exitoso_Docente() throws GeneralSecurityException, IOException {
+                String tokenStr = "docente-credential";
+                GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+                payload.setEmail("docente@correounivalle.edu.co");
+                payload.setEmailVerified(true);
+                payload.set("hd", "correounivalle.edu.co");
+
+                when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+                when(googleIdToken.getPayload()).thenReturn(payload);
+
+                Usuario doc = Usuario.builder()
+                                .id(30)
+                                .nombre("Docente")
+                                .apellido("Titular")
+                                .emailInstitucional("docente@correounivalle.edu.co")
+                                .rol(AuthConstants.ROL_DOCENTE)
+                                .activo(true)
+                                .build();
+
+                when(usuarioRepository.buscarPorCorreoInstitucional("docente@correounivalle.edu.co"))
+                                .thenReturn(Optional.of(doc));
+
+                Jwt mockJwt = mock(Jwt.class);
+                when(mockJwt.getTokenValue()).thenReturn("jwt-doc-token");
+                when(jwtEncoder.encode(any(JwtEncoderParameters.class))).thenReturn(mockJwt);
+
+                LoginResponse response = googleAuthService.login(tokenStr);
+
+                assertNotNull(response);
+                assertEquals(AuthConstants.ROL_DOCENTE, response.rol());
+                assertEquals("jwt-doc-token", response.token());
         }
 
         @Test
@@ -240,7 +310,7 @@ class GoogleAuthServiceTest {
                                 .nombre("Otro")
                                 .apellido("Inactivo")
                                 .emailInstitucional("inactivo.otro@correounivalle.edu.co")
-                                .rol(AuthConstants.ROL_DOCENTE)
+                                .rol(99)
                                 .activo(false)
                                 .build();
 
