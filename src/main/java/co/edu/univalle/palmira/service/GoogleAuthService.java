@@ -117,21 +117,21 @@ public class GoogleAuthService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA);
         }
 
-        // 5. Validar que la cuenta tenga un rol autorizado (1: Admin, 2: Coordinador, 3: Docente)
-        if (usuario.getRol() == null || (usuario.getRol() != AuthConstants.ROL_ADMIN
+        // 5. Solo se admiten los roles funcionales registrados.
+        if (usuario.getRol() == null
+                || (usuario.getRol() != AuthConstants.ROL_ADMIN
                 && usuario.getRol() != AuthConstants.ROL_COORDINADOR
                 && usuario.getRol() != AuthConstants.ROL_DOCENTE)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN);
         }
 
-        List<String> authorities = switch (usuario.getRol()) {
-            case AuthConstants.ROL_ADMIN -> List.of("ROLE_ADMIN", "ADMIN");
-            case AuthConstants.ROL_COORDINADOR -> List.of("ROLE_COORDINADOR", "COORDINADOR");
-            case AuthConstants.ROL_DOCENTE -> List.of("ROLE_DOCENTE", "DOCENTE");
-            default -> Collections.emptyList();
+        // 6. Todo correcto: emitir las autoridades correspondientes al rol.
+        String authority = switch (usuario.getRol()) {
+            case AuthConstants.ROL_ADMIN -> "ROLE_ADMIN";
+            case AuthConstants.ROL_COORDINADOR -> "ROLE_COORDINADOR";
+            case AuthConstants.ROL_DOCENTE -> "ROLE_DOCENTE";
+            default -> throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN);
         };
-
-        // 6. Todo correcto: Emisión de sesión JWT
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -143,7 +143,7 @@ public class GoogleAuthService {
                 .claim("nombre", usuario.getNombre())
                 .claim("apellido", usuario.getApellido())
                 .claim("rol", usuario.getRol())
-                .claim("authorities", authorities)
+                .claim("authorities", List.of(authority, authority.substring("ROLE_".length())))
                 .build();
         String token = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
                 .getTokenValue();

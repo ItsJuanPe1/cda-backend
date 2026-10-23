@@ -195,9 +195,9 @@ class GoogleAuthServiceTest {
         }
 
         @Test
-        @DisplayName("Criterio 3.2: Cuenta activa pero sin rol autorizado en el sistema")
-        void login_Error_SinRolAdministrador() throws GeneralSecurityException, IOException {
-                String tokenStr = "unauthorized-role-credential";
+        @DisplayName("Criterio 3.2: Cuenta activa de docente puede iniciar sesión")
+        void login_Exitoso_Docente() throws GeneralSecurityException, IOException {
+                String tokenStr = "docente-credential";
                 GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
                 payload.setEmail("desconocido.rol@correounivalle.edu.co");
                 payload.setEmailVerified(true);
@@ -209,19 +209,22 @@ class GoogleAuthServiceTest {
                                 .id(3)
                                 .nombre("Usuario")
                                 .apellido("Prueba")
-                                .emailInstitucional("desconocido.rol@correounivalle.edu.co")
-                                .rol(99) // Rol 99 no es admin, coordinador ni docente
+                                .emailInstitucional("docente@correounivalle.edu.co")
+                                .rol(AuthConstants.ROL_DOCENTE)
                                 .activo(true)
                                 .build();
 
                 when(usuarioRepository.buscarPorCorreoInstitucional("desconocido.rol@correounivalle.edu.co"))
                                 .thenReturn(Optional.of(usuarioSinRol));
 
-                ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> googleAuthService.login(tokenStr));
+                Jwt mockJwt = mock(Jwt.class);
+                when(mockJwt.getTokenValue()).thenReturn("mocked-docente-jwt-token");
+                when(jwtEncoder.encode(any(JwtEncoderParameters.class))).thenReturn(mockJwt);
 
-                assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
-                assertEquals(AuthConstants.ERROR_SIN_PERMISOS_ADMIN, ex.getReason());
+                LoginResponse response = googleAuthService.login(tokenStr);
+
+                assertEquals(AuthConstants.ROL_DOCENTE, response.rol());
+                assertEquals("Docente", response.nombre());
         }
 
         @Test
