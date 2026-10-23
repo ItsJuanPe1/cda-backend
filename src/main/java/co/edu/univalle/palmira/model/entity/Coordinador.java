@@ -38,13 +38,13 @@ public class Coordinador {
     @JoinColumn(name = "code_program")
     private Programa programa;
 
-    @Column(length = 50)
-    @Builder.Default
-    private String categoria = "Auxiliar";
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_categoria")
+    private Categoria categoria;
 
-    @Column(name = "tipo_contrato", length = 50)
-    @Builder.Default
-    private String tipoContrato = "Nombrado";
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_tipo_contrato")
+    private TipoContrato tipoContrato;
 
     @Column(nullable = false)
     @Builder.Default
