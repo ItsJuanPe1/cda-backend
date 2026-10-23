@@ -25,7 +25,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -45,13 +45,15 @@ public class GoogleAuthService {
                              CoordinadorRepository coordinadorRepository,
                              DocenteRepository docenteRepository,
                              JwtEncoder jwtEncoder,
-                             @Value("${auth.google.client-id:}") String googleClientId,
+                             @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
                              @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
         this.usuarioRepository = usuarioRepository;
         this.coordinadorRepository = coordinadorRepository;
         this.docenteRepository = docenteRepository;
         this.jwtEncoder = jwtEncoder;
-        this.googleClientId = googleClientId;
+        this.googleClientId = (googleClientId != null && !googleClientId.isBlank())
+                ? googleClientId
+                : "699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com";
         this.expirationMinutes = expirationMinutes;
     }
 
@@ -66,7 +68,9 @@ public class GoogleAuthService {
         this.coordinadorRepository = coordinadorRepository;
         this.docenteRepository = docenteRepository;
         this.jwtEncoder = jwtEncoder;
-        this.googleClientId = googleClientId;
+        this.googleClientId = (googleClientId != null && !googleClientId.isBlank())
+                ? googleClientId
+                : "699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com";
         this.expirationMinutes = expirationMinutes;
         this.tokenVerifier = tokenVerifier;
     }
@@ -109,7 +113,7 @@ public class GoogleAuthService {
         try {
             GoogleIdTokenVerifier verifier = this.tokenVerifier != null ? this.tokenVerifier :
                     new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
-                            .setAudience(Collections.singletonList(googleClientId))
+                            .setAudience(List.of(googleClientId))
                             .build();
 
             GoogleIdToken idToken = verifier.verify(credential);
@@ -224,7 +228,7 @@ public class GoogleAuthService {
                 .claim("nombre", nombre)
                 .claim("apellido", apellido)
                 .claim("rol", AuthConstants.ROL_COORDINADOR)
-                .claim("authorities", Collections.singletonList(AuthConstants.AUTHORITY_COORDINADOR));
+                .claim("authorities", List.of("ROLE_COORDINADOR", "COORDINADOR"));
 
         if (codeProgram != null) {
             claimsBuilder.claim("codeProgram", codeProgram);
@@ -288,7 +292,7 @@ public class GoogleAuthService {
                 .claim("nombre", usuario.getNombre())
                 .claim("apellido", usuario.getApellido())
                 .claim("rol", usuario.getRol())
-                .claim("authorities", Collections.singletonList(AuthConstants.AUTHORITY_ADMIN))
+                .claim("authorities", List.of("ROLE_ADMIN", "ADMIN"))
                 .build();
 
         String token = jwtEncoder.encode(JwtEncoderParameters.from(

@@ -17,10 +17,18 @@ public class DocenteController {
 
     private final DocenteService docenteService;
 
-    // Listado de docentes (para la vista con buscador y filtros)
+    // Listar todos los docentes para Plantilla
     @GetMapping
     public ResponseEntity<List<DocenteDto.Response>> listar() {
-        return ResponseEntity.ok(docenteService.listar());
+        return ResponseEntity.ok(docenteService.listarTodos());
+    }
+
+    // Activar / Inactivar docente
+    @PatchMapping("/{id}/estado")
+    public ResponseEntity<DocenteDto.Response> cambiarEstado(
+            @PathVariable Long id,
+            @RequestParam("estado") Boolean estado) {
+        return ResponseEntity.ok(docenteService.cambiarEstado(id, estado));
     }
 
     // crear perfil de docente

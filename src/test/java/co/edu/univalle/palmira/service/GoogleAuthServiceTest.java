@@ -323,7 +323,7 @@ class GoogleAuthServiceTest {
                 .identificacion("999888777")
                 .nombreCompleto("Ana López")
                 .correoInstitucional("coord.nuevo@correounivalle.edu.co")
-                .programa(null) // Sin programa asignado
+                .programa(null)
                 .activo(true)
                 .build();
 
@@ -360,7 +360,7 @@ class GoogleAuthServiceTest {
                 .identificacion("555444333")
                 .nombreCompleto("Inactivo Coord")
                 .correoInstitucional("coord.inactivo@correounivalle.edu.co")
-                .activo(false) // Desactivado
+                .activo(false)
                 .build();
 
         when(coordinadorRepository.findByCorreoInstitucionalWithDetails("coord.inactivo@correounivalle.edu.co"))
@@ -386,10 +386,8 @@ class GoogleAuthServiceTest {
         when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
         when(googleIdToken.getPayload()).thenReturn(payload);
 
-        // No existe en coordinadores
         when(coordinadorRepository.findByCorreoInstitucionalWithDetails("docente.registrado@correounivalle.edu.co"))
                 .thenReturn(Optional.empty());
-        // Pero sí existe en docentes
         when(docenteRepository.existsByCorreoInstitucional("docente.registrado@correounivalle.edu.co"))
                 .thenReturn(true);
 

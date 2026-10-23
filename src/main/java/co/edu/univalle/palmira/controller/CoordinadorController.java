@@ -73,6 +73,14 @@ public class CoordinadorController {
         return ResponseEntity.ok(coordinadorService.update(id, request));
     }
 
+    @PatchMapping("/{id}/estado")
+    @Operation(summary = "Cambiar estado activo/inactivo de un coordinador")
+    public ResponseEntity<CoordinadorDto.Response> cambiarEstado(
+            @PathVariable Integer id,
+            @RequestParam("activo") Boolean activo) {
+        return ResponseEntity.ok(coordinadorService.cambiarEstado(id, activo));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Eliminar un coordinador")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
