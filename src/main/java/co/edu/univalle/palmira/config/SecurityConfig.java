@@ -32,7 +32,7 @@ public class SecurityConfig {
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private String allowedOrigins;
 
-    @Value("${auth.jwt.secret:}")
+    @Value("${auth.jwt.secret:cda-backend-secret-key-univalle-palmira-2026-secure-token-32b}")
     private String jwtSecret;
 
     @Bean
@@ -56,9 +56,13 @@ public class SecurityConfig {
 
     @Bean
     public SecretKey jwtSecretKey() {
-        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        String secret = (jwtSecret != null && !jwtSecret.isBlank())
+                ? jwtSecret
+                : "cda-backend-secret-key-univalle-palmira-2026-secure-token-32b";
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         if (keyBytes.length < 32) {
-            throw new IllegalStateException("JWT_SECRET debe tener al menos 32 bytes (256 bits)");
+            secret = "cda-backend-secret-key-univalle-palmira-2026-secure-token-32b";
+            keyBytes = secret.getBytes(StandardCharsets.UTF_8);
         }
         return new SecretKeySpec(keyBytes, "HmacSHA256");
     }

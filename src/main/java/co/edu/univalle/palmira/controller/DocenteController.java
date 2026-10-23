@@ -8,12 +8,28 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/docentes")
 @RequiredArgsConstructor
 public class DocenteController {
 
     private final DocenteService docenteService;
+
+    // Listar todos los docentes para Plantilla
+    @GetMapping
+    public ResponseEntity<List<DocenteDto.Response>> listar() {
+        return ResponseEntity.ok(docenteService.listarTodos());
+    }
+
+    // Activar / Inactivar docente
+    @PatchMapping("/{id}/estado")
+    public ResponseEntity<DocenteDto.Response> cambiarEstado(
+            @PathVariable Long id,
+            @RequestParam("estado") Boolean estado) {
+        return ResponseEntity.ok(docenteService.cambiarEstado(id, estado));
+    }
 
     // HU-026: crear perfil de docente
     @PostMapping
