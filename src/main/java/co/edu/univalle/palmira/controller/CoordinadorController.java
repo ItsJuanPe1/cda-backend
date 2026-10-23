@@ -1,6 +1,7 @@
 package co.edu.univalle.palmira.controller;
 
 import co.edu.univalle.palmira.dto.CoordinadorDto;
+import co.edu.univalle.palmira.service.CoordinadorPerfilService;
 import co.edu.univalle.palmira.service.CoordinadorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -19,11 +20,18 @@ import java.util.List;
 public class CoordinadorController {
 
     private final CoordinadorService coordinadorService;
+    private final CoordinadorPerfilService coordinadorPerfilService;
 
     @GetMapping
     @Operation(summary = "Listar todos los coordinadores con su programa vinculado")
     public ResponseEntity<List<CoordinadorDto.Response>> getAll() {
         return ResponseEntity.ok(coordinadorService.getAll());
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "Mi perfil: obtener el coordinador por su correo institucional")
+    public ResponseEntity<CoordinadorDto.Response> miPerfil(@RequestParam("correo") String correo) {
+        return ResponseEntity.ok(coordinadorPerfilService.obtenerPorCorreo(correo));
     }
 
     @GetMapping("/{id}")
@@ -34,7 +42,8 @@ public class CoordinadorController {
 
     @GetMapping("/programa/{codeProgram}")
     @Operation(summary = "Listar coordinadores de un programa académico específico")
-    public ResponseEntity<List<CoordinadorDto.Response>> getByPrograma(@PathVariable("codeProgram") String codeProgram) {
+    public ResponseEntity<List<CoordinadorDto.Response>> getByPrograma(
+            @PathVariable("codeProgram") String codeProgram) {
         return ResponseEntity.ok(coordinadorService.getByPrograma(codeProgram));
     }
 
