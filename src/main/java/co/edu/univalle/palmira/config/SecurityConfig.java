@@ -38,6 +38,8 @@ public class SecurityConfig {
     private static final String[] ADMIN = {"ROLE_ADMIN", "ADMIN"};
     private static final String[] ADMIN_Y_COORDINADOR =
             {"ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR"};
+    private static final String[] ADMIN_Y_DOCENTE =
+        {"ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE"};
 
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private String allowedOrigins;
@@ -52,9 +54,6 @@ public class SecurityConfig {
         res.getWriter().write("{\"message\":\"" + message + "\"}");
     }
 
-    private static final String[] ADMIN_Y_DOCENTE =
-        {"ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE"};
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
@@ -68,42 +67,41 @@ public class SecurityConfig {
         .csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth -> auth
-                // Rutas públicas: autenticación, Swagger y health
-                .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
-                        "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
+            // Rutas públicas: autenticación, Swagger y health
+            .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
+            "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
 
-                // Perfiles propios autenticados (/me): DEBEN ir antes de las reglas /**
-                .requestMatchers("/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                .requestMatchers("/api/docentes/me").hasAnyAuthority(ADMIN_Y_DOCENTE)
+            // Perfiles propios autenticados (/me): DEBEN ir antes de las reglas /**
+            .requestMatchers("/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+            .requestMatchers("/api/docentes/me").hasAnyAuthority(ADMIN_Y_DOCENTE)
 
-                // Períodos: exclusivo Administrador
-                .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
+            // Períodos: exclusivo Administrador
+            .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
 
-                // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
-                .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
-                .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
+            // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
+            .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
+            .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
-                // 2. Asignaturas, mallas, programas, facultades y catálogos:
-                // Coordinadores solo pueden consultar (GET)
-                .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
-                        "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
-                        .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+            // 2. Asignaturas, mallas, programas, facultades y catálogos:
+            // Coordinadores solo pueden consultar (GET)
+            .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
+                    "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
+                    .hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
-                // 3. Creaciones y modificaciones: exclusivo Administrador
-                .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
-                .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
-                .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority(ADMIN)
-                .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority(ADMIN)
+            // 3. Creaciones y modificaciones: exclusivo Administrador
+            .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
+            .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
+            .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority(ADMIN)                .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority(ADMIN)
 
-                // 4. Cualquier otra petición a la API: exclusivo Administrador
-                .requestMatchers("/api/**").hasAnyAuthority(ADMIN)
-                .anyRequest().authenticated())
-        .oauth2ResourceServer(oauth -> oauth
-                .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
-                .authenticationEntryPoint((req, res, ex) ->
-                        escribirError(res, 401, "Sesión no válida o expirada"))
-                .accessDeniedHandler((req, res, ex) ->
-                        escribirError(res, 403, "No tiene permisos para esta acción")));
+            // 4. Cualquier otra petición a la API: exclusivo Administrador
+            .requestMatchers("/api/**").hasAnyAuthority(ADMIN)
+            .anyRequest().authenticated())
+            .oauth2ResourceServer(oauth -> oauth
+            .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
+            .authenticationEntryPoint((req, res, ex) ->
+            escribirError(res, 401, "Sesión no válida o expirada"))
+            .accessDeniedHandler((req, res, ex) ->
+            escribirError(res, 403, "No tiene permisos para esta acción")));
 
 return http.build();
     }
