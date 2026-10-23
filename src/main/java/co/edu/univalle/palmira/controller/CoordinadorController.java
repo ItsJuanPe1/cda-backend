@@ -1,7 +1,6 @@
 package co.edu.univalle.palmira.controller;
 
 import co.edu.univalle.palmira.dto.CoordinadorDto;
-import co.edu.univalle.palmira.service.CoordinadorPerfilService;
 import co.edu.univalle.palmira.service.CoordinadorService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,7 +23,6 @@ import java.util.List;
 public class CoordinadorController {
 
     private final CoordinadorService coordinadorService;
-    private final CoordinadorPerfilService coordinadorPerfilService;
 
     @GetMapping("/me")
     @PreAuthorize("hasAnyRole('COORDINADOR', 'ADMIN')")
@@ -47,12 +45,6 @@ public class CoordinadorController {
     @Operation(summary = "Listar todos los coordinadores con su programa vinculado")
     public ResponseEntity<List<CoordinadorDto.Response>> getAll() {
         return ResponseEntity.ok(coordinadorService.getAll());
-    }
-
-    @GetMapping("/me")
-    @Operation(summary = "Mi perfil: obtener el coordinador por su correo institucional")
-    public ResponseEntity<CoordinadorDto.Response> miPerfil(@RequestParam("correo") String correo) {
-        return ResponseEntity.ok(coordinadorPerfilService.obtenerPorCorreo(correo));
     }
 
     @GetMapping("/{id}")
