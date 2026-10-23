@@ -34,23 +34,7 @@ public interface CoordinadorRepository extends JpaRepository<Coordinador, Intege
                      "ORDER BY c.nombreCompleto ASC")
        List<Coordinador> findByProgramaCodeProgram(@Param("codeProgram") String codeProgram);
 
-       // Mi perfil: busca al coordinador por su correo institucional (sin distinguir
-       // mayúsculas)
-       @Query("SELECT c FROM Coordinador c " +
-                     "LEFT JOIN FETCH c.programa " +
-                     "LEFT JOIN FETCH c.categoria " +
-                     "LEFT JOIN FETCH c.tipoContrato " +
-                     "WHERE LOWER(c.correoInstitucional) = LOWER(:correo)")
-       Optional<Coordinador> findByCorreoInstitucionalWithDetails(@Param("correo") String correo);
-
-       @Query("SELECT c FROM Coordinador c " +
-                     "LEFT JOIN FETCH c.programa " +
-                     "LEFT JOIN FETCH c.categoria " +
-                     "LEFT JOIN FETCH c.tipoContrato " +
-                     "WHERE c.programa.codeProgram = :codeProgram " +
-                     "ORDER BY c.nombreCompleto ASC")
-       List<Coordinador> findByProgramaCodeProgram(@Param("codeProgram") String codeProgram);
-
+       // También lo usa "Mi perfil" (CoordinadorPerfilService)
        @Query("SELECT c FROM Coordinador c " +
                      "LEFT JOIN FETCH c.programa " +
                      "LEFT JOIN FETCH c.categoria " +
