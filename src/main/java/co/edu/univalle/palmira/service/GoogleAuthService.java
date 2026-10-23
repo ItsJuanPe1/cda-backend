@@ -8,6 +8,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -32,22 +34,21 @@ public class GoogleAuthService {
     private final long expirationMinutes;
     private GoogleIdTokenVerifier tokenVerifier;
 
-    @org.springframework.beans.factory.annotation.Autowired
+    @Autowired
     public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
-                             @Value("${auth.google.client-id:}") String googleClientId,
-                             @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
-        this.usuarioRepository = usuarioRepository;
-        this.jwtEncoder = jwtEncoder;
-        this.googleClientId = googleClientId;
-        this.expirationMinutes = expirationMinutes;
+            @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
+            @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
+        this(usuarioRepository, jwtEncoder, googleClientId, expirationMinutes, null);
     }
 
     public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
-                             String googleClientId, long expirationMinutes,
-                             GoogleIdTokenVerifier tokenVerifier) {
+            String googleClientId, long expirationMinutes,
+            GoogleIdTokenVerifier tokenVerifier) {
         this.usuarioRepository = usuarioRepository;
         this.jwtEncoder = jwtEncoder;
-        this.googleClientId = googleClientId;
+        this.googleClientId = (googleClientId != null && !googleClientId.isBlank())
+                ? googleClientId
+                : "699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com";
         this.expirationMinutes = expirationMinutes;
         this.tokenVerifier = tokenVerifier;
     }
@@ -62,14 +63,15 @@ public class GoogleAuthService {
         }
 
         if (googleClientId == null || googleClientId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "La autenticación de Google no está configurada");
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "La autenticación de Google no está configurada");
         }
 
         // 1. Verificación del token de Google
         GoogleIdToken.Payload payload;
         try {
-            GoogleIdTokenVerifier verifier = this.tokenVerifier != null ? this.tokenVerifier :
-                    new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
+            GoogleIdTokenVerifier verifier = this.tokenVerifier != null ? this.tokenVerifier
+                    : new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
                             .setAudience(Collections.singletonList(googleClientId))
                             .build();
 
@@ -132,9 +134,10 @@ public class GoogleAuthService {
                 .claim("nombre", usuario.getNombre())
                 .claim("apellido", usuario.getApellido())
                 .claim("rol", usuario.getRol())
-                .claim("authorities", Collections.singletonList("ROLE_ADMIN"))
+                .claim("authorities", List.of("ROLE_ADMIN", "ADMIN"))
                 .build();
-        String token = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+        String token = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                .getTokenValue();
 
         return new LoginResponse(token, "Bearer", expirationMinutes * 60, usuario.getId(),
                 usuario.getNombre(), usuario.getApellido(), usuario.getEmailInstitucional(),
