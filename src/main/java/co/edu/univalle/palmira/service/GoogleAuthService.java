@@ -1,5 +1,6 @@
 package co.edu.univalle.palmira.service;
 
+import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.LoginResponse;
 import co.edu.univalle.palmira.model.entity.Usuario;
 import co.edu.univalle.palmira.repository.UsuarioRepository;
@@ -7,6 +8,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
@@ -23,18 +26,17 @@ import java.util.Map;
 
 @Service
 public class GoogleAuthService {
-    private static final String DOMAIN = "@correounivalle.edu.co";
-    private static final int DOCENTE_ROLE = 3;
 
     private final UsuarioRepository usuarioRepository;
     private final JwtEncoder jwtEncoder;
     private final String googleClientId;
     private final long expirationMinutes;
-    private final RestClient restClient;
+    private GoogleIdTokenVerifier tokenVerifier;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
-                             @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
-                             @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
+            @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
+            @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
         this.usuarioRepository = usuarioRepository;
         this.jwtEncoder = jwtEncoder;
         this.googleClientId = (googleClientId != null && !googleClientId.isBlank())
@@ -44,55 +46,101 @@ public class GoogleAuthService {
         this.restClient = RestClient.create();
     }
 
+    public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
+            String googleClientId, long expirationMinutes,
+            GoogleIdTokenVerifier tokenVerifier) {
+        this.usuarioRepository = usuarioRepository;
+        this.jwtEncoder = jwtEncoder;
+        this.googleClientId = googleClientId;
+        this.expirationMinutes = expirationMinutes;
+        this.tokenVerifier = tokenVerifier;
+    }
+
+    public void setTokenVerifier(GoogleIdTokenVerifier tokenVerifier) {
+        this.tokenVerifier = tokenVerifier;
+    }
+
+    public GoogleAuthService(UsuarioRepository usuarioRepository, JwtEncoder jwtEncoder,
+            String googleClientId, long expirationMinutes,
+            GoogleIdTokenVerifier tokenVerifier) {
+        this.usuarioRepository = usuarioRepository;
+        this.jwtEncoder = jwtEncoder;
+        this.googleClientId = googleClientId;
+        this.expirationMinutes = expirationMinutes;
+        this.tokenVerifier = tokenVerifier;
+    }
+
+    public void setTokenVerifier(GoogleIdTokenVerifier tokenVerifier) {
+        this.tokenVerifier = tokenVerifier;
+    }
+
     public LoginResponse login(String credential) {
-        if (googleClientId == null || googleClientId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "La autenticación de Google no está configurada");
+        if (credential == null || credential.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
         }
 
-        Map<String, Object> payload;
-        try {
-            payload = restClient.get()
-                    .uri("https://oauth2.googleapis.com/tokeninfo?id_token={idToken}", credential)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<Map<String, Object>>() {});
+        if (googleClientId == null || googleClientId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "La autenticación de Google no está configurada");
+        }
 
+        // 1. Verificación del token de Google
+        GoogleIdToken.Payload payload;
+        try {
+            GoogleIdTokenVerifier verifier = this.tokenVerifier != null ? this.tokenVerifier
+                    : new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
+                            .setAudience(Collections.singletonList(googleClientId))
+                            .build();
+
+            GoogleIdToken idToken = verifier.verify(credential);
+            if (idToken == null) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
+            }
+            payload = idToken.getPayload();
             if (payload == null) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No fue posible iniciar sesión. Intente de nuevo");
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
             }
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No fue posible iniciar sesión. Intente de nuevo");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
         }
 
-        String aud = (String) payload.get("aud");
-        if (aud == null || !aud.equals(googleClientId)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token de Google no corresponde a esta aplicación");
+        // 2. Correo institucional: validar dominio exacto y sufijo institucional
+        String email = payload.getEmail();
+        boolean emailVerified = Boolean.TRUE.equals(payload.getEmailVerified());
+        if (!emailVerified || email == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
         }
 
-        String email = (String) payload.get("email");
-        Object emailVerifiedObj = payload.get("email_verified");
-        boolean emailVerified = Boolean.TRUE.equals(emailVerifiedObj) || "true".equalsIgnoreCase(String.valueOf(emailVerifiedObj));
-
-        if (!emailVerified || email == null || !email.toLowerCase(Locale.ROOT).endsWith(DOMAIN)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Debe usar su correo institucional");
+        String cleanEmail = email.trim().toLowerCase(Locale.ROOT);
+        if (!cleanEmail.endsWith(AuthConstants.DOMAIN)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
         }
 
-        Usuario usuario = usuarioRepository.buscarPorCorreoInstitucional(email.trim())
+        // Opcional: si existe el claim hd, verificar que coincida con
+        // correounivalle.edu.co
+        Object hdClaim = payload.get("hd");
+        if (hdClaim != null && !AuthConstants.HD_CLAIM.equalsIgnoreCase(hdClaim.toString().trim())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
+        }
+
+        // 3. Correo no existe en el sistema
+        Usuario usuario = usuarioRepository.buscarPorCorreoInstitucional(cleanEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN,
-                        "Su cuenta no está registrada. Contacte al administrador"));
+                        AuthConstants.ERROR_CUENTA_NO_REGISTRADA));
 
-        if (usuario.getRol() == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Su usuario no tiene un rol asignado en el sistema");
+        // 4. Cuenta desactivada
+        if (Boolean.FALSE.equals(usuario.getActivo())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA);
         }
 
-        java.util.List<String> authorities = switch (usuario.getRol()) {
-            case 1 -> java.util.List.of("ROLE_ADMIN", "ROLE_COORDINADOR", "ROLE_DOCENTE");
-            case 2 -> java.util.List.of("ROLE_COORDINADOR", "ROLE_DOCENTE");
-            case 3 -> java.util.List.of("ROLE_DOCENTE");
-            default -> java.util.List.of("ROLE_USER");
-        };
+        // 5. Cuenta sin rol Administrador
+        if (usuario.getRol() == null || usuario.getRol() != AuthConstants.ROL_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN);
+        }
 
+        // 6. Todo correcto: Emisión de sesión para Administrador
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -104,12 +152,13 @@ public class GoogleAuthService {
                 .claim("nombre", usuario.getNombre())
                 .claim("apellido", usuario.getApellido())
                 .claim("rol", usuario.getRol())
-                .claim("authorities", authorities)
+                .claim("authorities", Collections.singletonList("ROLE_ADMIN"))
                 .build();
-        String token = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+        String token = jwtEncoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
+                .getTokenValue();
 
         return new LoginResponse(token, "Bearer", expirationMinutes * 60, usuario.getId(),
                 usuario.getNombre(), usuario.getApellido(), usuario.getEmailInstitucional(),
-                usuario.getRol(), "Inicio de sesión exitoso");
+                usuario.getRol(), AuthConstants.LOGIN_SUCCESS_MESSAGE);
     }
 }

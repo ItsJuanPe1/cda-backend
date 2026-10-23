@@ -156,7 +156,7 @@ public class DocenteService {
     }
 
     // ---------------------------------------------------------------
-    // HU-022: Mi perfil (solo lectura)
+    // Mi perfil
     // ---------------------------------------------------------------
     @Transactional(readOnly = true)
     public DocenteDto.Response obtenerPorCorreo(String correo) {
@@ -165,6 +165,17 @@ public class DocenteService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No se encontró un perfil de docente activo para el correo " + correo));
         return toResponse(docente);
+    }
+
+    // ---------------------------------------------------------------
+    // Listado de docentes (ordenado por apellidos y nombres)
+    // ---------------------------------------------------------------
+    @Transactional(readOnly = true)
+    public List<DocenteDto.Response> listar() {
+        return docenteRepository.findAllByOrderByApellidosAscNombresAsc()
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     // ---------------------------------------------------------------

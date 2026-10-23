@@ -10,6 +10,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/docentes")
 @RequiredArgsConstructor
@@ -31,13 +33,19 @@ public class DocenteController {
         return ResponseEntity.ok(docenteService.cambiarEstado(id, estado));
     }
 
-    // HU-026: crear perfil de docente
+    // Listado de docentes (para la vista con buscador y filtros)
+    @GetMapping
+    public ResponseEntity<List<DocenteDto.Response>> listar() {
+        return ResponseEntity.ok(docenteService.listar());
+    }
+
+    // crear perfil de docente
     @PostMapping
     public ResponseEntity<DocenteDto.Response> crear(@Valid @RequestBody DocenteDto.CreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(docenteService.crear(request));
     }
 
-    // HU-026 punto 6: actualizar cuando el docente ya existe
+    // actualizar cuando el docente ya existe
     @PutMapping("/{id}")
     public ResponseEntity<DocenteDto.Response> actualizar(
             @PathVariable Long id,
