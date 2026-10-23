@@ -35,6 +35,13 @@ public class SecurityConfig {
     @Value("${auth.jwt.secret:}")
     private String jwtSecret;
 
+    private static void escribirError(jakarta.servlet.http.HttpServletResponse res, int status, String message)
+        throws java.io.IOException {
+    res.setStatus(status);
+    res.setContentType("application/json;charset=UTF-8");
+    res.getWriter().write("{\"message\":\"" + message + "\"}");
+}
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
@@ -49,8 +56,14 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
                                 "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
+                        .requestMatchers("/api/periodos/**").hasAuthority("ROLE_ADMIN")
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter)));
+                .oauth2ResourceServer(oauth -> oauth
+        .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
+        .authenticationEntryPoint((req, res, ex) ->
+                escribirError(res, 401, "Sesión no válida o expirada"))
+        .accessDeniedHandler((req, res, ex) ->
+                escribirError(res, 403, "No tiene permisos de administrador")));
         return http.build();
     }
 
