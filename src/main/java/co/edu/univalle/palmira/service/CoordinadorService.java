@@ -43,6 +43,14 @@ public class CoordinadorService {
     }
 
     @Transactional(readOnly = true)
+    public CoordinadorDto.Response getByEmail(String email) {
+        String cleanEmail = email.trim().toLowerCase();
+        Coordinador coordinador = coordinadorRepository.findByCorreoInstitucionalWithDetails(cleanEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con correo: " + cleanEmail));
+        return toResponse(coordinador);
+    }
+
+    @Transactional(readOnly = true)
     public List<CoordinadorDto.Response> getByPrograma(String codeProgram) {
         String normalizedCode = codeProgram.trim().toUpperCase();
         return coordinadorRepository.findByProgramaCodeProgram(normalizedCode)
@@ -164,12 +172,15 @@ public class CoordinadorService {
         return toResponse(coordinadorRepository.save(coordinador));
     }
 
+    /**
+     * RN-13: Nada se borra físicamente. La eliminación desactiva el registro para conservar el historial.
+     */
     @Transactional
     public void delete(Integer id) {
-        if (!coordinadorRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Coordinador no encontrado con id: " + id);
-        }
-        coordinadorRepository.deleteById(id);
+        Coordinador coordinador = coordinadorRepository.findByIdWithDetails(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
+        coordinador.setActivo(false);
+        coordinadorRepository.save(coordinador);
     }
 
     private Categoria resolveCategoria(Integer idCategoria, String nombreCategoria) {
