@@ -18,7 +18,9 @@ public class CoordinadorDto {
             String telefono,
             @JsonProperty("code_program") String codeProgram,
             @JsonProperty("name_program") String nameProgram,
+            @JsonProperty("id_categoria") Integer idCategoria,
             String categoria,
+            @JsonProperty("id_tipo_contrato") Integer idTipoContrato,
             @JsonProperty("tipo_contrato") String tipoContrato,
             Boolean activo,
             @JsonProperty("created_at") LocalDateTime createdAt
@@ -50,7 +52,13 @@ public class CoordinadorDto {
             @JsonProperty("code_program")
             String codeProgram,
 
+            @JsonProperty("id_categoria")
+            Integer idCategoria,
+
             String categoria,
+
+            @JsonProperty("id_tipo_contrato")
+            Integer idTipoContrato,
 
             @JsonProperty("tipo_contrato")
             String tipoContrato,
@@ -78,7 +86,13 @@ public class CoordinadorDto {
             @JsonProperty("code_program")
             String codeProgram,
 
+            @JsonProperty("id_categoria")
+            Integer idCategoria,
+
             String categoria,
+
+            @JsonProperty("id_tipo_contrato")
+            Integer idTipoContrato,
 
             @JsonProperty("tipo_contrato")
             String tipoContrato,

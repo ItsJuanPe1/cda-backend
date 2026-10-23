@@ -12,13 +12,26 @@ import java.util.Optional;
 @Repository
 public interface CoordinadorRepository extends JpaRepository<Coordinador, Integer> {
 
-    @Query("SELECT c FROM Coordinador c LEFT JOIN FETCH c.programa ORDER BY c.nombreCompleto ASC")
-    List<Coordinador> findAllWithPrograma();
+    @Query("SELECT c FROM Coordinador c " +
+           "LEFT JOIN FETCH c.programa " +
+           "LEFT JOIN FETCH c.categoria " +
+           "LEFT JOIN FETCH c.tipoContrato " +
+           "ORDER BY c.nombreCompleto ASC")
+    List<Coordinador> findAllWithDetails();
 
-    @Query("SELECT c FROM Coordinador c LEFT JOIN FETCH c.programa WHERE c.id = :id")
-    Optional<Coordinador> findByIdWithPrograma(@Param("id") Integer id);
+    @Query("SELECT c FROM Coordinador c " +
+           "LEFT JOIN FETCH c.programa " +
+           "LEFT JOIN FETCH c.categoria " +
+           "LEFT JOIN FETCH c.tipoContrato " +
+           "WHERE c.id = :id")
+    Optional<Coordinador> findByIdWithDetails(@Param("id") Integer id);
 
-    @Query("SELECT c FROM Coordinador c LEFT JOIN FETCH c.programa WHERE c.programa.codeProgram = :codeProgram ORDER BY c.nombreCompleto ASC")
+    @Query("SELECT c FROM Coordinador c " +
+           "LEFT JOIN FETCH c.programa " +
+           "LEFT JOIN FETCH c.categoria " +
+           "LEFT JOIN FETCH c.tipoContrato " +
+           "WHERE c.programa.codeProgram = :codeProgram " +
+           "ORDER BY c.nombreCompleto ASC")
     List<Coordinador> findByProgramaCodeProgram(@Param("codeProgram") String codeProgram);
 
     boolean existsByIdentificacion(String identificacion);
