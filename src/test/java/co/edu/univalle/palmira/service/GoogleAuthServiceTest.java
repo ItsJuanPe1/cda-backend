@@ -243,8 +243,6 @@ class GoogleAuthServiceTest {
                 .activo(true)
                 .build();
 
-        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("docente@correounivalle.edu.co"))
-                .thenReturn(Optional.empty());
         when(usuarioRepository.buscarPorCorreoInstitucional("docente@correounivalle.edu.co"))
                 .thenReturn(Optional.of(docente));
 
