@@ -376,7 +376,6 @@ public class GoogleAuthService {
         if (usuario.getRol() == null || usuario.getRol() != AuthConstants.ROL_ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN);
         }
-
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 

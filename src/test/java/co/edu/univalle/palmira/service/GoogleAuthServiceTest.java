@@ -215,11 +215,9 @@ class GoogleAuthServiceTest {
         String tokenStr = "invalid-token";
         when(tokenVerifier.verify(tokenStr)).thenReturn(null);
 
-
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
                 googleAuthService.login(tokenStr)
         );
-
 
         assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
         assertEquals(AuthConstants.ERROR_LOGIN_FALLIDO, ex.getReason());
@@ -250,8 +248,9 @@ class GoogleAuthServiceTest {
         when(usuarioRepository.buscarPorCorreoInstitucional("docente@correounivalle.edu.co"))
                 .thenReturn(Optional.of(docente));
 
+        GoogleLoginRequest request = new GoogleLoginRequest(tokenStr, AuthConstants.ROL_ADMIN);
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
-                googleAuthService.login(tokenStr)
+                googleAuthService.login(request)
         );
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());

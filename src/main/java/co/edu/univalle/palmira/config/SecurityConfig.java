@@ -79,26 +79,34 @@ public class SecurityConfig {
                         .requestMatchers("/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers("/api/docentes/me").hasAnyAuthority(ADMIN_Y_DOCENTE)
 
-                        // Períodos: exclusivo Administrador
-                        .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
-
                         // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
                         .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
                         .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
-                        // 2. Asignaturas, mallas, programas, facultades y catálogos:
+                        // 2. Períodos: los tres roles consultan; solo el administrador modifica
+                        .requestMatchers(HttpMethod.GET, "/api/periodos/**")
+                                .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
+
+                        // 3. Disponibilidad docente: docentes
+                        .requestMatchers(HttpMethod.GET, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.POST, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+
+                        // 4. Asignaturas, mallas, programas, facultades y catálogos:
                         // Coordinadores solo pueden consultar (GET)
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
                                 "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
                                 .hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
-                        // 3. Creaciones y modificaciones: exclusivo Administrador
+                        // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
                         .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority(ADMIN)
                         .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority(ADMIN)
 
-                        // 4. Cualquier otra petición a la API: exclusivo Administrador
+                        // 6. Cualquier otra petición a la API: exclusivo Administrador
                         .requestMatchers("/api/**").hasAnyAuthority(ADMIN)
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth

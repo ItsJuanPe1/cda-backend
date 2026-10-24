@@ -24,6 +24,7 @@ public final class AuthConstants {
     public static final String ERROR_SIN_PERMISOS_ADMIN = "No tiene permisos de administrador";
     public static final String ERROR_SIN_PERFIL_COORDINADOR = "No tiene perfil de coordinador";
     public static final String ERROR_SIN_PERFIL_DOCENTE = "No tiene perfil de docente";
+    public static final String ERROR_SIN_PERMISOS_DOCENTE = "No tiene permisos de Docente";
     public static final String WARN_SIN_PROGRAMA_ASIGNADO = "Aún no tiene un programa asignado. Contacte al administrador";
     public static final String LOGIN_SUCCESS_MESSAGE = "Inicio de sesión exitoso";
 }
