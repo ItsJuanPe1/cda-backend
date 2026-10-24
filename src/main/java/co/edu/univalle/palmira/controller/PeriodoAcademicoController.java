@@ -25,6 +25,11 @@ public class PeriodoAcademicoController {
         return response == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(response);
     }
 
+    @GetMapping("/{id}")
+    public PeriodoAcademicoDto.Response obtenerPorId(@PathVariable("id") Long id) {
+        return service.obtenerPorId(id);
+    }
+
     @PostMapping
     public ResponseEntity<PeriodoAcademicoDto.Response> crear(@Valid @RequestBody PeriodoAcademicoDto.Request request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.crear(request));
