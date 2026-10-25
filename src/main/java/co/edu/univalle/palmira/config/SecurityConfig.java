@@ -71,6 +71,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
                                 "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
 
+<<<<<<< HEAD
                         // 0. Mi perfil (GET): cualquier usuario autenticado (Admin, Coordinador o Docente).
                         // DEBE ir antes de las reglas /** porque gana la primera que coincide.
                         .requestMatchers(HttpMethod.GET, "/api/docentes/me", "/api/coordinadores/me").authenticated()
@@ -100,6 +101,33 @@ public class SecurityConfig {
 
                         // 4. Cualquier otra petición a la API: exclusivo Administrador
                         .requestMatchers("/api/**").hasAnyAuthority(ADMIN)
+=======
+                        // 1. Módulo Plantilla: solo el administrador gestiona usuarios.
+                        .requestMatchers("/api/coordinadores/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        .requestMatchers("/api/docentes/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+
+                        // 2. Períodos: los tres roles consultan; solo el administrador modifica.
+                        .requestMatchers(HttpMethod.GET, "/api/periodos/**")
+                                .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers("/api/periodos/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.POST, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+
+                        // 3. Asignaturas y Mallas: el coordinador puede consultar.
+                        .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**", "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
+                                .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR")
+
+                        // 4. Creaciones y modificaciones sobre cualquier otro recurso: administrador.
+                        .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+
+                        // 5. Cualquier otra petición a la API: administrador.
+                        .requestMatchers("/api/**").hasAnyAuthority("ROLE_ADMIN", "ADMIN")
+>>>>>>> acad0f207f1fcd5f2a84230b3809d1317a59c054
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))

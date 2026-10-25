@@ -209,18 +209,40 @@ class GoogleAuthServiceTest {
         assertEquals(AuthConstants.ERROR_CUENTA_DESACTIVADA, ex.getReason());
     }
 
+<<<<<<< HEAD
     @Test
     @DisplayName("Criterio 2.4 y 2.5: Verificador de Google retorna null o falla")
     void login_Error_TokenInvalido() throws GeneralSecurityException, IOException {
         String tokenStr = "invalid-token";
         when(tokenVerifier.verify(tokenStr)).thenReturn(null);
+=======
+        @Test
+        @DisplayName("Criterio 3.2: Cuenta activa de docente puede iniciar sesión")
+        void login_Exitoso_DocentePorRol() throws GeneralSecurityException, IOException {
+                String tokenStr = "docente-credential";
+                GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+                payload.setEmail("desconocido.rol@correounivalle.edu.co");
+                payload.setEmailVerified(true);
+>>>>>>> acad0f207f1fcd5f2a84230b3809d1317a59c054
 
 
+<<<<<<< HEAD
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
                 googleAuthService.login(tokenStr)
         );
+=======
+                Usuario usuarioSinRol = Usuario.builder()
+                                .id(3)
+                                .nombre("Usuario")
+                                .apellido("Prueba")
+                                .emailInstitucional("docente@correounivalle.edu.co")
+                                .rol(AuthConstants.ROL_DOCENTE)
+                                .activo(true)
+                                .build();
+>>>>>>> acad0f207f1fcd5f2a84230b3809d1317a59c054
 
 
+<<<<<<< HEAD
         assertEquals(HttpStatus.UNAUTHORIZED, ex.getStatusCode());
         assertEquals(AuthConstants.ERROR_LOGIN_FALLIDO, ex.getReason());
     }
@@ -232,6 +254,17 @@ class GoogleAuthServiceTest {
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
         payload.setEmail("docente@correounivalle.edu.co");
         payload.setEmailVerified(true);
+=======
+                Jwt mockJwt = mock(Jwt.class);
+                when(mockJwt.getTokenValue()).thenReturn("mocked-docente-jwt-token");
+                when(jwtEncoder.encode(any(JwtEncoderParameters.class))).thenReturn(mockJwt);
+
+                LoginResponse response = googleAuthService.login(tokenStr);
+
+                assertEquals(AuthConstants.ROL_DOCENTE, response.rol());
+                assertEquals("Usuario", response.nombre());
+        }
+>>>>>>> acad0f207f1fcd5f2a84230b3809d1317a59c054
 
         when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
         when(googleIdToken.getPayload()).thenReturn(payload);

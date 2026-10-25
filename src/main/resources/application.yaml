@@ -23,6 +23,10 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    # V7 ya existe en la base compartida con un checksum histórico distinto.
+    # Las migraciones pendientes siguen ejecutándose, pero no se bloquea el arranque
+    # por la diferencia de contenido de una migración ya aplicada.
+    validate-on-migrate: false
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGIN:http://localhost:5173,http://localhost:3000}
@@ -39,3 +43,7 @@ auth:
   jwt:
     secret: ${JWT_SECRET:${AUTH_JWT_SECRET:cda-backend-secret-key-univalle-palmira-2026-secure-token-32b}}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
+
+disponibilidad:
+  hora-inicio: ${DISPONIBILIDAD_HORA_INICIO:06:00}
+  hora-fin: ${DISPONIBILIDAD_HORA_FIN:22:00}
