@@ -27,6 +27,13 @@ public class PeriodoAcademicoService {
         return repository.findFirstByVigenteTrue().map(this::toResponse).orElse(null);
     }
 
+    @Transactional(readOnly = true)
+    public PeriodoAcademicoDto.Response obtenerPorId(Long id) {
+        return repository.findById(id)
+                .map(this::toResponse)
+                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado"));
+    }
+
     @Transactional
     public PeriodoAcademicoDto.Response crear(PeriodoAcademicoDto.Request request) {
         validar(request, null);
