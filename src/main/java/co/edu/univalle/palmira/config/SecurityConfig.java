@@ -77,7 +77,8 @@ public class SecurityConfig {
 
                         // Otros métodos sobre el perfil propio (p. ej. PUT): según el rol
                         .requestMatchers("/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                        .requestMatchers("/api/docentes/me").hasAnyAuthority(ADMIN_Y_DOCENTE)
+                        // HU-015: contacto y foto del propio perfil docente
+                        .requestMatchers("/api/docentes/me", "/api/docentes/me/**").hasAnyAuthority(ADMIN_Y_DOCENTE)
 
                         // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
                         .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
