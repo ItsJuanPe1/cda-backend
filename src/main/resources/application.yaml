@@ -1,5 +1,9 @@
 server:
   port: ${PORT:8080}
+  tomcat:
+    # Permite leer y descartar archivos algo mayores al límite para responder 400
+    # en lugar de cortar la conexión (HU-015)
+    max-swallow-size: 10MB
 
 spring:
   application:
@@ -8,6 +12,11 @@ spring:
     import:
       - optional:file:.env[.properties]
       - optional:file:cda-backend/.env[.properties]
+  servlet:
+    multipart:
+      # HU-015: foto de perfil de máximo 5 MB
+      max-file-size: 5MB
+      max-request-size: 6MB
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/postgres}
     username: ${DB_USER:postgres}

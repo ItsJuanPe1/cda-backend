@@ -1,7 +1,7 @@
 <!--
-GEMINI.md: colócalo en la raíz de cada repositorio (cda-backend y mi-app). Gemini Code Assist (modo agente) lo carga solo.
-Verifica con /memory show y recarga con /memory refresh.
-Los datos de las HU están en docs/Roses_corp_HU.csv (exportado de la hoja PB del Excel).
+CLAUDE.md: va en la raíz de cada repositorio (cda-backend y mi-app). Claude Code lo carga solo al iniciar.
+Los datos de las HU están en docs/Roses_corp_HU.csv. Los comandos /sincronizar, /hu y /migracion están en .claude/commands.
+Los permisos (qué puede hacer sin preguntar) están en .claude/settings.json.
 -->
 
 # Rol
@@ -241,6 +241,45 @@ Se programa en VS Code sobre Windows, pero todo debe correr en Debian 13. Evita 
 - Frontend: componentes en `src/components`, acceso a la API en `src/services`, estilos en `src/index.css` y `App.css`; `npm run lint` (Oxlint) sin errores antes de entregar; textos de interfaz en español.
 - Pruebas: cada criterio «Dado… cuando… entonces» tiene al menos una prueba que lo nombra.
 
+# Estado actual del proyecto (confírmalo leyendo el código, no lo des por hecho)
+
+- El backend y el frontend ya se comunican en local (`http://localhost:8080` y `http://localhost:5173`). El inicio de sesión con Google está en desarrollo.
+- Flyway está **activo** y se ejecuta automáticamente cada vez que arranca el backend (`bootRun`) o una prueba de integración. **Cualquier archivo nuevo en la carpeta de migraciones se aplica a la base a la que apunte el `.env` en ese momento.**
+- La base que usa el equipo hoy es la de **Supabase (compartida)**, con PostgreSQL 17. Un compañero ya aplicó la versión 13 del esquema mientras otras ramas solo tenían hasta la 12. Hay riesgo real de choques de versión entre ramas.
+- Ramas: `develop` es la rama de integración. Los compañeros trabajan en ramas propias (por ejemplo `SanabriaBack`) y ya hubo conflictos en `GoogleAuthService`.
+- Cada persona tiene su `.env` local con sus propios valores. **Nunca leas, muestres ni edites `.env`.** Usa `.env.example` para conocer los nombres de las variables.
+
+# Sincronización y migraciones (regla obligatoria)
+
+## Al iniciar cada sesión, antes de proponer o cambiar nada
+1. Ejecuta `git status`, `git branch --show-current` y `git fetch`. Informa en qué rama estás, si hay cambios sin guardar y cuántos commits te separan de `origin/develop`. Si estás atrasado, **dilo y pregunta** si quiere hacer `git merge origin/develop` antes de seguir. No lo hagas por tu cuenta.
+2. Lee la estructura actual del proyecto (carpetas, `build.gradle` o `package.json`, configuración, controladores, servicios, entidades, pantallas) para trabajar sobre el código real y no sobre tu memoria de la conversación anterior.
+3. Lista las migraciones existentes en `src/main/resources/db/migration` (confirma la ruta leyendo `application.properties`) y anota la **versión más alta**. Compara con `origin/develop` (`git ls-tree -r origin/develop --name-only` sobre esa carpeta) para ver si alguien agregó versiones que tú no tienes.
+4. Lee `docs/decisiones.md` y la HU que se va a trabajar.
+5. Resume en pocas líneas lo que encontraste y lo que cambió desde la última vez, y recién ahí pregunta qué HU se trabaja.
+
+## Antes de cualquier migración o cambio de base de datos
+Aplica a: crear o editar archivos de migración, tocar `supabase_setup.sql`, ejecutar `psql`, ejecutar tareas de Flyway, o correr la aplicación o las pruebas apuntando a una base real.
+
+**No hagas nada de esto sin que el usuario te haya dado un «sí» explícito después de ver tu propuesta.** La propuesta debe incluir:
+1. **Qué cambia y por qué**, con la HU que lo exige.
+2. **El SQL completo** de la migración, escrito para PostgreSQL 17 sin extensiones ni objetos propios de Supabase (`auth.*`, `anon`, `authenticated`).
+3. **El número de versión propuesto**: la más alta que viste en tu rama y en `origin/develop`, más uno. Si hay riesgo de que otra persona use el mismo número, avísalo.
+4. **A qué base se aplicaría**: pregunta si es la local o la de Supabase compartida. Por defecto, propón probar primero en una base local y no en la compartida.
+5. **Impacto**: tablas y datos afectados, si destruye o transforma datos, y cómo se deshace (si no se puede deshacer, dilo).
+6. **Cuándo se aplicaría**: recuerda que Flyway la ejecuta al próximo arranque o prueba.
+
+Mientras no haya aprobación, puedes dejar el SQL propuesto **en tu respuesta**, no en un archivo dentro de la carpeta de migraciones.
+
+## Reglas permanentes sobre migraciones
+- **Nunca edites una migración ya aplicada.** Si hay que corregir algo, crea una migración nueva.
+- **Nunca ejecutes** `flywayClean`, `flywayRepair`, `flywayBaseline`, `DROP`, `TRUNCATE` ni `DELETE` masivo sobre una base, ni lo propongas como atajo. Si el usuario lo pide, confirma dos veces.
+- Convención de nombre: `V<n>__descripcion_corta.sql`, sin saltarse números.
+- Nada de `ON DELETE CASCADE` ni borrado físico (RN-13). Usa estados y desactivación.
+- Después de crear la migración, antes de decir que está lista: pide permiso para probarla contra una base **local** PostgreSQL 17 y muestra el resultado.
+- El esquema lo gobierna el backend. El frontend **no** modifica la base: si una HU del frontend necesita un cambio de datos, descríbelo y pide que se haga en el backend.
+- Si encuentras migraciones aplicadas que no existen en tu rama (como la versión 13 mencionada), **avisa y no sigas** hasta que el usuario resuelva la sincronización.
+
 # Cómo trabajas cada HU
 
 **Solo trabajas las HU que el usuario te nombre.** No crees, planifiques ni implementes HU por tu cuenta ni en bloque. Si el usuario nombra una HU, procede; si pide varias, hazlas una por una en el orden indicado. Si te falta una HU de la que depende otra, avísalo y pregunta.
@@ -248,7 +287,7 @@ Se programa en VS Code sobre Windows, pero todo debe correr en Debian 13. Evita 
 1. Lee la HU completa en el Excel (historia, criterios, observaciones). No trabajes con el índice de arriba.
 2. Resume en pocas líneas qué vas a construir y lista los criterios como una lista de verificación. Marca dudas y dependencias (otras HU).
 3. Si hay ambigüedad o contradicción, pregunta (máximo 3 preguntas por vez, ordenadas por impacto) y espera la respuesta.
-4. Propón un plan corto: modelo de datos, endpoints o servicios, pantallas, pruebas. Pide aprobación cuando el cambio sea grande o toque el modelo.
+4. Propón un plan corto: modelo de datos, endpoints o servicios, pantallas, pruebas. Pide aprobación cuando el cambio sea grande o toque el modelo. Si el plan incluye cualquier cambio en la base de datos, aplica la sección «Sincronización y migraciones» y no crees ni ejecutes nada hasta que el usuario lo apruebe.
 5. Implementa en pasos pequeños. Cada criterio «Dado… cuando… entonces» tiene al menos una prueba automatizada que lo nombra.
 6. Usa los **mensajes de interfaz exactamente como están en los criterios** (por ejemplo «Periodo eliminado», «No se pudo cargar»), en español.
 7. Al terminar, muestra: qué criterios cumple, cuáles quedan pendientes, supuestos y archivos cambiados. Sugiere el mensaje de commit y actualiza `docs/decisiones.md` si hubo decisiones.
@@ -277,11 +316,10 @@ Se programa en VS Code sobre Windows, pero todo debe correr en Debian 13. Evita 
 - No cargues datos reales (docentes, documentos, correos, evaluaciones) en Supabase ni en Vercel. No dejes dependencias de Supabase o Vercel fuera de `src/services/` y de la configuración. No pegues secretos ni el contenido de `.env` en tus respuestas. No asumas acceso al servidor SIA.
 - No uses rutas, comandos ni dependencias que solo funcionen en Windows.
 
-# Primera tarea al empezar
+# Al iniciar una sesión
 
-1. Identifica en qué repositorio estás y lee su estructura (`src/`, `build.gradle` o `package.json`, `Dockerfile`, `docker-compose.yml`, `.env.example`). Resume en pocas líneas el estado real del código.
-2. Revisa los «Riesgos técnicos actuales» y confirma cuáles siguen vigentes. Empieza por el `.env` versionado y las políticas abiertas, y propón el arreglo.
-3. Haz las preguntas bloqueantes (máximo 5, por orden de impacto): dónde correrá el backend en la fase temporal (Vercel no ejecuta Spring Boot), ruta de despliegue final del backend en SIA (JDK 21 o Docker), subdominio y ruta base, HTTP/HTTPS con Google, y estrategia de ramas y revisión. Recuerda que faltan las «recomendaciones de publicación» de la OITel.
-4. Lee `docs/Roses_corp_HU.csv` para conocer su estructura, pero **no generes ni implementes ninguna HU todavía**. Cuando el usuario nombre una, lee solo esa historia en el Excel y, si hace falta, crea únicamente `docs/hu/HU-0xx.md` con su historia, criterios, módulo, peso, prioridad y observaciones.
-5. Termina con un resumen corto del estado del repositorio, tus preguntas bloqueantes y la pregunta: «¿Con qué HU empezamos?».
-6. Espera la HU indicada y confirmación del plan antes de escribir código.
+1. Haz la rutina de «Al iniciar cada sesión» de la sección «Sincronización y migraciones».
+2. Revisa los «Riesgos técnicos actuales» y confirma cuáles siguen vigentes. Avisa si ves secretos en archivos versionados.
+3. Haz solo las preguntas bloqueantes (máximo 5, por orden de impacto).
+4. No generes ni implementes ninguna HU todavía. Termina con el resumen y la pregunta: «¿Con qué HU empezamos?».
+5. Cuando el usuario nombre una HU, lee solo esa en `docs/Roses_corp_HU.csv`, crea (si hace falta) únicamente `docs/hu/HU-0xx.md`, presenta criterios, dudas y plan, y espera la aprobación antes de escribir código.

@@ -41,6 +41,10 @@ public class Docente {
     @Column(name = "correo_institucional", length = 50, nullable = false, unique = true)
     private String correoInstitucional;
 
+    // HU-015: dato de contacto opcional que edita el propio docente
+    @Column(name = "correo_personal", length = 100)
+    private String correoPersonal;
+
     @Column(name = "telefono", length = 20)
     private String telefono;
 

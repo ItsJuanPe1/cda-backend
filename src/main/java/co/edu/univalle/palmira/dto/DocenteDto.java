@@ -67,6 +67,24 @@ public class DocenteDto {
             @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor) {
     }
 
+    // HU-015: datos de contacto que edita el propio docente desde "Mi perfil".
+    // Ambos son opcionales: null o vacío deja el campo sin valor.
+    public record ContactoRequest(
+            @JsonProperty("correo_personal")
+            @Size(max = 100, message = "El correo personal no puede exceder 100 caracteres")
+            @Pattern(regexp = "^\\s*$|^\\s*[A-Za-z0-9._%+\\-]+@[A-Za-z0-9\\-]+(\\.[A-Za-z0-9\\-]+)*\\.[A-Za-z]{2,}\\s*$", message = "El correo personal no tiene un formato válido")
+            @Pattern(regexp = "^(?!.*@correounivalle\\.edu\\.co\\s*$).*$", flags = Pattern.Flag.CASE_INSENSITIVE, message = "El correo personal no puede ser institucional")
+            String correoPersonal,
+
+            @JsonProperty("telefono")
+            @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El teléfono solo admite de 7 a 10 dígitos")
+            String telefono) {
+    }
+
+    // HU-015: contenido de la foto activa para descargarla
+    public record Foto(String tipoMime, byte[] contenido) {
+    }
+
     public record Response(
             @JsonProperty("id") Long id,
             @JsonProperty("codigo") String codigo,
@@ -75,12 +93,14 @@ public class DocenteDto {
             @JsonProperty("tipo_documento") TipoDocumento tipoDocumento,
             @JsonProperty("numero_documento") String numeroDocumento,
             @JsonProperty("correo_institucional") String correoInstitucional,
+            @JsonProperty("correo_personal") String correoPersonal,
             @JsonProperty("telefono") String telefono,
             @JsonProperty("tipo_docente") TipoDocente tipoDocente,
             @JsonProperty("categoria") CategoriaDocente categoria,
             @JsonProperty("code_program") String codeProgram,
             @JsonProperty("nombre_programa") String nombrePrograma,
             @JsonProperty("foto_url") String fotoUrl,
+            @JsonProperty("tiene_foto") Boolean tieneFoto,
             @JsonProperty("evaluacion_periodo") String evaluacionPeriodo,
             @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor,
             @JsonProperty("estado") Boolean estado,
