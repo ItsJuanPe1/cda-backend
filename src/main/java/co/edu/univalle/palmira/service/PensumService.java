@@ -35,7 +35,7 @@ public class PensumService {
 
     @Transactional(readOnly = true)
     public List<PensumItemDto.Response> getAll() {
-        return pensumRepository.findAll()
+        return pensumRepository.findAllWithAsignatura()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -59,7 +59,8 @@ public class PensumService {
 
         PensumId id = new PensumId(progCode, courseCode);
         if (pensumRepository.existsById(id)) {
-            throw new BadRequestException("La asignatura " + courseCode + " ya se encuentra asignada al programa " + progCode);
+            throw new BadRequestException(
+                    "La asignatura " + courseCode + " ya se encuentra asignada al programa " + progCode);
         }
 
         PensumAcademico pensum = PensumAcademico.builder()
@@ -137,7 +138,6 @@ public class PensumService {
                 a != null ? a.getEsComplementaria() : false,
                 a != null ? a.getEsBasica() : false,
                 a != null ? a.getFacultad() : p.getFacultad(),
-                p.getActivo() != null ? p.getActivo() : true
-        );
+                p.getActivo() != null ? p.getActivo() : true);
     }
 }

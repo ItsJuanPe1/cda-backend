@@ -14,7 +14,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 // HU-040: crear, editar y desactivar programas académicos (docs/contratos/HU-040.md)
 @Service
@@ -31,9 +33,14 @@ public class ProgramaService {
     // Criterio 5: el administrador ve todos los programas, activos e inactivos
     @Transactional(readOnly = true)
     public List<ProgramaDto.Response> getAll() {
+        // Un solo GROUP BY en vez de un COUNT por cada programa
+        Map<String, Long> conteos = new HashMap<>();
+        for (Object[] fila : pensumAcademicoRepository.contarAsignaturasPorPrograma()) {
+            conteos.put((String) fila[0], (Long) fila[1]);
+        }
         return programaRepository.findAllByOrderByNameProgramAsc()
                 .stream()
-                .map(this::toResponseWithCount)
+                .map(p -> toResponse(p, conteos.getOrDefault(p.getCodeProgram(), 0L)))
                 .toList();
     }
 
@@ -69,7 +76,8 @@ public class ProgramaService {
         return toResponse(programaRepository.save(programa), 0L);
     }
 
-    // Criterio 4: editar no toca mallas, cohortes ni coordinador (solo columnas de programas)
+    // Criterio 4: editar no toca mallas, cohortes ni coordinador (solo columnas de
+    // programas)
     @Transactional
     public ProgramaDto.Response update(String codeProgram, ProgramaDto.UpdateRequest request) {
         Programa programa = buscar(codeProgram);
@@ -80,7 +88,8 @@ public class ProgramaService {
 
         Jornada jornada = request.jornada() != null ? Jornada.valueOf(request.jornada()) : programa.getJornada();
         Integer diurna = request.numeroSemestre() != null ? request.numeroSemestre() : programa.getNumeroSemestre();
-        Integer nocturna = request.semestresNocturna() != null ? request.semestresNocturna() : programa.getSemestresNocturna();
+        Integer nocturna = request.semestresNocturna() != null ? request.semestresNocturna()
+                : programa.getSemestresNocturna();
         // La duración de la jornada que ya no se oferta queda vacía
         if (jornada == Jornada.DIURNA) {
             nocturna = null;
@@ -108,7 +117,8 @@ public class ProgramaService {
         return toResponseWithCount(programaRepository.save(programa));
     }
 
-    // RN-13: no se borra; se desactiva y se conservan malla, cohortes, coordinador y docentes
+    // RN-13: no se borra; se desactiva y se conservan malla, cohortes, coordinador
+    // y docentes
     @Transactional
     public void desactivar(String codeProgram) {
         Programa programa = buscar(codeProgram);
@@ -148,7 +158,6 @@ public class ProgramaService {
                 p.getIngreso(),
                 p.getEstado(),
                 p.getIdFacultadPrograma(),
-                totalAsignaturas
-        );
+                totalAsignaturas);
     }
 }
