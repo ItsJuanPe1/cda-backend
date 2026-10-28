@@ -101,6 +101,9 @@ public class SecurityConfig {
                                 "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
                                 .hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
+                        // Coordinadores conservan acceso operativo a las mallas curriculares.
+                        .requestMatchers("/api/pensum/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
                         // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
