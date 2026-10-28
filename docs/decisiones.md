@@ -35,3 +35,21 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   9. **Eliminar la foto la desactiva** (RN-13). Solo el administrador la elimina directamente en la base de datos; no hay endpoint de borrado físico.
   10. **Una sola foto almacenada por docente:** al subir una nueva (o la primera) se reemplaza el contenido de la fila existente y queda activa; solo hay una activa.
   11. Contrato `docs/contratos/HU-015.md` aprobado. La migración de HU-015 se numera **V14** para no chocar con la V13 ya aplicada en la base compartida.
+
+
+## [2026-10-27] Sincronización con el product backlog actualizado
+
+* **HU afectadas:** HU-010, HU-015, HU-017, HU-019, HU-037, HU-040 (cambios de texto) y las HU con cambio de estado listadas abajo.
+* **Cambios en `docs/Roses_corp_HU.csv`:**
+  1. HU-010: se quita «(supuesto)» del criterio 3.4.
+  2. HU-015: el docente edita foto, correo personal y teléfono; nombres, apellidos y correo institucional no son editables (alinea el CSV con la decisión del 2026-10-25). Los criterios 4 y 9 siguen escritos para el correo institucional (inconsistencia 3 de CLAUDE.md).
+  3. HU-017: se aclara el significado de ingreso semestral o anual en el criterio 1; se quita «horas de estudio independiente» del criterio 2.1 (pendiente de confirmar, inconsistencia 10).
+  4. HU-019: Observaciones pasa de «5» a «5.0» (pendiente de confirmar, inconsistencia 11).
+  5. HU-037: «programas» pasa a «programas académicos».
+  6. HU-040: «mallas» pasa a «mallas curriculares».
+  7. Los errores de tipeo detectados (HU-015 «telefono»; HU-017 «cada cuanto», «sujeto», «tendria», «esten») se dejan como están por decisión del equipo; se corrigen en el Excel.
+* **Estado de las HU (confirmado por el equipo):**
+  - **Hechas:** HU-001, HU-002, HU-003, HU-005, HU-006, HU-010, HU-015, HU-022, HU-026, HU-027, HU-028, HU-029, HU-031. HU-006 se marca junto con HU-001 y HU-010 porque el login es un solo módulo compartido.
+  - **Pendientes:** HU-004, HU-007.
+  - El resto sigue «En Backlog».
+* **Otros:** se agrega `*.csv text eol=lf` a `.gitattributes`.
