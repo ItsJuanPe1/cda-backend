@@ -140,6 +140,7 @@ HU sin sprint asignado: HU-018, 041, 050, 056, 057 y 058. Pregunta al equipo en 
 9. **Pendientes marcados en el Excel**: HU-002 (¿se crea el calendario en la app o se sube un PDF?), HU-014 (¿el tiempo de exportación se define en HU-002?), formato exacto de SIRA, y dónde se registra el horario de cada curso para detectar cruces (la aplicación no lo crea).
 10. **HU-017: horas de estudio independiente.** En el backlog del 2026-10-27 el criterio 2.1 ya no incluye «horas de estudio independiente», pero el criterio 2 sí la lista y la reunión dice que la malla la incluye. Confirma si el campo se quita o fue un borrado accidental.
 11. **HU-019: Observaciones «5.0».** La columna Observaciones contiene solo «5.0» (antes «5»), sin significado claro; parece un artefacto de exportación de Excel. Confirma qué debía decir.
+12. **HU-043 (criterio 5) y cambio de duración de un programa.** Si un programa pasa de 10 a 8 semestres (HU-040 lo permite, decisión 11 del 2026-10-27), las cohortes 9 y 10 de la malla en extinción deben terminar, pero HU-043 dice que la propuesta «nunca supera la duración definida del programa». Resuélvelo antes de HU-042 y HU-043 (por ejemplo, que cada cohorte use la duración de su malla).
 
 # Arquitectura y repositorios
 

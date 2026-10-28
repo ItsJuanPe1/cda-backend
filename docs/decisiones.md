@@ -53,3 +53,21 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - **Pendientes:** HU-004, HU-007.
   - El resto sigue «En Backlog».
 * **Otros:** se agrega `*.csv text eol=lf` a `.gitattributes`.
+
+
+## [2026-10-27] Programas académicos: jornada, duración, código y desactivación (HU-040)
+
+* **HU afectadas:** HU-040 (crear y editar programas), HU-041 (desactivar o eliminar), HU-017 y HU-032 (mallas), HU-042 y HU-045 (cohortes y programación).
+* **Decisión:**
+  1. La resolución de calendario es distinta de la resolución de programa (también llamada programa académico o malla curricular).
+  2. La malla curricular es la misma para el programa en jornada diurna, nocturna o ambas. Cambia la duración: por ejemplo 6 semestres en diurna y 7 en nocturna, o 10 en diurna y hasta 11 en nocturna, porque algunas asignaturas se redistribuyen para dar un semestre extra.
+  3. Todos los programas tienen código de 4 dígitos. Los valores actuales con sufijo de jornada en `programas.code_program` (por ejemplo `2135-DIU`, `3846-DIU`) se deben llevar a 4 dígitos.
+  4. Un programa no se elimina: se desactiva (RN-13). El `DELETE` de programas deja de borrar físicamente.
+  5. Una asignatura de la malla puede ubicarse en un semestre distinto según la jornada del programa (diurna o nocturna). La malla sigue siendo una sola; lo que varía por jornada es el semestre de cada asignatura. Se configura desde el inicio, al registrar la malla, y se implementa en HU-017 y HU-032 con su propia migración.
+  6. La rotación de cohortes (HU-043) no depende del tipo de ingreso: cada cohorte c pasa a c+1 y la del último semestre vuelve al 1, igual para programas anuales y semestrales. El campo `ingreso` (semestral o anual) es descriptivo.
+  7. Valores iniciales en V15: todos los programas existentes quedan con jornada diurna e ingreso semestral; el administrador los corrige desde la pantalla de HU-040.
+  8. Administración de Empresas (3846) queda con jornada ambas: 10 semestres en diurna y 11 en nocturna. Sirve de guía para otros programas de pregrado que se registren con las dos jornadas (nocturna con un semestre más que la diurna, editable).
+  9. Se conserva `numero_semestre` como duración en jornada diurna y se agrega `semestres_nocturna`.
+  10. Migración V15 (`V15__hu040_programas_codigo_jornada_estado.sql`) aprobada para crear y probar en PostgreSQL 17 local. Aún no se aplica en la base compartida.
+  11. No se bloquea reducir la duración de un programa por debajo del último semestre de su malla: si la carrera pasa, por ejemplo, de 10 a 8 semestres, después se ajusta la malla (HU-032) o se registra una nueva (HU-017), redistribuyendo o retirando asignaturas.
+  12. Contrato `docs/contratos/HU-040.md` aprobado: el `DELETE` desactiva, el `PUT` es parcial y el código no se edita.
