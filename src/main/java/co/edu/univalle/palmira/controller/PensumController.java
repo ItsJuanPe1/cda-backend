@@ -32,6 +32,43 @@ public class PensumController {
         return ResponseEntity.ok(pensumService.getByProgram(codeProgram));
     }
 
+    @GetMapping("/programa/{codeProgram}/historial")
+    public ResponseEntity<List<PensumItemDto.HistorySummary>> getHistory(
+            @PathVariable("codeProgram") String codeProgram) {
+        return ResponseEntity.ok(pensumService.getHistory(codeProgram));
+    }
+
+    @GetMapping("/programa/{codeProgram}/version/{version}")
+    public ResponseEntity<List<PensumItemDto.Response>> getVersion(
+            @PathVariable("codeProgram") String codeProgram,
+            @PathVariable("version") Integer version) {
+        return ResponseEntity.ok(pensumService.getVersion(codeProgram, version));
+    }
+
+    @PostMapping("/programa/{codeProgram}/guardar")
+    public ResponseEntity<List<PensumItemDto.Response>> saveVersion(
+            @PathVariable("codeProgram") String codeProgram,
+            @Valid @RequestBody PensumItemDto.SaveRequest request) {
+        if (!codeProgram.equalsIgnoreCase(request.codeProgram())) {
+            throw new co.edu.univalle.palmira.exception.BadRequestException(
+                    "El programa de la ruta no coincide con el cuerpo de la solicitud");
+        }
+        return ResponseEntity.status(HttpStatus.CREATED).body(pensumService.saveVersion(request));
+    }
+
+    @PatchMapping("/programa/{codeProgram}/desactivar")
+    public ResponseEntity<Void> deactivate(@PathVariable("codeProgram") String codeProgram) {
+        pensumService.deactivateCurrent(codeProgram);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/programa/{codeProgram}/version/{version}/reactivar")
+    public ResponseEntity<List<PensumItemDto.Response>> reactivate(
+            @PathVariable("codeProgram") String codeProgram,
+            @PathVariable("version") Integer version) {
+        return ResponseEntity.ok(pensumService.reactivate(codeProgram, version));
+    }
+
     @PostMapping
     @Operation(summary = "Agregar una asignatura al pensum de un programa")
     public ResponseEntity<PensumItemDto.Response> addCourseToPensum(
