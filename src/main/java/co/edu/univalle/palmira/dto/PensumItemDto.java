@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.util.List;
+
 public class PensumItemDto {
 
     public record Response(
@@ -18,7 +20,25 @@ public class PensumItemDto {
             @JsonProperty("es_complementaria") Boolean esComplementaria,
             @JsonProperty("es_basica") Boolean esBasica,
             String facultad,
-            Boolean activo
+            Boolean activo,
+            Integer version,
+            Boolean vigente
+    ) {}
+
+    public record SaveItem(
+            @JsonProperty("code_course") @NotBlank String codeCourse,
+            @NotNull @Min(1) @Max(20) Integer semestre
+    ) {}
+
+    public record SaveRequest(
+            @JsonProperty("code_program") @NotBlank String codeProgram,
+            @NotNull List<SaveItem> items
+    ) {}
+
+    public record HistorySummary(
+            Integer version,
+            java.time.LocalDateTime fechaDesactivacion,
+            Integer totalAsignaturas
     ) {}
 
     public record AddRequest(

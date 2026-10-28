@@ -70,6 +70,7 @@ public class ProgramaService {
                 .ingreso(TipoIngreso.valueOf(request.ingreso()))
                 .estado(request.estado() != null ? EstadoPrograma.valueOf(request.estado()) : EstadoPrograma.ACTIVO)
                 .idFacultadPrograma(request.idFacultadPrograma())
+                .apertura(normalizeApertura(request.apertura()))
                 .build();
 
         // Criterio 3: un programa nuevo no tiene malla ni cohortes
@@ -112,6 +113,9 @@ public class ProgramaService {
         }
         if (request.idFacultadPrograma() != null) {
             programa.setIdFacultadPrograma(request.idFacultadPrograma());
+        }
+        if (request.apertura() != null) {
+            programa.setApertura(normalizeApertura(request.apertura()));
         }
 
         return toResponseWithCount(programaRepository.save(programa));
@@ -158,6 +162,11 @@ public class ProgramaService {
                 p.getIngreso(),
                 p.getEstado(),
                 p.getIdFacultadPrograma(),
-                totalAsignaturas);
+                totalAsignaturas,
+                p.getApertura());
+    }
+
+    private String normalizeApertura(String apertura) {
+        return apertura == null || apertura.isBlank() ? null : apertura.trim().toUpperCase();
     }
 }

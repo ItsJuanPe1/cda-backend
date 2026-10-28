@@ -21,12 +21,14 @@ public class ProgramaDto {
     public static final String MSG_DURACION_NOCTURNA = "La duración en jornada nocturna es obligatoria y debe estar entre 1 y 20";
     public static final String MSG_INGRESO = "El ingreso debe ser semestral o anual";
     public static final String MSG_ESTADO = "El estado debe ser activo o inactivo";
+    public static final String MSG_APERTURA = "La apertura debe ser semestral o anual";
 
     private static final String REGEX_CODIGO = "^\\s*[0-9]{4}\\s*$";
     private static final String REGEX_NO_VACIO = "^(?s).*\\S.*$";
     private static final String REGEX_JORNADA = "^(DIURNA|NOCTURNA|AMBAS)$";
     private static final String REGEX_INGRESO = "^(SEMESTRAL|ANUAL)$";
     private static final String REGEX_ESTADO = "^(ACTIVO|INACTIVO)$";
+    private static final String REGEX_APERTURA = "(?i)^(SEMESTRAL|ANUAL)$";
 
     public record Response(
             @JsonProperty("code_program") String codeProgram,
@@ -37,8 +39,16 @@ public class ProgramaDto {
             @JsonProperty("ingreso") TipoIngreso ingreso,
             @JsonProperty("estado") EstadoPrograma estado,
             @JsonProperty("id_facultad_programa") Integer idFacultadPrograma,
-            @JsonProperty("total_asignaturas") Long totalAsignaturas
-    ) {}
+            @JsonProperty("total_asignaturas") Long totalAsignaturas,
+            @JsonProperty("apertura") String apertura
+    ) {
+        public Response(String codeProgram, String nameProgram, Jornada jornada,
+                        Integer numeroSemestre, Integer semestresNocturna, TipoIngreso ingreso,
+                        EstadoPrograma estado, Integer idFacultadPrograma, Long totalAsignaturas) {
+            this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna, ingreso,
+                    estado, idFacultadPrograma, totalAsignaturas, null);
+        }
+    }
 
     // Las duraciones obligatorias según la jornada se validan en ProgramaService
     public record CreateRequest(
@@ -78,8 +88,19 @@ public class ProgramaDto {
             String estado,
 
             @JsonProperty("id_facultad_programa")
-            Integer idFacultadPrograma
-    ) {}
+            Integer idFacultadPrograma,
+
+            @JsonProperty("apertura")
+            @Pattern(regexp = REGEX_APERTURA, message = MSG_APERTURA)
+            String apertura
+    ) {
+        public CreateRequest(String codeProgram, String nameProgram, String jornada,
+                             Integer numeroSemestre, Integer semestresNocturna, String ingreso,
+                             String estado, Integer idFacultadPrograma) {
+            this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
+                    ingreso, estado, idFacultadPrograma, null);
+        }
+    }
 
     // Actualización parcial: un campo ausente o null conserva su valor
     public record UpdateRequest(
@@ -114,6 +135,17 @@ public class ProgramaDto {
             String estado,
 
             @JsonProperty("id_facultad_programa")
-            Integer idFacultadPrograma
-    ) {}
+            Integer idFacultadPrograma,
+
+            @JsonProperty("apertura")
+            @Pattern(regexp = REGEX_APERTURA, message = MSG_APERTURA)
+            String apertura
+    ) {
+        public UpdateRequest(String codeProgram, String nameProgram, String jornada,
+                             Integer numeroSemestre, Integer semestresNocturna, String ingreso,
+                             String estado, Integer idFacultadPrograma) {
+            this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
+                    ingreso, estado, idFacultadPrograma, null);
+        }
+    }
 }

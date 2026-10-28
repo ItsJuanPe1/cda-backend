@@ -13,19 +13,28 @@ import java.time.LocalTime;
 @AllArgsConstructor
 @Builder
 public class DisponibilidadDocente {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "id_docente", nullable = false)
-    private Usuario docente;
+    @JoinColumn(
+            name = "id_docente",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_disponibilidad_docente")
+    )
+    private Docente docente;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "periodo_id", nullable = false)
+    @JoinColumn(
+            name = "periodo_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "fk_disponibilidad_periodo")
+    )
     private PeriodoAcademico periodo;
 
-    @Column(nullable = false)
+    @Column(name = "dia", nullable = false)
     private Integer dia;
 
     @Column(name = "hora_inicio", nullable = false)
