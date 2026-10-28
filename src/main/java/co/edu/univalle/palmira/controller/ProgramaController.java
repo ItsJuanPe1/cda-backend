@@ -46,10 +46,11 @@ public class ProgramaController {
         return ResponseEntity.ok(programaService.update(codeProgram, request));
     }
 
+    // HU-040 y RN-13: no borra, desactiva el programa
     @DeleteMapping("/{codeProgram}")
-    @Operation(summary = "Eliminar un programa académico")
+    @Operation(summary = "Desactivar un programa académico (no lo borra)")
     public ResponseEntity<Void> delete(@PathVariable("codeProgram") String codeProgram) {
-        programaService.delete(codeProgram);
+        programaService.desactivar(codeProgram);
         return ResponseEntity.noContent().build();
     }
 }

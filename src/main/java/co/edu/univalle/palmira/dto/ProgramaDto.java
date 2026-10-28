@@ -1,49 +1,117 @@
 package co.edu.univalle.palmira.dto;
 
+import co.edu.univalle.palmira.model.enums.EstadoPrograma;
+import co.edu.univalle.palmira.model.enums.Jornada;
+import co.edu.univalle.palmira.model.enums.TipoIngreso;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+// HU-040: contrato en docs/contratos/HU-040.md
 public class ProgramaDto {
+
+    public static final String MSG_CODIGO = "El código debe tener 4 dígitos";
+    public static final String MSG_NOMBRE_OBLIGATORIO = "El nombre es obligatorio";
+    public static final String MSG_NOMBRE_LARGO = "El nombre no puede superar 100 caracteres";
+    public static final String MSG_JORNADA = "La jornada debe ser diurna, nocturna o ambas";
+    public static final String MSG_DURACION_DIURNA = "La duración en jornada diurna es obligatoria y debe estar entre 1 y 20";
+    public static final String MSG_DURACION_NOCTURNA = "La duración en jornada nocturna es obligatoria y debe estar entre 1 y 20";
+    public static final String MSG_INGRESO = "El ingreso debe ser semestral o anual";
+    public static final String MSG_ESTADO = "El estado debe ser activo o inactivo";
+
+    private static final String REGEX_CODIGO = "^\\s*[0-9]{4}\\s*$";
+    private static final String REGEX_NO_VACIO = "^(?s).*\\S.*$";
+    private static final String REGEX_JORNADA = "^(DIURNA|NOCTURNA|AMBAS)$";
+    private static final String REGEX_INGRESO = "^(SEMESTRAL|ANUAL)$";
+    private static final String REGEX_ESTADO = "^(ACTIVO|INACTIVO)$";
 
     public record Response(
             @JsonProperty("code_program") String codeProgram,
             @JsonProperty("name_program") String nameProgram,
+            @JsonProperty("jornada") Jornada jornada,
             @JsonProperty("numero_semestre") Integer numeroSemestre,
+            @JsonProperty("semestres_nocturna") Integer semestresNocturna,
+            @JsonProperty("ingreso") TipoIngreso ingreso,
+            @JsonProperty("estado") EstadoPrograma estado,
             @JsonProperty("id_facultad_programa") Integer idFacultadPrograma,
             @JsonProperty("total_asignaturas") Long totalAsignaturas
     ) {}
 
+    // Las duraciones obligatorias según la jornada se validan en ProgramaService
     public record CreateRequest(
             @JsonProperty("code_program")
-            @NotBlank(message = "El código del programa es obligatorio")
-            @Size(max = 50, message = "El código no puede exceder 50 caracteres")
+            @NotNull(message = MSG_CODIGO)
+            @Pattern(regexp = REGEX_CODIGO, message = MSG_CODIGO)
             String codeProgram,
 
             @JsonProperty("name_program")
-            @NotBlank(message = "El nombre del programa es obligatorio")
-            @Size(max = 150, message = "El nombre no puede exceder 150 caracteres")
+            @NotNull(message = MSG_NOMBRE_OBLIGATORIO)
+            @Pattern(regexp = REGEX_NO_VACIO, message = MSG_NOMBRE_OBLIGATORIO)
+            @Size(max = 100, message = MSG_NOMBRE_LARGO)
             String nameProgram,
 
+            @JsonProperty("jornada")
+            @NotNull(message = MSG_JORNADA)
+            @Pattern(regexp = REGEX_JORNADA, message = MSG_JORNADA)
+            String jornada,
+
             @JsonProperty("numero_semestre")
-            @Min(value = 1, message = "El número de semestres debe ser al menos 1")
-            @Max(value = 20, message = "El número de semestres no puede exceder 20")
+            @Min(value = 1, message = MSG_DURACION_DIURNA)
+            @Max(value = 20, message = MSG_DURACION_DIURNA)
             Integer numeroSemestre,
+
+            @JsonProperty("semestres_nocturna")
+            @Min(value = 1, message = MSG_DURACION_NOCTURNA)
+            @Max(value = 20, message = MSG_DURACION_NOCTURNA)
+            Integer semestresNocturna,
+
+            @JsonProperty("ingreso")
+            @NotNull(message = MSG_INGRESO)
+            @Pattern(regexp = REGEX_INGRESO, message = MSG_INGRESO)
+            String ingreso,
+
+            @JsonProperty("estado")
+            @Pattern(regexp = REGEX_ESTADO, message = MSG_ESTADO)
+            String estado,
 
             @JsonProperty("id_facultad_programa")
             Integer idFacultadPrograma
     ) {}
 
+    // Actualización parcial: un campo ausente o null conserva su valor
     public record UpdateRequest(
+            @JsonProperty("code_program")
+            String codeProgram,
+
             @JsonProperty("name_program")
+            @Pattern(regexp = REGEX_NO_VACIO, message = MSG_NOMBRE_OBLIGATORIO)
+            @Size(max = 100, message = MSG_NOMBRE_LARGO)
             String nameProgram,
 
+            @JsonProperty("jornada")
+            @Pattern(regexp = REGEX_JORNADA, message = MSG_JORNADA)
+            String jornada,
+
             @JsonProperty("numero_semestre")
-            @Min(value = 1, message = "El número de semestres debe ser al menos 1")
-            @Max(value = 20, message = "El número de semestres no puede exceder 20")
+            @Min(value = 1, message = MSG_DURACION_DIURNA)
+            @Max(value = 20, message = MSG_DURACION_DIURNA)
             Integer numeroSemestre,
+
+            @JsonProperty("semestres_nocturna")
+            @Min(value = 1, message = MSG_DURACION_NOCTURNA)
+            @Max(value = 20, message = MSG_DURACION_NOCTURNA)
+            Integer semestresNocturna,
+
+            @JsonProperty("ingreso")
+            @Pattern(regexp = REGEX_INGRESO, message = MSG_INGRESO)
+            String ingreso,
+
+            @JsonProperty("estado")
+            @Pattern(regexp = REGEX_ESTADO, message = MSG_ESTADO)
+            String estado,
 
             @JsonProperty("id_facultad_programa")
             Integer idFacultadPrograma

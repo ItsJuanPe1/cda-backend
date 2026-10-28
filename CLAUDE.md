@@ -99,7 +99,7 @@ La fuente completa, con criterios de aceptación, está en el Excel. Peso en pun
 | HU-034 | administrador | reactivar una resolución de programa | Gestión de resolución de programa | 2 | M | Sprint 1 |
 | HU-035 | administrador | Yo como administrador, descargar la resolución de programa  en Excel, para exportarla | Reportes | 5 | M | Sprint 1 |
 | HU-036 | administrador | reemplazar un coordinador de un programa | Gestión de coordinador | 3 | M | Sprint 1 |
-| HU-037 | administrador | ver programas y sus coordinadores | Gestión de coordinador | 2 | M | Sprint 1 |
+| HU-037 | administrador | ver programas académicos y sus coordinadores | Gestión de coordinador | 2 | M | Sprint 1 |
 | HU-038 | docente | recibir un recordatorio de las fechas de mi periodo | Notificaciones y alertas | 5 | M | Sprint 1 |
 | HU-039 | coordinador | recibir un recordatorio de las fechas de mi periodo | Notificaciones y alertas | 5 | M | Sprint 1 |
 | HU-040 | administrador | crear y editar programas académicos | Gestión de resolución de programa | 3 | M | Sprint 1 |
@@ -131,13 +131,16 @@ HU sin sprint asignado: HU-018, 041, 050, 056, 057 y 058. Pregunta al equipo en 
 
 1. **HU-011 y HU-061 contra HU-042, 043 y 045.** HU-011 hace que el coordinador elija resolución, semestre y periodo de oferta, y HU-061 avanza al siguiente semestre al terminar de asignar. La reunión y HU-042/043/045/046 dicen que la oferta la define el administrador y que la rotación es por periodo. Implementa primero HU-042, 043, 045 y 046. Antes de HU-011 y HU-061 pide confirmación del alcance.
 2. **HU-027 y la reunión.** HU-027 vincula la cuenta de coordinación a un solo programa, pero dos coordinadores tienen 2 programas. Confirma si son dos cuentas o una cuenta con dos programas.
-3. **HU-015 y HU-022.** HU-015 permite al docente editar el correo institucional, que es su credencial de Google. La reunión dice que el docente solo cambia su contacto. HU-022 le muestra su evaluación docente (marcado como supuesto). Confirma ambos puntos.
+3. **HU-015 (criterios 4 y 9) y HU-022.** El backlog del 2026-10-27 ya deja el correo institucional, nombres y apellidos como no editables y agrega correo personal y teléfono (criterio 2). Pero los criterios 4 (correo terminado en `@correounivalle.edu.co`) y 9 («si cambié mi correo») siguen escritos para el correo institucional. `docs/decisiones.md` (2026-10-25) dice que no aplican al docente; falta corregir el texto en el Excel. HU-022 le muestra su evaluación docente (marcado como supuesto): confírmalo.
 4. **HU-059 (cupos)** no aparece en la reunión. La historia dice «administrador» pero los criterios hablan del coordinador y de «mi programa». Confirma el rol.
 5. **HU-034 y HU-032.** Al reactivar una malla la activa pasa a inactiva solo si no tiene cohortes. Al quitar una asignatura con asignaciones, HU-032 las elimina. Confirma cómo conviven mallas antiguas y nuevas, y si borrar asignaciones es lo deseado.
 6. **HU-004** se titula «eliminar (desactivar)». Aplica RN-13: es desactivar, nunca borrar.
 7. **Duplicadas por rol.** HU-001, 006 y 010 (login) y HU-023, 024 y 025 (cerrar sesión) son la misma funcionalidad. Impleméntalas una sola vez como módulo compartido con redirección por rol, y marca las tres HU como cubiertas.
 8. **HU-052 y HU-053** son la consulta de carga para coordinador y administrador. HU-052 tiene la observación «relacionada con HU-XXX» sin completar.
 9. **Pendientes marcados en el Excel**: HU-002 (¿se crea el calendario en la app o se sube un PDF?), HU-014 (¿el tiempo de exportación se define en HU-002?), formato exacto de SIRA, y dónde se registra el horario de cada curso para detectar cruces (la aplicación no lo crea).
+10. **HU-017: horas de estudio independiente.** En el backlog del 2026-10-27 el criterio 2.1 ya no incluye «horas de estudio independiente», pero el criterio 2 sí la lista y la reunión dice que la malla la incluye. Confirma si el campo se quita o fue un borrado accidental.
+11. **HU-019: Observaciones «5.0».** La columna Observaciones contiene solo «5.0» (antes «5»), sin significado claro; parece un artefacto de exportación de Excel. Confirma qué debía decir.
+12. **HU-043 (criterio 5) y cambio de duración de un programa.** Si un programa pasa de 10 a 8 semestres (HU-040 lo permite, decisión 11 del 2026-10-27), las cohortes 9 y 10 de la malla en extinción deben terminar, pero HU-043 dice que la propuesta «nunca supera la duración definida del programa». Resuélvelo antes de HU-042 y HU-043 (por ejemplo, que cada cohorte use la duración de su malla).
 
 # Arquitectura y repositorios
 

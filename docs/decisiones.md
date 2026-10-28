@@ -35,3 +35,39 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   9. **Eliminar la foto la desactiva** (RN-13). Solo el administrador la elimina directamente en la base de datos; no hay endpoint de borrado físico.
   10. **Una sola foto almacenada por docente:** al subir una nueva (o la primera) se reemplaza el contenido de la fila existente y queda activa; solo hay una activa.
   11. Contrato `docs/contratos/HU-015.md` aprobado. La migración de HU-015 se numera **V14** para no chocar con la V13 ya aplicada en la base compartida.
+
+
+## [2026-10-27] Sincronización con el product backlog actualizado
+
+* **HU afectadas:** HU-010, HU-015, HU-017, HU-019, HU-037, HU-040 (cambios de texto) y las HU con cambio de estado listadas abajo.
+* **Cambios en `docs/Roses_corp_HU.csv`:**
+  1. HU-010: se quita «(supuesto)» del criterio 3.4.
+  2. HU-015: el docente edita foto, correo personal y teléfono; nombres, apellidos y correo institucional no son editables (alinea el CSV con la decisión del 2026-10-25). Los criterios 4 y 9 siguen escritos para el correo institucional (inconsistencia 3 de CLAUDE.md).
+  3. HU-017: se aclara el significado de ingreso semestral o anual en el criterio 1; se quita «horas de estudio independiente» del criterio 2.1 (pendiente de confirmar, inconsistencia 10).
+  4. HU-019: Observaciones pasa de «5» a «5.0» (pendiente de confirmar, inconsistencia 11).
+  5. HU-037: «programas» pasa a «programas académicos».
+  6. HU-040: «mallas» pasa a «mallas curriculares».
+  7. Los errores de tipeo detectados (HU-015 «telefono»; HU-017 «cada cuanto», «sujeto», «tendria», «esten») se dejan como están por decisión del equipo; se corrigen en el Excel.
+* **Estado de las HU (confirmado por el equipo):**
+  - **Hechas:** HU-001, HU-002, HU-003, HU-005, HU-010, HU-015, HU-022, HU-026, HU-027, HU-028, HU-029, HU-031.
+  - **Pendientes:** HU-004, HU-007.
+  - El resto sigue «En Backlog».
+* **Otros:** se agrega `*.csv text eol=lf` a `.gitattributes`.
+
+
+## [2026-10-27] Programas académicos: jornada, duración, código y desactivación (HU-040)
+
+* **HU afectadas:** HU-040 (crear y editar programas), HU-041 (desactivar o eliminar), HU-017 y HU-032 (mallas), HU-042 y HU-045 (cohortes y programación).
+* **Decisión:**
+  1. La resolución de calendario es distinta de la resolución de programa (también llamada programa académico o malla curricular).
+  2. La malla curricular es la misma para el programa en jornada diurna, nocturna o ambas. Cambia la duración: por ejemplo 6 semestres en diurna y 7 en nocturna, o 10 en diurna y hasta 11 en nocturna, porque algunas asignaturas se redistribuyen para dar un semestre extra.
+  3. Todos los programas tienen código de 4 dígitos. Los valores actuales con sufijo de jornada en `programas.code_program` (por ejemplo `2135-DIU`, `3846-DIU`) se deben llevar a 4 dígitos.
+  4. Un programa no se elimina: se desactiva (RN-13). El `DELETE` de programas deja de borrar físicamente.
+  5. Una asignatura de la malla puede ubicarse en un semestre distinto según la jornada del programa (diurna o nocturna). La malla sigue siendo una sola; lo que varía por jornada es el semestre de cada asignatura. Se configura desde el inicio, al registrar la malla, y se implementa en HU-017 y HU-032 con su propia migración.
+  6. La rotación de cohortes (HU-043) no depende del tipo de ingreso: cada cohorte c pasa a c+1 y la del último semestre vuelve al 1, igual para programas anuales y semestrales. El campo `ingreso` (semestral o anual) es descriptivo.
+  7. Valores iniciales en V15: todos los programas existentes quedan con jornada diurna e ingreso semestral; el administrador los corrige desde la pantalla de HU-040.
+  8. Administración de Empresas (3846) queda con jornada ambas: 10 semestres en diurna y 11 en nocturna. Sirve de guía para otros programas de pregrado que se registren con las dos jornadas (nocturna con un semestre más que la diurna, editable).
+  9. Se conserva `numero_semestre` como duración en jornada diurna y se agrega `semestres_nocturna`.
+  10. Migración V15 (`V15__hu040_programas_codigo_jornada_estado.sql`) aprobada para crear y probar en PostgreSQL 17 local. Aún no se aplica en la base compartida.
+  11. No se bloquea reducir la duración de un programa por debajo del último semestre de su malla: si la carrera pasa, por ejemplo, de 10 a 8 semestres, después se ajusta la malla (HU-032) o se registra una nueva (HU-017), redistribuyendo o retirando asignaturas.
+  12. Contrato `docs/contratos/HU-040.md` aprobado: el `DELETE` desactiva, el `PUT` es parcial y el código no se edita.
