@@ -78,7 +78,7 @@
 4. Sesión
 4.1. Dado que el usuario ya tiene sesión activa, cuando abra el login, entonces el sistema debe llevarlo a su pantalla de inicio.
 4.2. Dado que no hay sesión iniciada, cuando el usuario intente entrar a una pantalla interna, entonces el sistema debe redirigirlo al login.
-4.3. Dado que la sesión expira por inactividad, entonces el sistema debe cerrarla y mostrar “Su sesión expiró”. (el tiempo lo define el cliente)","Gestión de acceso","5","M","Sujeta a cambios según las preferencias del cliente con la HU-001","Hecha"
+4.3. Dado que la sesión expira por inactividad, entonces el sistema debe cerrarla y mostrar “Su sesión expiró”. (el tiempo lo define el cliente)","Gestión de acceso","5","M","Sujeta a cambios según las preferencias del cliente con la HU-001","En Backlog"
 "HU-007","Yo como docente, requiero registrar mis horarios, para notificar a los coordinadores mis horarios disponibles para las clases","1. Acceder al registro
 1.1. Dado que el docente ha iniciado sesión, hay un período vigente y su plazo de registro está abierto, cuando acceda al módulo de horarios, entonces el sistema debe mostrar la opción “Registrar disponibilidad”.
 1.2. Dado que el plazo del docente está cerrado o aún no inicia, cuando acceda al módulo de horarios, entonces el sistema no debe mostrar la opción de registrar y debe mostrar “Fuera del período habilitado”.

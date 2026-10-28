@@ -49,7 +49,7 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   6. HU-040: «mallas» pasa a «mallas curriculares».
   7. Los errores de tipeo detectados (HU-015 «telefono»; HU-017 «cada cuanto», «sujeto», «tendria», «esten») se dejan como están por decisión del equipo; se corrigen en el Excel.
 * **Estado de las HU (confirmado por el equipo):**
-  - **Hechas:** HU-001, HU-002, HU-003, HU-005, HU-006, HU-010, HU-015, HU-022, HU-026, HU-027, HU-028, HU-029, HU-031. HU-006 se marca junto con HU-001 y HU-010 porque el login es un solo módulo compartido.
+  - **Hechas:** HU-001, HU-002, HU-003, HU-005, HU-010, HU-015, HU-022, HU-026, HU-027, HU-028, HU-029, HU-031.
   - **Pendientes:** HU-004, HU-007.
   - El resto sigue «En Backlog».
 * **Otros:** se agrega `*.csv text eol=lf` a `.gitattributes`.
