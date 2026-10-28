@@ -31,7 +31,7 @@ WHERE code_program = '3846';
 -- 5. Reglas del programa. Si queda algún código que no sea de 4 dígitos,
 --    la migración falla y no se aplica nada.
 ALTER TABLE public.programas
-ALTER COLUMN name_program TYPE VARCHAR(100),
+    ALTER COLUMN name_program TYPE VARCHAR(100),
     ADD CONSTRAINT chk_programas_codigo  CHECK (code_program ~ '^[0-9]{4}$'),
     ADD CONSTRAINT chk_programas_jornada CHECK (jornada IN ('DIURNA', 'NOCTURNA', 'AMBAS')),
     ADD CONSTRAINT chk_programas_ingreso CHECK (ingreso IN ('SEMESTRAL', 'ANUAL')),
