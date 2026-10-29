@@ -39,7 +39,7 @@ public class PensumService {
 
     @Transactional(readOnly = true)
     public List<PensumItemDto.Response> getAll() {
-        return pensumRepository.findAll()
+        return pensumRepository.findAllWithAsignatura()
                 .stream()
                 .filter(p -> Boolean.TRUE.equals(p.getVigente()))
                 .map(this::toResponse)
@@ -65,7 +65,8 @@ public class PensumService {
         int version = currentVersion(progCode);
         PensumId id = new PensumId(progCode, courseCode, version);
         if (pensumRepository.existsById(id)) {
-            throw new BadRequestException("La asignatura " + courseCode + " ya se encuentra asignada al programa " + progCode);
+            throw new BadRequestException(
+                    "La asignatura " + courseCode + " ya se encuentra asignada al programa " + progCode);
         }
 
         PensumAcademico pensum = PensumAcademico.builder()
@@ -210,7 +211,8 @@ public class PensumService {
                 .filter(row -> Boolean.TRUE.equals(row.getVigente()))
                 .toList();
         if (rows.isEmpty()) {
-            throw new co.edu.univalle.palmira.exception.ConflictException("El programa no tiene una malla vigente", null);
+            throw new co.edu.univalle.palmira.exception.ConflictException("El programa no tiene una malla vigente",
+                    null);
         }
         LocalDateTime now = LocalDateTime.now();
         rows.forEach(row -> {
@@ -270,7 +272,6 @@ public class PensumService {
                 a != null ? a.getFacultad() : p.getFacultad(),
                 p.getActivo() != null ? p.getActivo() : true,
                 p.getId().getVersion(),
-                p.getVigente() != null ? p.getVigente() : true
-        );
+                p.getVigente() != null ? p.getVigente() : true);
     }
 }

@@ -15,11 +15,23 @@ import java.util.List;
 public interface PensumAcademicoRepository extends JpaRepository<PensumAcademico, PensumId> {
 
     @Query("SELECT p FROM PensumAcademico p " +
-           "JOIN FETCH p.asignatura " +
-           "JOIN FETCH p.programa " +
-           "WHERE p.id.codeProgram = :codeProgram AND p.vigente = true " +
-           "ORDER BY p.semestre ASC, p.asignatura.nameCourse ASC")
+            "JOIN FETCH p.asignatura " +
+            "JOIN FETCH p.programa " +
+            "WHERE p.id.codeProgram = :codeProgram " +
+            "ORDER BY p.semestre ASC, p.asignatura.nameCourse ASC")
     List<PensumAcademico> findByCodeProgramWithDetails(@Param("codeProgram") String codeProgram);
+
+    // Pensum completo en UNA sola consulta (evita el N+1 de findAll() con
+    // relaciones LAZY)
+    @Query("SELECT p FROM PensumAcademico p " +
+            "JOIN FETCH p.asignatura " +
+            "ORDER BY p.id.codeProgram ASC, p.semestre ASC, p.asignatura.nameCourse ASC")
+    List<PensumAcademico> findAllWithAsignatura();
+
+    // Conteo de materias por programa en UNA sola consulta: filas [code_program,
+    // total]
+    @Query("SELECT p.id.codeProgram, COUNT(p) FROM PensumAcademico p GROUP BY p.id.codeProgram")
+    List<Object[]> contarAsignaturasPorPrograma();
 
     List<PensumAcademico> findByIdCodeCourse(String codeCourse);
 
