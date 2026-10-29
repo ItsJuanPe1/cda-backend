@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 
 // HU-040: contrato en docs/contratos/HU-040.md
 public class ProgramaDto {
@@ -61,9 +62,9 @@ public class ProgramaDto {
                     estado, idFacultadPrograma, totalAsignaturas, apertura, null);
         }
     }
-    
 
-       // Las duraciones obligatorias según la jornada se validan en ProgramaService
+
+    // Las duraciones obligatorias según la jornada se validan en ProgramaService
     public record CreateRequest(
             @JsonProperty("code_program")
             @NotNull(message = MSG_CODIGO)
@@ -168,26 +169,40 @@ public class ProgramaDto {
             @Pattern(regexp = REGEX_APERTURA, message = MSG_APERTURA)
             String apertura,
 
-            // Ausente o null conserva el valor; si llega, no puede estar en blanco
+            // Ausente o null conserva el valor; si llega, no puede estar en blanco.
             @JsonProperty("numero_resolucion")
             @Pattern(regexp = REGEX_NO_VACIO, message = MSG_NUMERO_RESOLUCION_OBLIGATORIO)
             @Size(max = 50, message = MSG_NUMERO_RESOLUCION_LARGO)
-            String numeroResolucion
+            String numeroResolucion,
+
+            // Solo se envía cuando el administrador realmente cambia la asignación.
+            @JsonProperty("id_coordinador_nuevo")
+            @Positive(message = "El ID del coordinador debe ser positivo")
+            Integer idCoordinadorNuevo
     ) {
-        // Compatibilidad: sin apertura ni número de resolución
+        // Compatibilidad con llamadas que todavía usan los 10 campos anteriores.
+        public UpdateRequest(String codeProgram, String nameProgram, String jornada,
+                             Integer numeroSemestre, Integer semestresNocturna, String ingreso,
+                             String estado, Integer idFacultadPrograma, String apertura,
+                             String numeroResolucion) {
+            this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
+                    ingreso, estado, idFacultadPrograma, apertura, numeroResolucion, null);
+        }
+
+        // Compatibilidad: sin apertura ni número de resolución.
         public UpdateRequest(String codeProgram, String nameProgram, String jornada,
                              Integer numeroSemestre, Integer semestresNocturna, String ingreso,
                              String estado, Integer idFacultadPrograma) {
             this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
-                    ingreso, estado, idFacultadPrograma, null, null);
+                    ingreso, estado, idFacultadPrograma, null, null, null);
         }
 
-        // Compatibilidad: sin número de resolución
+        // Compatibilidad: sin número de resolución.
         public UpdateRequest(String codeProgram, String nameProgram, String jornada,
                              Integer numeroSemestre, Integer semestresNocturna, String ingreso,
                              String estado, Integer idFacultadPrograma, String apertura) {
             this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
-                    ingreso, estado, idFacultadPrograma, apertura, null);
+                    ingreso, estado, idFacultadPrograma, apertura, null, null);
         }
     }
 }

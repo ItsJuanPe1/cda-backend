@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,7 +40,8 @@ public class ProgramaController {
     }
 
     @PutMapping("/{codeProgram}")
-    @Operation(summary = "Actualizar un programa académico existente")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
+    @Operation(summary = "Actualizar un programa académico existente (incluye intercambio de coordinador para admin)")
     public ResponseEntity<ProgramaDto.Response> update(
             @PathVariable("codeProgram") String codeProgram,
             @Valid @RequestBody ProgramaDto.UpdateRequest request) {
