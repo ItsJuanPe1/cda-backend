@@ -80,7 +80,19 @@ public class AsignaturaService {
         if (request.idFacultad() != null) {
             asignatura.setIdFacultad(request.idFacultad());
         }
+        if (request.activo() != null) {
+            asignatura.setActivo(request.activo());
+        }
 
+        return toResponse(asignaturaRepository.save(asignatura));
+    }
+
+    @Transactional
+    public AsignaturaDto.Response cambiarEstado(String codeCourse, Boolean activo) {
+        String normalizedCode = codeCourse.trim().toUpperCase();
+        Asignatura asignatura = asignaturaRepository.findById(normalizedCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Asignatura no encontrada con código: " + normalizedCode));
+        asignatura.setActivo(Boolean.TRUE.equals(activo));
         return toResponse(asignaturaRepository.save(asignatura));
     }
 
@@ -102,7 +114,8 @@ public class AsignaturaService {
                 a.getEsComplementaria(),
                 a.getEsBasica(),
                 a.getFacultad(),
-                a.getIdFacultad()
+                a.getIdFacultad(),
+                a.getActivo() != null ? a.getActivo() : true
         );
     }
 }

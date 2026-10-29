@@ -1,0 +1,53 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git fetch:*)",
+      "Bash(git branch:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git show:*)",
+      "Bash(./gradlew compileJava:*)",
+      "Bash(./gradlew compileTestJava:*)",
+      "Bash(./gradlew --version)",
+      "Read(./src/**)",
+      "Read(./docs/**)",
+      "Read(./.env.example)"
+    ],
+    "ask": [
+      "Edit(./src/main/resources/db/migration/**)",
+      "Edit(./src/main/resources/application*)",
+      "Edit(./build.gradle)",
+      "Bash(./gradlew bootRun:*)",
+      "Bash(./gradlew test:*)",
+      "Bash(./gradlew build:*)",
+      "Bash(./gradlew clean:*)",
+      "Bash(./gradlew flyway:*)",
+      "Bash(psql:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git merge:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git stash:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.production)",
+      "Edit(./.env)",
+      "Edit(./.env.local)",
+      "Bash(./gradlew flywayClean:*)",
+      "Bash(./gradlew flywayRepair:*)",
+      "Bash(./gradlew flywayBaseline:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git clean:*)",
+      "Bash(git rebase:*)",
+      "Bash(rm -rf:*)"
+    ]
+  }
+}

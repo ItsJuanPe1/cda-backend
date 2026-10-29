@@ -1,0 +1,16 @@
+services:
+  cda-backend:
+    build: .
+    container_name: cda_backend
+    restart: always
+    network_mode: "host"
+    env_file:
+      - .env
+    environment:
+      PORT: 8080
+      DB_URL: ${DB_URL}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SUPABASE_URL: ${SUPABASE_URL}
+      CORS_ALLOWED_ORIGIN: ${CORS_ALLOWED_ORIGIN}
+      JAVA_TOOL_OPTIONS: "-Djava.net.preferIPv4Stack=true"

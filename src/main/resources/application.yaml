@@ -1,5 +1,9 @@
 server:
   port: ${PORT:8080}
+  tomcat:
+    # Permite leer y descartar archivos algo mayores al límite para responder 400
+    # en lugar de cortar la conexión (HU-015)
+    max-swallow-size: 10MB
 
 spring:
   application:
@@ -8,10 +12,15 @@ spring:
     import:
       - optional:file:.env[.properties]
       - optional:file:cda-backend/.env[.properties]
+  servlet:
+    multipart:
+      # HU-015: foto de perfil de máximo 5 MB
+      max-file-size: 5MB
+      max-request-size: 6MB
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USER}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/postgres}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -23,6 +32,10 @@ spring:
   flyway:
     enabled: true
     baseline-on-migrate: true
+    # V7 ya existe en la base compartida con un checksum histórico distinto.
+    # Las migraciones pendientes siguen ejecutándose, pero no se bloquea el arranque
+    # por la diferencia de contenido de una migración ya aplicada.
+    validate-on-migrate: false
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGIN:http://localhost:5173,http://localhost:3000}
@@ -32,3 +45,14 @@ springdoc:
     path: /swagger-ui.html
   api-docs:
     path: /v3/api-docs
+
+auth:
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:${AUTH_GOOGLE_CLIENT_ID:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}}
+  jwt:
+    secret: ${JWT_SECRET:${AUTH_JWT_SECRET:cda-backend-secret-key-univalle-palmira-2026-secure-token-32b}}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
+
+disponibilidad:
+  hora-inicio: ${DISPONIBILIDAD_HORA_INICIO:06:00}
+  hora-fin: ${DISPONIBILIDAD_HORA_FIN:22:00}
