@@ -56,6 +56,14 @@ public class PensumController {
         return ResponseEntity.status(HttpStatus.CREATED).body(pensumService.saveVersion(request));
     }
 
+    @PutMapping("/programa/{codeProgram}/editar")
+    @Operation(summary = "Actualizar la malla curricular activa de un programa (HU-032)")
+    public ResponseEntity<List<PensumItemDto.Response>> updateActiveVersion(
+            @PathVariable("codeProgram") String codeProgram,
+            @Valid @RequestBody PensumItemDto.SaveRequest request) {
+        return ResponseEntity.ok(pensumService.updateActiveVersion(codeProgram, request));
+    }
+
     @PatchMapping("/programa/{codeProgram}/desactivar")
     public ResponseEntity<Void> deactivate(@PathVariable("codeProgram") String codeProgram) {
         pensumService.deactivateCurrent(codeProgram);

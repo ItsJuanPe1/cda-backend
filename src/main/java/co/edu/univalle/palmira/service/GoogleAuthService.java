@@ -173,8 +173,15 @@ public class GoogleAuthService {
 
         if (usuarioRepository != null) {
             Optional<Usuario> usuarioOpt = usuarioRepository.buscarPorCorreoInstitucional(cleanEmail);
-            if (usuarioOpt.isPresent() && Integer.valueOf(AuthConstants.ROL_ADMIN).equals(usuarioOpt.get().getRol())) {
-                return emitirSesionAdmin(usuarioOpt.get());
+            if (usuarioOpt.isPresent()) {
+                Usuario u = usuarioOpt.get();
+                if (Integer.valueOf(AuthConstants.ROL_ADMIN).equals(u.getRol())) {
+                    return emitirSesionAdmin(u);
+                } else if (Integer.valueOf(AuthConstants.ROL_COORDINADOR).equals(u.getRol())) {
+                    return emitirSesionUsuarioRol(u, AuthConstants.ROL_COORDINADOR, "ROLE_COORDINADOR", "COORDINADOR");
+                } else if (Integer.valueOf(AuthConstants.ROL_DOCENTE).equals(u.getRol())) {
+                    return emitirSesionUsuarioRol(u, AuthConstants.ROL_DOCENTE, "ROLE_DOCENTE", "DOCENTE");
+                }
             }
         }
 
@@ -201,8 +208,14 @@ public class GoogleAuthService {
             return emitirSesionCoordinador(coordinadorOpt.get());
         }
 
-        boolean existeEnOtroRol = (usuarioRepository != null
-                && usuarioRepository.buscarPorCorreoInstitucional(email).isPresent())
+        Optional<Usuario> usuarioOpt = usuarioRepository != null
+                ? usuarioRepository.buscarPorCorreoInstitucional(email)
+                : Optional.empty();
+        if (usuarioOpt.isPresent() && Integer.valueOf(AuthConstants.ROL_COORDINADOR).equals(usuarioOpt.get().getRol())) {
+            return emitirSesionUsuarioRol(usuarioOpt.get(), AuthConstants.ROL_COORDINADOR, "ROLE_COORDINADOR", "COORDINADOR");
+        }
+
+        boolean existeEnOtroRol = usuarioOpt.isPresent()
                 || (docenteRepository != null && docenteRepository.existsByCorreoInstitucional(email));
 
         if (existeEnOtroRol) {
@@ -224,8 +237,14 @@ public class GoogleAuthService {
             return emitirSesionDocente(docenteOpt.get());
         }
 
-        boolean existeEnOtroRol = (usuarioRepository != null
-                && usuarioRepository.buscarPorCorreoInstitucional(email).isPresent())
+        Optional<Usuario> usuarioOpt = usuarioRepository != null
+                ? usuarioRepository.buscarPorCorreoInstitucional(email)
+                : Optional.empty();
+        if (usuarioOpt.isPresent() && Integer.valueOf(AuthConstants.ROL_DOCENTE).equals(usuarioOpt.get().getRol())) {
+            return emitirSesionUsuarioRol(usuarioOpt.get(), AuthConstants.ROL_DOCENTE, "ROLE_DOCENTE", "DOCENTE");
+        }
+
+        boolean existeEnOtroRol = usuarioOpt.isPresent()
                 || (coordinadorRepository != null
                         && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email));
 
@@ -234,6 +253,53 @@ public class GoogleAuthService {
         }
 
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA);
+    }
+
+    private LoginResponse emitirSesionUsuarioRol(Usuario usuario, int rol, String roleAuthority, String shortAuthority) {
+        if (Boolean.FALSE.equals(usuario.getActivo())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO);
+        }
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
+
+        List<String> authorities = new ArrayList<>(List.of(roleAuthority, shortAuthority));
+        if (rol == AuthConstants.ROL_COORDINADOR && docenteRepository != null
+                && docenteRepository.existsByCorreoInstitucional(usuario.getEmailInstitucional())) {
+            authorities.add("ROLE_DOCENTE");
+            authorities.add("DOCENTE");
+        }
+
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("cda-backend")
+                .subject(String.valueOf(usuario.getId()))
+                .issuedAt(now)
+                .expiresAt(expiresAt)
+                .claim("email", usuario.getEmailInstitucional())
+                .claim("nombre", usuario.getNombre())
+                .claim("apellido", usuario.getApellido())
+                .claim("rol", rol)
+                .claim("authorities", authorities)
+                .build();
+
+        String token = jwtEncoder.encode(JwtEncoderParameters.from(
+                JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+
+        String mensaje = rol == AuthConstants.ROL_COORDINADOR
+                ? AuthConstants.WARN_SIN_PROGRAMA_ASIGNADO
+                : AuthConstants.LOGIN_SUCCESS_MESSAGE;
+
+        return new LoginResponse(
+                token,
+                "Bearer",
+                expirationMinutes * 60,
+                usuario.getId(),
+                usuario.getNombre(),
+                usuario.getApellido(),
+                usuario.getEmailInstitucional(),
+                rol,
+                null,
+                null,
+                mensaje);
     }
 
     private LoginResponse emitirSesionCoordinador(Coordinador coordinador) {
