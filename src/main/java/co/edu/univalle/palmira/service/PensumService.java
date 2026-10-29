@@ -33,7 +33,7 @@ public class PensumService {
 
     @Transactional(readOnly = true)
     public List<PensumItemDto.Response> getAll() {
-        return pensumRepository.findAll()
+        return pensumRepository.findAllWithAsignatura()
                 .stream()
                 .filter(item -> Boolean.TRUE.equals(item.getVigente()))
                 .map(this::toResponse)
