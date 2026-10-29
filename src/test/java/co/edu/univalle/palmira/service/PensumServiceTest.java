@@ -123,15 +123,14 @@ class PensumServiceTest {
     }
 
     @Test
-    @DisplayName("HU-017 / HU-032: Valida códigos únicos, permite ELE-PROF-I, II... y guarda número de resolución y semestres")
-    void saveVersion_GuardaNumeroResolucionYPermiteElectivasProf() {
+    @DisplayName("HU-044 / HU-017: Valida códigos duplicados y solo permite asignaturas existentes en el catálogo")
+    void saveVersion_SeleccionaAsignaturasExistentesDelCatalogo() {
         Programa prog = Programa.builder()
                 .codeProgram("2724")
                 .nameProgram("Tecnología en Desarrollo de Software")
                 .build();
         when(programaRepository.findById("2724")).thenReturn(Optional.of(prog));
 
-        // Códigos duplicados
         PensumItemDto.SaveRequest duplicados = new PensumItemDto.SaveRequest(
                 "2724",
                 List.of(
@@ -145,23 +144,24 @@ class PensumServiceTest {
                 6,
                 "RES-001"
         );
-
         BadRequestException exDup = assertThrows(BadRequestException.class,
                 () -> pensumService.saveVersion(duplicados));
         assertTrue(exDup.getMessage().contains("duplicado"));
 
-        // Permite códigos especiales ELE-PROF-I, ELE-PROF-II y guarda numero_resolucion y numero_semestres
         when(pensumRepository.lockByProgram("2724")).thenReturn(List.of());
-        when(asignaturaRepository.findById("ELE-PROF-I")).thenReturn(Optional.empty());
-        when(asignaturaRepository.findById("ELE-PROF-II")).thenReturn(Optional.empty());
-        when(asignaturaRepository.save(any(Asignatura.class))).thenAnswer(inv -> inv.getArgument(0));
+        Asignatura electiva1 = Asignatura.builder()
+                .codeCourse("ELE101").nameCourse("Electiva Profesional I").credits(3).activo(true).isElective(true).build();
+        Asignatura electiva2 = Asignatura.builder()
+                .codeCourse("ELE102").nameCourse("Electiva Profesional II").credits(3).activo(true).isElective(true).build();
+        when(asignaturaRepository.findById("ELE101")).thenReturn(Optional.of(electiva1));
+        when(asignaturaRepository.findById("ELE102")).thenReturn(Optional.of(electiva2));
         when(pensumRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
-        PensumItemDto.SaveRequest conElectivasProf = new PensumItemDto.SaveRequest(
+        PensumItemDto.SaveRequest request = new PensumItemDto.SaveRequest(
                 "2724",
                 List.of(
-                        new PensumItemDto.SaveItem("ELE-PROF-I", 1, "Electiva Profesional I", 3, 4, 8, "Profesional", null),
-                        new PensumItemDto.SaveItem("ELE-PROF-II", 4, "Electiva Profesional II", 3, 4, 8, "Profesional", null)
+                        new PensumItemDto.SaveItem("ELE101", 1, "Nombre escrito en la malla", 8, 4, 8, "Profesional", null),
+                        new PensumItemDto.SaveItem("ELE102", 4, "Otro nombre escrito en la malla", 9, 4, 8, "Profesional", null)
                 ),
                 "Tecnología en Desarrollo de Software",
                 "Resolución con electivas profesionales",
@@ -171,12 +171,14 @@ class PensumServiceTest {
                 "RES-2026-088"
         );
 
-        List<PensumItemDto.Response> savedElectivas = pensumService.saveVersion(conElectivasProf);
-        assertEquals(2, savedElectivas.size());
-        assertEquals("ELE-PROF-I", savedElectivas.get(0).codeCourse());
-        assertEquals("RES-2026-088", savedElectivas.get(0).numeroResolucion());
-        assertEquals(8, savedElectivas.get(0).numeroSemestres());
-        assertFalse(savedElectivas.get(0).editada());
+        List<PensumItemDto.Response> saved = pensumService.saveVersion(request);
+        assertEquals(2, saved.size());
+        assertTrue(saved.stream().anyMatch(item -> "ELE101".equals(item.codeCourse())
+                && "Electiva Profesional I".equals(item.nameCourse()) && item.credits() == 3));
+        assertEquals("RES-2026-088", saved.get(0).numeroResolucion());
+        assertEquals(8, saved.get(0).numeroSemestres());
+        assertFalse(saved.get(0).editada());
+        verify(asignaturaRepository, never()).save(any(Asignatura.class));
     }
 
     @Test
@@ -215,7 +217,7 @@ class PensumServiceTest {
         when(pensumRepository.lockByProgram("2724"))
                 .thenReturn(List.of(itemActivo));
         when(asignaturaRepository.findById("MAT101")).thenReturn(Optional.of(asigExistente));
-        when(asignaturaRepository.save(any(Asignatura.class))).thenAnswer(inv -> inv.getArgument(0));
+
         when(pensumRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
         PensumItemDto.SaveRequest request = new PensumItemDto.SaveRequest(

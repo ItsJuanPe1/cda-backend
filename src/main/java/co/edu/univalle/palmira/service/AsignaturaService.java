@@ -34,14 +34,21 @@ public class AsignaturaService {
 
     @Transactional
     public AsignaturaDto.Response create(AsignaturaDto.CreateRequest request) {
-        String normalizedCode = request.codeCourse().trim().toUpperCase();
+        String normalizedCode = request.codeCourse() == null ? "" : request.codeCourse().trim().toUpperCase();
+        String normalizedName = request.nameCourse() == null ? "" : request.nameCourse().trim();
+        validarCodigo(normalizedCode);
+        validarNombre(normalizedName);
+
         if (asignaturaRepository.existsById(normalizedCode)) {
             throw new BadRequestException("Ya existe una asignatura con el código: " + normalizedCode);
+        }
+        if (asignaturaRepository.countByNormalizedName(normalizedName) > 0) {
+            throw new BadRequestException("Ya existe una asignatura con el nombre: " + normalizedName);
         }
 
         Asignatura asignatura = Asignatura.builder()
                 .codeCourse(normalizedCode)
-                .nameCourse(request.nameCourse().trim())
+                .nameCourse(normalizedName)
                 .credits(request.credits() != null ? Math.max(0, request.credits()) : 0)
                 .isElective(Boolean.TRUE.equals(request.isElective()))
                 .esComplementaria(Boolean.TRUE.equals(request.esComplementaria()))
@@ -59,8 +66,14 @@ public class AsignaturaService {
         Asignatura asignatura = asignaturaRepository.findById(normalizedCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Asignatura no encontrada con código: " + normalizedCode));
 
-        if (request.nameCourse() != null && !request.nameCourse().trim().isEmpty()) {
-            asignatura.setNameCourse(request.nameCourse().trim());
+        if (request.nameCourse() != null) {
+            String normalizedName = request.nameCourse().trim();
+            validarNombre(normalizedName);
+            if (!normalizedName.equalsIgnoreCase(asignatura.getNameCourse())
+                    && asignaturaRepository.countByNormalizedNameExcludingCode(normalizedName, normalizedCode) > 0) {
+                throw new BadRequestException("Ya existe una asignatura con el nombre: " + normalizedName);
+            }
+            asignatura.setNameCourse(normalizedName);
         }
         if (request.credits() != null) {
             asignatura.setCredits(Math.max(0, request.credits()));
@@ -96,13 +109,28 @@ public class AsignaturaService {
         return toResponse(asignaturaRepository.save(asignatura));
     }
 
+    /**
+     * Compatibilidad con clientes antiguos: DELETE ya no elimina físicamente.
+     * La HU 44 exige conservar las relaciones e historial de las mallas.
+     */
     @Transactional
     public void delete(String codeCourse) {
-        String normalizedCode = codeCourse.trim().toUpperCase();
-        if (!asignaturaRepository.existsById(normalizedCode)) {
-            throw new ResourceNotFoundException("Asignatura no encontrada con código: " + normalizedCode);
+        cambiarEstado(codeCourse, false);
+    }
+
+    private void validarCodigo(String code) {
+        if (code == null || !code.matches("^[A-Z0-9]{1,8}$")) {
+            throw new BadRequestException("El código debe ser alfanumérico y tener entre 1 y 8 caracteres");
         }
-        asignaturaRepository.deleteById(normalizedCode);
+    }
+
+    private void validarNombre(String name) {
+        if (name == null || name.isBlank()) {
+            throw new BadRequestException("El nombre de la asignatura es obligatorio");
+        }
+        if (name.length() > 100) {
+            throw new BadRequestException("El nombre no puede exceder 100 caracteres");
+        }
     }
 
     private AsignaturaDto.Response toResponse(Asignatura a) {
