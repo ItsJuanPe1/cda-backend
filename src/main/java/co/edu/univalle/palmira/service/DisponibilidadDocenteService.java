@@ -36,7 +36,9 @@ public class DisponibilidadDocenteService {
     @Transactional(readOnly = true)
     public DisponibilidadDocenteDto.Response consultar(String correoInstitucional) {
         Docente docente = obtenerDocenteActivo(correoInstitucional);
-        PeriodoAcademico periodo = periodoRepository.findFirstByVigenteTrue().orElse(null);
+        PeriodoAcademico periodo = periodoRepository.findFirstByVigenteTrue()
+                .filter(this::esPeriodoActivo)
+                .orElse(null);
         if (periodo == null) {
             return new DisponibilidadDocenteDto.Response(
                     "SIN_PERIODO", "No hay un período académico vigente", List.of());
@@ -47,7 +49,9 @@ public class DisponibilidadDocenteService {
         return new DisponibilidadDocenteDto.Response(
                 abierto ? "HABILITADO" : "FUERA_DE_PLAZO",
                 abierto ? "Registrar disponibilidad" : "Fuera del período habilitado",
-                horarios);
+                horarios,
+                periodo.getPlazoDocenteInicio(),
+                periodo.getPlazoDocenteFin());
     }
 
     @Transactional
@@ -55,6 +59,7 @@ public class DisponibilidadDocenteService {
             String correoInstitucional, DisponibilidadDocenteDto.Request request) {
         Docente docente = obtenerDocenteActivo(correoInstitucional);
         PeriodoAcademico periodo = periodoRepository.findFirstByVigenteTrue()
+                .filter(this::esPeriodoActivo)
                 .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
 
         if (!estaEnPlazo(periodo, Instant.now())) {
@@ -82,6 +87,51 @@ public class DisponibilidadDocenteService {
         return toItem(guardado);
     }
 
+    @Transactional
+    public List<DisponibilidadDocenteDto.Item> actualizarTodo(
+            String correoInstitucional, List<DisponibilidadDocenteDto.Request> requests) {
+        Docente docente = obtenerDocenteActivo(correoInstitucional);
+        PeriodoAcademico periodo = periodoRepository.findFirstByVigenteTrue()
+                .filter(this::esPeriodoActivo)
+                .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
+
+        if (!estaEnPlazo(periodo, Instant.now())) {
+            throw new BadRequestException("Fuera del período habilitado");
+        }
+
+        List<DisponibilidadDocenteDto.Request> lista = requests == null ? List.of() : requests;
+        for (int i = 0; i < lista.size(); i++) {
+            DisponibilidadDocenteDto.Request req = lista.get(i);
+            validarHorario(req);
+            for (int j = i + 1; j < lista.size(); j++) {
+                DisponibilidadDocenteDto.Request otro = lista.get(j);
+                if (otro != null && req.dia().equals(otro.dia())
+                        && req.horaInicio().isBefore(otro.horaFin())
+                        && req.horaFin().isAfter(otro.horaInicio())) {
+                    throw new BadRequestException("El horario se cruza con otro intervalo enviado ("
+                            + nombreDia(req.dia()) + ")");
+                }
+            }
+        }
+
+        disponibilidadRepository.deleteAllByDocenteIdAndPeriodoId(docente.getId(), periodo.getId());
+        disponibilidadRepository.flush();
+
+        List<DisponibilidadDocente> entidades = lista.stream()
+                .map(req -> DisponibilidadDocente.builder()
+                        .docente(docente)
+                        .periodo(periodo)
+                        .dia(req.dia())
+                        .horaInicio(req.horaInicio())
+                        .horaFin(req.horaFin())
+                        .build())
+                .toList();
+
+        return disponibilidadRepository.saveAll(entidades).stream()
+                .map(this::toItem)
+                .toList();
+    }
+
     private Docente obtenerDocenteActivo(String correoInstitucional) {
         if (correoInstitucional == null || correoInstitucional.isBlank()) {
             throw new ResourceNotFoundException("No se pudo identificar al docente autenticado");
@@ -95,7 +145,25 @@ public class DisponibilidadDocenteService {
         return docente;
     }
 
+    private boolean esPeriodoActivo(PeriodoAcademico periodo) {
+        if (periodo == null) {
+            return false;
+        }
+        String estado = periodo.getEstado();
+        if (estado != null && !estado.isBlank()) {
+            String norm = estado.trim().toUpperCase(Locale.ROOT);
+            if ("DESACTIVADO".equals(norm) || "HISTORIAL".equals(norm) || "HISTORICO".equals(norm)) {
+                return false;
+            }
+            return "VIGENTE".equals(norm) || "ACTIVO".equals(norm);
+        }
+        return true;
+    }
+
     private boolean estaEnPlazo(PeriodoAcademico periodo, Instant ahora) {
+        if (periodo.getPlazoDocenteInicio() == null || periodo.getPlazoDocenteFin() == null) {
+            return false;
+        }
         return !ahora.isBefore(periodo.getPlazoDocenteInicio())
                 && !ahora.isAfter(periodo.getPlazoDocenteFin());
     }
