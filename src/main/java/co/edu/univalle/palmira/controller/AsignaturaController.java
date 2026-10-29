@@ -55,7 +55,7 @@ public class AsignaturaController {
     }
 
     @DeleteMapping("/{codeCourse}")
-    @Operation(summary = "Eliminar una asignatura")
+    @Operation(summary = "Desactivar una asignatura (compatibilidad; no elimina datos)")
     public ResponseEntity<Void> delete(@PathVariable("codeCourse") String codeCourse) {
         asignaturaService.delete(codeCourse);
         return ResponseEntity.noContent().build();
