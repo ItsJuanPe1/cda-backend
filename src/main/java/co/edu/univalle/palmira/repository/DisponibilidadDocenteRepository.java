@@ -11,6 +11,8 @@ public interface DisponibilidadDocenteRepository extends JpaRepository<Disponibi
     List<DisponibilidadDocente> findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(
             Long docenteId, Long periodoId);
 
+    void deleteAllByDocenteIdAndPeriodoId(Long docenteId, Long periodoId);
+
     @Query("""
             select d from DisponibilidadDocente d
             where d.docente.id = :docenteId and d.periodo.id = :periodoId

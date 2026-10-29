@@ -25,4 +25,11 @@ public class DisponibilidadDocenteController {
             @Valid @RequestBody DisponibilidadDocenteDto.Request request) {
         return service.registrar(jwt.getClaimAsString("email"), request);
     }
+
+    @PutMapping("/me")
+    public java.util.List<DisponibilidadDocenteDto.Item> actualizarTodo(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody java.util.List<DisponibilidadDocenteDto.Request> requests) {
+        return service.actualizarTodo(jwt.getClaimAsString("email"), requests);
+    }
 }
