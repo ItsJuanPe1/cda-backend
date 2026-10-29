@@ -25,6 +25,11 @@ public class PensumAcademico {
     @JoinColumn(name = "code_course", nullable = false)
     private Asignatura asignatura;
 
+    // Nombre que tenía la asignatura cuando se registró/actualizó esta versión de la malla.
+    // Las versiones históricas deben conservar este valor aunque el catálogo cambie.
+    @Column(name = "name_course_snapshot", length = 150)
+    private String nameCourseSnapshot;
+
     @Column(nullable = false)
     private Integer semestre;
 

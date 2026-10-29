@@ -66,7 +66,10 @@ public class PensumService {
                 .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código: " + progCode));
 
         Asignatura asignatura = asignaturaRepository.findById(courseCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Asignatura no encontrada con código: " + courseCode));
+                .orElseThrow(() -> new ResourceNotFoundException("Asignatura no encontrada en el catálogo con código: " + courseCode));
+        if (Boolean.FALSE.equals(asignatura.getActivo())) {
+            throw new BadRequestException("La asignatura " + courseCode + " está inactiva y no se puede agregar a una nueva malla");
+        }
 
         int version = currentVersion(progCode);
         PensumId id = new PensumId(progCode, courseCode, version);
@@ -79,6 +82,7 @@ public class PensumService {
                 .id(id)
                 .programa(programa)
                 .asignatura(asignatura)
+                .nameCourseSnapshot(asignatura.getNameCourse())
                 .semestre(semestre)
                 .isElective(asignatura.getIsElective())
                 .facultad(asignatura.getFacultad())
@@ -182,12 +186,13 @@ public class PensumService {
 
         List<PensumAcademico> saved = request.items().stream().map(item -> {
             String courseCode = normalize(item.codeCourse());
-            Asignatura asignatura = resolveOrUpsertAsignatura(courseCode, item);
+            Asignatura asignatura = resolveAsignaturaFromCatalog(courseCode, false);
             String meta = buildMetadata(item, asignatura, descClean);
             return PensumAcademico.builder()
                     .id(new PensumId(programCode, courseCode, version))
                     .programa(programa)
                     .asignatura(asignatura)
+                    .nameCourseSnapshot(asignatura.getNameCourse())
                     .semestre(item.semestre())
                     .isElective(asignatura.getIsElective())
                     .facultad(meta)
@@ -262,26 +267,29 @@ public class PensumService {
         String resolucionClean = request.numeroResolucion() != null && !request.numeroResolucion().isBlank()
                 ? request.numeroResolucion().trim()
                 : (activeRows.get(0).getNumeroResolucion() != null
-                        ? activeRows.get(0).getNumeroResolucion()
-                        : programa.getNumeroResolucion());
+                   ? activeRows.get(0).getNumeroResolucion()
+                   : programa.getNumeroResolucion());
         Integer numSemestres = request.numeroSemestre() != null
                 ? request.numeroSemestre()
                 : (activeRows.get(0).getNumeroSemestres() != null
-                        ? activeRows.get(0).getNumeroSemestres()
-                        : programa.getNumeroSemestre());
+                   ? activeRows.get(0).getNumeroSemestres()
+                   : programa.getNumeroSemestre());
 
         LocalDateTime editTime = LocalDateTime.now();
 
         List<PensumAcademico> toSave = new ArrayList<>();
         for (PensumItemDto.SaveItem item : request.items()) {
             String courseCode = normalize(item.codeCourse());
-            Asignatura asignatura = resolveOrUpsertAsignatura(courseCode, item);
+            PensumAcademico existing = existingMap.get(courseCode);
+            // Una asignatura ya incluida puede mantenerse aunque se haya desactivado;
+            // lo que no se permite es agregarla como una nueva asignación.
+            Asignatura asignatura = resolveAsignaturaFromCatalog(courseCode, existing != null);
             String meta = buildMetadata(item, asignatura, descClean);
 
-            PensumAcademico existing = existingMap.get(courseCode);
             if (existing != null) {
                 existing.setSemestre(item.semestre());
                 existing.setAsignatura(asignatura);
+                existing.setNameCourseSnapshot(asignatura.getNameCourse());
                 existing.setIsElective(asignatura.getIsElective());
                 existing.setFacultad(meta);
                 existing.setNumeroResolucion(resolucionClean);
@@ -296,6 +304,7 @@ public class PensumService {
                         .id(new PensumId(programCode, courseCode, activeVersion))
                         .programa(programa)
                         .asignatura(asignatura)
+                        .nameCourseSnapshot(asignatura.getNameCourse())
                         .semestre(item.semestre())
                         .isElective(asignatura.getIsElective())
                         .facultad(meta)
@@ -442,14 +451,14 @@ public class PensumService {
     }
 
     private boolean hayCambiosEnMalla(Programa programa, List<PensumAcademico> activeRows,
-            PensumItemDto.SaveRequest request) {
+                                      PensumItemDto.SaveRequest request) {
         if (request.nameProgram() != null && !request.nameProgram().trim().isEmpty()
                 && !request.nameProgram().trim().equals(programa.getNameProgram())) {
             return true;
         }
         if (request.jornada() != null && !request.jornada().trim().isEmpty()
                 && !request.jornada().trim()
-                        .equalsIgnoreCase(programa.getJornada() != null ? programa.getJornada().name() : "DIURNA")) {
+                .equalsIgnoreCase(programa.getJornada() != null ? programa.getJornada().name() : "DIURNA")) {
             return true;
         }
         if (request.periodoOferta() != null && !request.periodoOferta().trim().isEmpty()) {
@@ -501,13 +510,6 @@ public class PensumService {
             if (!Objects.equals(existing.getSemestre(), item.semestre())) {
                 return true;
             }
-            Asignatura a = existing.getAsignatura();
-            if (item.nameCourse() != null && a != null && !item.nameCourse().trim().equals(a.getNameCourse())) {
-                return true;
-            }
-            if (item.credits() != null && a != null && !Objects.equals(item.credits(), a.getCredits())) {
-                return true;
-            }
             Integer existingHc = parseIntSafe(extractMetaField(existing.getFacultad(), "hc"), null);
             if (item.horasClase() != null && !Objects.equals(item.horasClase(), existingHc)) {
                 return true;
@@ -516,7 +518,10 @@ public class PensumService {
             if (item.horasIndependiente() != null && !Objects.equals(item.horasIndependiente(), existingHi)) {
                 return true;
             }
+            Asignatura a = existing.getAsignatura();
+
             String existingTipo = extractMetaField(existing.getFacultad(), "tipo");
+
             if (existingTipo == null && a != null) {
                 existingTipo = inferTipoFromAsignatura(a);
             }
@@ -579,50 +584,22 @@ public class PensumService {
         }
     }
 
-    private Asignatura resolveOrUpsertAsignatura(String courseCode, PensumItemDto.SaveItem item) {
-        Optional<Asignatura> existingOpt = asignaturaRepository.findById(courseCode);
-        String tipo = item.tipoAsignatura() != null ? item.tipoAsignatura().trim().toUpperCase() : null;
+    /**
+     * La malla solo puede referenciar asignaturas previamente creadas en el catálogo.
+     * No crea ni modifica el nombre, créditos o tipo de una asignatura desde HU-017.
+     * allowInactive se usa únicamente para conservar una asignatura que ya pertenece
+     * a la malla activa cuando el administrador está editando otros datos de esa malla.
+     */
+    private Asignatura resolveAsignaturaFromCatalog(String courseCode, boolean allowInactive) {
+        Asignatura asignatura = asignaturaRepository.findById(courseCode)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "La asignatura " + courseCode + " no existe en el catálogo. Regístrala primero en el Banco de Asignaturas."));
 
-        boolean esBasica = "BASICA".equals(tipo) || "ASIGNATURA BASICA".equals(tipo)
-                || "ASIGNATURA BÁSICA".equals(tipo);
-        boolean esComplementaria = "ELECTIVA_COMPLEMENTARIA".equals(tipo) || "ELECTIVA COMPLEMENTARIA".equals(tipo);
-        boolean isElective = esComplementaria || "EXTRACURRICULAR".equals(tipo) || "ACT. EXTRACURRICULAR".equals(tipo);
-
-        if (existingOpt.isPresent()) {
-            Asignatura asignatura = existingOpt.get();
-            boolean changed = false;
-            if (item.nameCourse() != null && !item.nameCourse().trim().isEmpty()
-                    && !item.nameCourse().trim().equals(asignatura.getNameCourse())) {
-                asignatura.setNameCourse(item.nameCourse().trim());
-                changed = true;
-            }
-            if (item.credits() != null && !Objects.equals(item.credits(), asignatura.getCredits())) {
-                asignatura.setCredits(Math.max(0, item.credits()));
-                changed = true;
-            }
-            if (tipo != null) {
-                asignatura.setEsBasica(esBasica);
-                asignatura.setEsComplementaria(esComplementaria);
-                asignatura.setIsElective(isElective);
-                changed = true;
-            }
-            return changed ? asignaturaRepository.save(asignatura) : asignatura;
+        if (Boolean.FALSE.equals(asignatura.getActivo()) && !allowInactive) {
+            throw new BadRequestException(
+                    "La asignatura " + courseCode + " está inactiva y no se puede usar en una nueva malla.");
         }
-
-        if (item.nameCourse() == null || item.nameCourse().trim().isEmpty()) {
-            throw new ResourceNotFoundException("Asignatura no encontrada: " + courseCode);
-        }
-
-        Asignatura nueva = Asignatura.builder()
-                .codeCourse(courseCode)
-                .nameCourse(item.nameCourse().trim())
-                .credits(item.credits() != null ? Math.max(0, item.credits()) : 0)
-                .esBasica(esBasica)
-                .esComplementaria(esComplementaria)
-                .isElective(isElective)
-                .activo(true)
-                .build();
-        return asignaturaRepository.save(nueva);
+        return asignatura;
     }
 
     private String buildMetadata(PensumItemDto.SaveItem item, Asignatura asignatura, String descripcion) {
@@ -711,7 +688,7 @@ public class PensumService {
         String jornada = prog != null && prog.getJornada() != null ? prog.getJornada().name() : null;
         String periodoOferta = prog != null
                 ? (prog.getApertura() != null ? prog.getApertura()
-                        : (prog.getIngreso() != null ? prog.getIngreso().name() : null))
+                   : (prog.getIngreso() != null ? prog.getIngreso().name() : null))
                 : null;
         String numeroResolucion = p.getNumeroResolucion() != null
                 ? p.getNumeroResolucion()
@@ -720,10 +697,17 @@ public class PensumService {
                 ? p.getNumeroSemestres()
                 : (prog != null ? prog.getNumeroSemestre() : null);
 
+        boolean esVigente = Boolean.TRUE.equals(p.getVigente());
+        String nombreAsignatura = esVigente
+                ? (a != null ? a.getNameCourse() : p.getId().getCodeCourse())
+                : (p.getNameCourseSnapshot() != null
+                   ? p.getNameCourseSnapshot()
+                   : (a != null ? a.getNameCourse() : p.getId().getCodeCourse()));
+
         return new PensumItemDto.Response(
                 p.getId().getCodeProgram(),
                 p.getId().getCodeCourse(),
-                a != null ? a.getNameCourse() : p.getId().getCodeCourse(),
+                nombreAsignatura,
                 credits,
                 p.getSemestre(),
                 a != null ? a.getIsElective() : p.getIsElective(),
