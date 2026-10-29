@@ -85,7 +85,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
                         // 2. Períodos: los tres roles consultan; solo el administrador modifica
-                        .requestMatchers(HttpMethod.GET, "/api/periodos/**")
+                        .requestMatchers(HttpMethod.GET, "/api/periodos", "/api/periodos/**")
                                 .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
 
@@ -94,12 +94,19 @@ public class SecurityConfig {
                                 .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers(HttpMethod.POST, "/api/disponibilidades/**")
                                 .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.PUT, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/disponibilidades/**")
+                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
 
                         // 4. Asignaturas, mallas, programas, facultades y catálogos:
                         // Coordinadores solo pueden consultar (GET)
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
                                 "/api/programas/**", "/api/facultades/**", "/api/catalogos/**")
                                 .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
+                        // Coordinadores conservan acceso operativo a las mallas curriculares.
+                        .requestMatchers("/api/pensum/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
                         // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)

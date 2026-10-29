@@ -21,17 +21,21 @@ public class PensumId implements Serializable {
     @Column(name = "code_course", length = 50, nullable = false)
     private String codeCourse;
 
+    @Column(name = "version", nullable = false)
+    private Integer version;
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PensumId pensumId = (PensumId) o;
         return Objects.equals(codeProgram, pensumId.codeProgram) &&
-                Objects.equals(codeCourse, pensumId.codeCourse);
+                Objects.equals(codeCourse, pensumId.codeCourse) &&
+                Objects.equals(version, pensumId.version);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(codeProgram, codeCourse);
+        return Objects.hash(codeProgram, codeCourse, version);
     }
 }

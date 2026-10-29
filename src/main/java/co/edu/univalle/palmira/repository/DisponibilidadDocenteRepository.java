@@ -9,7 +9,9 @@ import java.util.List;
 
 public interface DisponibilidadDocenteRepository extends JpaRepository<DisponibilidadDocente, Long> {
     List<DisponibilidadDocente> findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(
-            Integer docenteId, Long periodoId);
+            Long docenteId, Long periodoId);
+
+    void deleteAllByDocenteIdAndPeriodoId(Long docenteId, Long periodoId);
 
     @Query("""
             select d from DisponibilidadDocente d
@@ -18,7 +20,7 @@ public interface DisponibilidadDocenteRepository extends JpaRepository<Disponibi
             order by d.horaInicio
             """)
     List<DisponibilidadDocente> findCruces(
-            @Param("docenteId") Integer docenteId,
+            @Param("docenteId") Long docenteId,
             @Param("periodoId") Long periodoId,
             @Param("dia") Integer dia,
             @Param("horaInicio") java.time.LocalTime horaInicio,

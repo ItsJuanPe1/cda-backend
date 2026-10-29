@@ -24,7 +24,10 @@ public class PeriodoAcademicoService {
 
     @Transactional(readOnly = true)
     public PeriodoAcademicoDto.Response vigente() {
-        return repository.findFirstByVigenteTrue().map(this::toResponse).orElse(null);
+        return repository.findFirstByVigenteTrue()
+                .filter(p -> p.isVigente() && (p.getEstado() == null || "VIGENTE".equalsIgnoreCase(p.getEstado())))
+                .map(this::toResponse)
+                .orElse(null);
     }
 
     @Transactional(readOnly = true)

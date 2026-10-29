@@ -48,4 +48,10 @@ public class Programa {
     @Column(name = "estado", length = 10, nullable = false)
     @Builder.Default
     private EstadoPrograma estado = EstadoPrograma.ACTIVO;
+
+    @Column(name = "apertura", length = 10)
+    private String apertura;
+
+    @Column(name = "numero_resolucion", length = 50)
+    private String numeroResolucion;
 }
