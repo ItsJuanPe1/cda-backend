@@ -51,4 +51,7 @@ public class Programa {
 
     @Column(name = "apertura", length = 10)
     private String apertura;
+
+    @Column(name = "numero_resolucion", length = 50)
+    private String numeroResolucion;
 }

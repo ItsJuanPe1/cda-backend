@@ -48,4 +48,17 @@ public class PensumAcademico {
 
     @Column(name = "fecha_reactivacion")
     private java.time.LocalDateTime fechaReactivacion;
+
+    @Column(name = "numero_resolucion", length = 50)
+    private String numeroResolucion;
+
+    @Column(name = "numero_semestres")
+    private Integer numeroSemestres;
+
+    @Column(name = "editada", nullable = false)
+    @Builder.Default
+    private Boolean editada = false;
+
+    @Column(name = "fecha_edicion")
+    private java.time.LocalDateTime fechaEdicion;
 }
