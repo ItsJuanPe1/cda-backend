@@ -1,15 +1,18 @@
 package co.edu.univalle.palmira.service;
 
 import co.edu.univalle.palmira.dto.ProgramaDto;
+import jakarta.persistence.EntityManager;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ConflictException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Programa;
+import co.edu.univalle.palmira.model.entity.Coordinador;
 import co.edu.univalle.palmira.model.enums.EstadoPrograma;
 import co.edu.univalle.palmira.model.enums.Jornada;
 import co.edu.univalle.palmira.model.enums.TipoIngreso;
 import co.edu.univalle.palmira.repository.PensumAcademicoRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
+import co.edu.univalle.palmira.repository.CoordinadorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,6 +27,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.*;
 
 /**
@@ -37,6 +41,12 @@ class ProgramaServiceTest {
 
     @Mock
     private PensumAcademicoRepository pensumAcademicoRepository;
+
+    @Mock
+    private CoordinadorRepository coordinadorRepository;
+
+    @Mock
+    private EntityManager entityManager;
 
     @InjectMocks
     private ProgramaService programaService;
@@ -169,7 +179,7 @@ class ProgramaServiceTest {
         verify(pensumAcademicoRepository, never()).deleteAll();
     }
 
-        @Test
+    @Test
     @DisplayName("Editar sin enviar número de resolución conserva el existente")
     void editarSinNumeroConservaNumeroResolucion() {
         existente.setNumeroResolucion("RES-ORIGINAL");
@@ -254,6 +264,68 @@ class ProgramaServiceTest {
 
         assertEquals("Programa no encontrado", ex.getMessage());
     }
+
+    //@Test
+    //@DisplayName("Editar intercambia coordinadores sin dejar un programa sin asignación")
+    //void editarIntercambiaCoordinadores() {
+    //   Programa anteriorDelElegido = Programa.builder()
+    //           .codeProgram("9002").nameProgram("Programa Dos")
+    //           .jornada(Jornada.DIURNA).numeroSemestre(10)
+    //            .ingreso(TipoIngreso.SEMESTRAL).estado(EstadoPrograma.ACTIVO).build();
+    //     Coordinador anterior = Coordinador.builder().id(10).identificacion("DOC-10")
+    //            .nombreCompleto("Coordinador actual").programa(existente).activo(true).build();
+    //    Coordinador elegido = Coordinador.builder().id(20).identificacion("DOC-20")
+    //           .nombreCompleto("Coordinador nuevo").programa(anteriorDelElegido).activo(true).build();
+//
+    //   when(programaRepository.findById("9001")).thenReturn(Optional.of(existente));
+    //   when(programaRepository.findAllByCodeProgramInForUpdate(anyCollection()))
+    //           .thenReturn(List.of(existente, anteriorDelElegido));
+    //   when(coordinadorRepository.findByIdWithDetails(20)).thenReturn(Optional.of(elegido));
+    //   when(coordinadorRepository.findByProgramaCodeProgram("9001")).thenReturn(List.of(anterior));
+    //   when(coordinadorRepository.findByProgramaCodeProgram("9002")).thenReturn(List.of(elegido));
+    //   when(coordinadorRepository.findAllByIdsForUpdate(anyCollection()))
+    //           .thenReturn(List.of(anterior, elegido));
+    //   when(coordinadorRepository.saveAndFlush(any(Coordinador.class)))
+    //          .thenAnswer(inv -> inv.getArgument(0));
+    //  guardarDevuelveLoMismo();
+    //  when(pensumAcademicoRepository.countByIdCodeProgram("9001")).thenReturn(0L);
+    //
+    //   ProgramaDto.UpdateRequest request = new ProgramaDto.UpdateRequest(
+    //            null, "Programa actualizado", null, null, null, null, null, null,
+    //           null, null, 20);
+    //   programaService.update("9001", request);
+//
+    //   assertEquals("9002", anterior.getPrograma().getCodeProgram());
+    //   assertEquals("9001", elegido.getPrograma().getCodeProgram());
+    //  verify(coordinadorRepository, times(3)).saveAndFlush(any(Coordinador.class));
+        //}
+
+    //@Test
+    //@DisplayName("No intercambia si el programa destino no tiene coordinador y el elegido dejaría otro huérfano")
+    //void intercambioRechazadoSiDejariaProgramaHuerfano() {
+        //   Programa anteriorDelElegido = Programa.builder()
+        //          .codeProgram("9002").nameProgram("Programa Dos")
+        //          .jornada(Jornada.DIURNA).numeroSemestre(10)
+        //          .ingreso(TipoIngreso.SEMESTRAL).estado(EstadoPrograma.ACTIVO).build();
+        //    Coordinador elegido = Coordinador.builder().id(20).identificacion("DOC-20")
+        //            .nombreCompleto("Coordinador nuevo").programa(anteriorDelElegido).activo(true).build();
+
+        //    when(programaRepository.findById("9001")).thenReturn(Optional.of(existente));
+        //    when(programaRepository.findAllByCodeProgramInForUpdate(anyCollection()))
+        //            .thenReturn(List.of(existente, anteriorDelElegido));
+        //    when(coordinadorRepository.findByIdWithDetails(20)).thenReturn(Optional.of(elegido));
+        //    when(coordinadorRepository.findByProgramaCodeProgram("9001")).thenReturn(List.of());
+        //    when(coordinadorRepository.findByProgramaCodeProgram("9002")).thenReturn(List.of(elegido));
+        //     when(coordinadorRepository.findAllByIdsForUpdate(anyCollection())).thenReturn(List.of(elegido));
+//
+        //      ProgramaDto.UpdateRequest request = new ProgramaDto.UpdateRequest(
+                //              null, null, null, null, null, null, null, null, null, null, 20);
+        //     BadRequestException ex = assertThrows(BadRequestException.class,
+                //           () -> programaService.update("9001", request));
+//
+        //   assertTrue(ex.getMessage().contains("no tiene un coordinador asignado"));
+        //  verify(coordinadorRepository, never()).saveAndFlush(any());
+        //}
 
     // Criterio 5
 
