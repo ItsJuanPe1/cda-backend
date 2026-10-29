@@ -55,12 +55,12 @@ public class ProgramaService {
         if (programaRepository.existsById(code)) {
             throw new ConflictException(MSG_CODIGO_REPETIDO, null);
         }
-
+        
         Jornada jornada = Jornada.valueOf(request.jornada());
         Integer diurna = jornada == Jornada.NOCTURNA ? null : request.numeroSemestre();
         Integer nocturna = jornada == Jornada.DIURNA ? null : request.semestresNocturna();
         validarDuraciones(jornada, diurna, nocturna);
-
+        
         Programa programa = Programa.builder()
                 .codeProgram(code)
                 .nameProgram(request.nameProgram().trim())
@@ -71,6 +71,7 @@ public class ProgramaService {
                 .estado(request.estado() != null ? EstadoPrograma.valueOf(request.estado()) : EstadoPrograma.ACTIVO)
                 .idFacultadPrograma(request.idFacultadPrograma())
                 .apertura(normalizeApertura(request.apertura()))
+                .numeroResolucion(request.numeroResolucion() == null ? null : request.numeroResolucion().trim())
                 .build();
 
         // Criterio 3: un programa nuevo no tiene malla ni cohortes
@@ -117,6 +118,9 @@ public class ProgramaService {
         if (request.apertura() != null) {
             programa.setApertura(normalizeApertura(request.apertura()));
         }
+        if (request.numeroResolucion() != null && !request.numeroResolucion().isBlank()) {
+            programa.setNumeroResolucion(request.numeroResolucion().trim());
+        }
 
         return toResponseWithCount(programaRepository.save(programa));
     }
@@ -152,7 +156,7 @@ public class ProgramaService {
         return toResponse(p, pensumAcademicoRepository.countByIdCodeProgram(p.getCodeProgram()));
     }
 
-    private ProgramaDto.Response toResponse(Programa p, long totalAsignaturas) {
+        private ProgramaDto.Response toResponse(Programa p, long totalAsignaturas) {
         return new ProgramaDto.Response(
                 p.getCodeProgram(),
                 p.getNameProgram(),
@@ -163,7 +167,8 @@ public class ProgramaService {
                 p.getEstado(),
                 p.getIdFacultadPrograma(),
                 totalAsignaturas,
-                p.getApertura());
+                p.getApertura(),
+                p.getNumeroResolucion());
     }
 
     private String normalizeApertura(String apertura) {

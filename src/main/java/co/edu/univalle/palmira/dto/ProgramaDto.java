@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotBlank;
 
 // HU-040: contrato en docs/contratos/HU-040.md
 public class ProgramaDto {
@@ -22,6 +23,8 @@ public class ProgramaDto {
     public static final String MSG_INGRESO = "El ingreso debe ser semestral o anual";
     public static final String MSG_ESTADO = "El estado debe ser activo o inactivo";
     public static final String MSG_APERTURA = "La apertura debe ser semestral o anual";
+    public static final String MSG_NUMERO_RESOLUCION_OBLIGATORIO = "El número de resolución es obligatorio";
+    public static final String MSG_NUMERO_RESOLUCION_LARGO = "El número de resolución no puede superar 50 caracteres";
 
     private static final String REGEX_CODIGO = "^\\s*[0-9]{4}\\s*$";
     private static final String REGEX_NO_VACIO = "^(?s).*\\S.*$";
@@ -40,17 +43,27 @@ public class ProgramaDto {
             @JsonProperty("estado") EstadoPrograma estado,
             @JsonProperty("id_facultad_programa") Integer idFacultadPrograma,
             @JsonProperty("total_asignaturas") Long totalAsignaturas,
-            @JsonProperty("apertura") String apertura
+            @JsonProperty("apertura") String apertura,
+            @JsonProperty("numero_resolucion") String numeroResolucion
     ) {
         public Response(String codeProgram, String nameProgram, Jornada jornada,
                         Integer numeroSemestre, Integer semestresNocturna, TipoIngreso ingreso,
                         EstadoPrograma estado, Integer idFacultadPrograma, Long totalAsignaturas) {
             this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna, ingreso,
-                    estado, idFacultadPrograma, totalAsignaturas, null);
+                    estado, idFacultadPrograma, totalAsignaturas, null, null);
+        }
+
+        public Response(String codeProgram, String nameProgram, Jornada jornada,
+                        Integer numeroSemestre, Integer semestresNocturna, TipoIngreso ingreso,
+                        EstadoPrograma estado, Integer idFacultadPrograma, Long totalAsignaturas,
+                        String apertura) {
+            this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna, ingreso,
+                    estado, idFacultadPrograma, totalAsignaturas, apertura, null);
         }
     }
+    
 
-    // Las duraciones obligatorias según la jornada se validan en ProgramaService
+       // Las duraciones obligatorias según la jornada se validan en ProgramaService
     public record CreateRequest(
             @JsonProperty("code_program")
             @NotNull(message = MSG_CODIGO)
@@ -92,13 +105,27 @@ public class ProgramaDto {
 
             @JsonProperty("apertura")
             @Pattern(regexp = REGEX_APERTURA, message = MSG_APERTURA)
-            String apertura
+            String apertura,
+
+            @JsonProperty("numero_resolucion")
+            @NotBlank(message = MSG_NUMERO_RESOLUCION_OBLIGATORIO)
+            @Size(max = 50, message = MSG_NUMERO_RESOLUCION_LARGO)
+            String numeroResolucion
     ) {
+        // Compatibilidad: sin apertura ni número de resolución
         public CreateRequest(String codeProgram, String nameProgram, String jornada,
                              Integer numeroSemestre, Integer semestresNocturna, String ingreso,
                              String estado, Integer idFacultadPrograma) {
             this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
-                    ingreso, estado, idFacultadPrograma, null);
+                    ingreso, estado, idFacultadPrograma, null, null);
+        }
+
+        // Compatibilidad: sin número de resolución
+        public CreateRequest(String codeProgram, String nameProgram, String jornada,
+                             Integer numeroSemestre, Integer semestresNocturna, String ingreso,
+                             String estado, Integer idFacultadPrograma, String apertura) {
+            this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
+                    ingreso, estado, idFacultadPrograma, apertura, null);
         }
     }
 
@@ -139,13 +166,28 @@ public class ProgramaDto {
 
             @JsonProperty("apertura")
             @Pattern(regexp = REGEX_APERTURA, message = MSG_APERTURA)
-            String apertura
+            String apertura,
+
+            // Ausente o null conserva el valor; si llega, no puede estar en blanco
+            @JsonProperty("numero_resolucion")
+            @Pattern(regexp = REGEX_NO_VACIO, message = MSG_NUMERO_RESOLUCION_OBLIGATORIO)
+            @Size(max = 50, message = MSG_NUMERO_RESOLUCION_LARGO)
+            String numeroResolucion
     ) {
+        // Compatibilidad: sin apertura ni número de resolución
         public UpdateRequest(String codeProgram, String nameProgram, String jornada,
                              Integer numeroSemestre, Integer semestresNocturna, String ingreso,
                              String estado, Integer idFacultadPrograma) {
             this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
-                    ingreso, estado, idFacultadPrograma, null);
+                    ingreso, estado, idFacultadPrograma, null, null);
+        }
+
+        // Compatibilidad: sin número de resolución
+        public UpdateRequest(String codeProgram, String nameProgram, String jornada,
+                             Integer numeroSemestre, Integer semestresNocturna, String ingreso,
+                             String estado, Integer idFacultadPrograma, String apertura) {
+            this(codeProgram, nameProgram, jornada, numeroSemestre, semestresNocturna,
+                    ingreso, estado, idFacultadPrograma, apertura, null);
         }
     }
 }

@@ -169,6 +169,32 @@ class ProgramaServiceTest {
         verify(pensumAcademicoRepository, never()).deleteAll();
     }
 
+        @Test
+    @DisplayName("Editar sin enviar número de resolución conserva el existente")
+    void editarSinNumeroConservaNumeroResolucion() {
+        existente.setNumeroResolucion("RES-ORIGINAL");
+        when(programaRepository.findById("9001")).thenReturn(Optional.of(existente));
+        guardarDevuelveLoMismo();
+
+        ProgramaDto.Response r = programaService.update("9001",
+                editar(null, "Programa Renombrado", null, null, null, null));
+
+        assertEquals("RES-ORIGINAL", r.numeroResolucion());
+    }
+
+    @Test
+    @DisplayName("Editar con número de resolución lo actualiza con trim")
+    void editarActualizaNumeroResolucionConTrim() {
+        existente.setNumeroResolucion("RES-ORIGINAL");
+        when(programaRepository.findById("9001")).thenReturn(Optional.of(existente));
+        guardarDevuelveLoMismo();
+
+        ProgramaDto.Response r = programaService.update("9001", new ProgramaDto.UpdateRequest(
+                null, null, null, null, null, null, null, null, null, "  RES-NUEVA  "));
+
+        assertEquals("RES-NUEVA", r.numeroResolucion());
+    }
+
     @Test
     @DisplayName("Criterio 4: el código del programa no se puede modificar")
     void criterio4_codigoNoEditable() {

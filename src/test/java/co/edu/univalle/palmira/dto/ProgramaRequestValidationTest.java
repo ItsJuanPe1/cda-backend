@@ -43,7 +43,7 @@ class ProgramaRequestValidationTest {
     }
 
     private ProgramaDto.CreateRequest crear(String codigo, String nombre, String jornada, String ingreso, String estado) {
-        return new ProgramaDto.CreateRequest(codigo, nombre, jornada, 6, null, ingreso, estado, null);
+        return new ProgramaDto.CreateRequest(codigo, nombre, jornada, 6, null, ingreso, estado, null, null, "RES-001");
     }
 
     @Test
@@ -105,4 +105,20 @@ class ProgramaRequestValidationTest {
         assertTrue(mensajes(new ProgramaDto.UpdateRequest(null, " ", null, null, null, null, null, null))
                 .contains("El nombre es obligatorio"));
     }
+    
+    @Test
+    @DisplayName("Editar: el número de resolución, si llega, no puede estar en blanco ni superar 50 caracteres")
+    void edicionNumeroResolucion() {
+        assertTrue(mensajes(updateConNumero(null)).isEmpty());
+        assertTrue(mensajes(updateConNumero("a".repeat(50))).isEmpty());
+        assertTrue(mensajes(updateConNumero("   ")).contains("El número de resolución es obligatorio"));
+        assertTrue(mensajes(updateConNumero("")).contains("El número de resolución es obligatorio"));
+        assertTrue(mensajes(updateConNumero("a".repeat(51)))
+                .contains("El número de resolución no puede superar 50 caracteres"));
+    }
+
+    private ProgramaDto.UpdateRequest updateConNumero(String numero) {
+        return new ProgramaDto.UpdateRequest(null, null, null, null, null, null, null, null, null, numero);
+    }
+
 }
