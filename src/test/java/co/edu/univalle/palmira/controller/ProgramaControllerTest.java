@@ -1,9 +1,11 @@
 package co.edu.univalle.palmira.controller;
 
+import co.edu.univalle.palmira.dto.ProgramaCoordinadorDto;
 import co.edu.univalle.palmira.dto.ProgramaDto;
 import co.edu.univalle.palmira.model.enums.EstadoPrograma;
 import co.edu.univalle.palmira.model.enums.Jornada;
 import co.edu.univalle.palmira.model.enums.TipoIngreso;
+import co.edu.univalle.palmira.service.ProgramaCoordinadorService;
 import co.edu.univalle.palmira.service.ProgramaService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,18 +15,24 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * HU-040: respuestas HTTP de /api/programas. Datos de prueba ficticios.
+ * HU-040 y HU-037: respuestas HTTP de /api/programas. Datos de prueba ficticios.
  */
 @ExtendWith(MockitoExtension.class)
 class ProgramaControllerTest {
 
     @Mock
     private ProgramaService programaService;
+
+    @Mock
+    private ProgramaCoordinadorService programaCoordinadorService;
 
     @InjectMocks
     private ProgramaController programaController;
@@ -51,5 +59,40 @@ class ProgramaControllerTest {
 
         assertEquals(HttpStatus.NO_CONTENT, r.getStatusCode());
         verify(programaService).desactivar("9001");
+    }
+
+    @Test
+    @DisplayName("GET /api/programas/coordinadores - HU-037 criterio 1: responde 200 con los programas y su coordinador")
+    void listarConCoordinadorResponde200() {
+        List<ProgramaCoordinadorDto.Response> lista = List.of(
+                new ProgramaCoordinadorDto.Response("9001", "Programa Prueba", Jornada.DIURNA, false, null));
+        when(programaCoordinadorService.listar("prueba", true)).thenReturn(lista);
+
+        ResponseEntity<List<ProgramaCoordinadorDto.Response>> r = programaController.getConCoordinador("prueba", true);
+
+        assertEquals(HttpStatus.OK, r.getStatusCode());
+        assertEquals(lista, r.getBody());
+    }
+
+    @Test
+    @DisplayName("GET /api/programas/coordinadores - HU-037 criterio 4: sin programas responde 200 con lista vacía")
+    void listarConCoordinadorVacioResponde200() {
+        when(programaCoordinadorService.listar(null, false)).thenReturn(List.of());
+
+        ResponseEntity<List<ProgramaCoordinadorDto.Response>> r = programaController.getConCoordinador(null, false);
+
+        assertEquals(HttpStatus.OK, r.getStatusCode());
+        assertEquals(List.of(), r.getBody());
+    }
+
+    @Test
+    @DisplayName("GET /api/programas/coordinadores - HU-037: solo el administrador tiene acceso")
+    void listarConCoordinadorSoloAdmin() throws NoSuchMethodException {
+        PreAuthorize regla = ProgramaController.class
+                .getMethod("getConCoordinador", String.class, boolean.class)
+                .getAnnotation(PreAuthorize.class);
+
+        assertNotNull(regla);
+        assertEquals("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')", regla.value());
     }
 }

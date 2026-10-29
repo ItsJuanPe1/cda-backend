@@ -88,3 +88,14 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - Los duplicados responden 400 (`BadRequestException`). El proyecto ya tiene `ConflictException` (409); hay que definir cuál se usa.
   - `name_course_snapshot` admite 150 caracteres, pero el catálogo limita el nombre a 100, porque hay nombres históricos de hasta 150. Confirmar si se acepta esta diferencia.
   - Falta escribir el contrato `docs/contratos/HU-044.md`.
+
+
+## [2026-10-29] Ver programas académicos y sus coordinadores (HU-037)
+
+* **HU afectadas:** HU-037; relacionadas HU-020 (asignar coordinador) y HU-036 (reemplazar coordinador).
+* **Decisión:**
+  1. «Programas con resolución activa» (criterio 1) se entiende como los **programas de pregrado activos**. Todos los programas del sistema son de pregrado; no se agrega un campo de nivel. Se muestran los programas con `estado = ACTIVO`.
+  2. Si el coordinador asignado a un programa está **desactivado**, la fila muestra «Sin coordinador» y el botón «Asignar coordinador».
+  3. La **búsqueda y el filtro** «Sin coordinador» se hacen en el **servidor**, sin paginación.
+  4. Se trabaja en la rama `feature10-sanabria`.
+  5. No requiere migración.
