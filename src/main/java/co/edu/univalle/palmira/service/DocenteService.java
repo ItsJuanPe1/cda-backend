@@ -6,9 +6,11 @@ import co.edu.univalle.palmira.exception.ConflictException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.DocenteFoto;
+import co.edu.univalle.palmira.model.entity.Facultad;
 import co.edu.univalle.palmira.model.entity.Programa;
 import co.edu.univalle.palmira.repository.DocenteFotoRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
+import co.edu.univalle.palmira.repository.FacultadRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,6 +41,7 @@ public class DocenteService {
 
     private final DocenteRepository docenteRepository;
     private final ProgramaRepository programaRepository;
+    private final FacultadRepository facultadRepository;
     private final DocenteFotoRepository docenteFotoRepository;
 
     // ---------------------------------------------------------------
@@ -56,8 +59,7 @@ public class DocenteService {
                             existente.getId());
                 });
 
-        // Código y correo duplicados: 409 sin id existente (no es el flujo "¿desea
-        // actualizar?")
+        // Código y correo duplicados: 409 sin id existente
         if (docenteRepository.existsByCodigo(req.codigo())) {
             throw new ConflictException(
                     "Ya existe un docente con el código " + req.codigo(), null);
@@ -67,7 +69,19 @@ public class DocenteService {
                     "Ya existe un docente con el correo " + req.correoInstitucional(), null);
         }
 
-        Programa programa = buscarPrograma(req.codeProgram());
+        Facultad facultad = null;
+        Programa programa = null;
+
+        if (req.idFacultad() != null) {
+            facultad = buscarFacultad(req.idFacultad());
+        } else if (req.codeProgram() != null && !req.codeProgram().isBlank()) {
+            programa = buscarPrograma(req.codeProgram());
+            if (programa.getIdFacultadPrograma() != null) {
+                facultad = facultadRepository.findById(programa.getIdFacultadPrograma()).orElse(null);
+            }
+        } else {
+            throw new BadRequestException("La facultad de adscripción es obligatoria");
+        }
 
         Docente docente = Docente.builder()
                 .codigo(req.codigo().trim())
@@ -79,6 +93,7 @@ public class DocenteService {
                 .telefono(req.telefono())
                 .tipoDocente(req.tipoDocente())
                 .categoria(req.categoria())
+                .facultad(facultad)
                 .programa(programa)
                 .fotoUrl(req.fotoUrl())
                 .evaluacionPeriodo(req.evaluacionPeriodo())
@@ -138,7 +153,9 @@ public class DocenteService {
         if (req.fotoUrl() != null)
             docente.setFotoUrl(req.fotoUrl());
 
-        if (req.codeProgram() != null) {
+        if (req.idFacultad() != null) {
+            docente.setFacultad(buscarFacultad(req.idFacultad()));
+        } else if (req.codeProgram() != null && !req.codeProgram().isBlank()) {
             docente.setPrograma(buscarPrograma(req.codeProgram()));
         }
 
@@ -313,6 +330,12 @@ public class DocenteService {
                 && Arrays.equals(contenido, 0, firma.length, firma, 0, firma.length);
     }
 
+    private Facultad buscarFacultad(Integer idFacultad) {
+        return facultadRepository.findById(idFacultad)
+                .orElseThrow(() -> new BadRequestException(
+                        "La facultad de adscripción no existe: " + idFacultad));
+    }
+
     private Programa buscarPrograma(String codeProgram) {
         return programaRepository.findById(codeProgram)
                 .orElseThrow(() -> new BadRequestException(
@@ -332,6 +355,11 @@ public class DocenteService {
     }
 
     private DocenteDto.Response toResponse(Docente d, boolean tieneFoto) {
+        Integer idFacultad = d.getFacultad() != null
+                ? d.getFacultad().getId()
+                : (d.getPrograma() != null ? d.getPrograma().getIdFacultadPrograma() : null);
+        String nombreFacultad = d.getFacultad() != null ? d.getFacultad().getNombre() : null;
+
         return new DocenteDto.Response(
                 d.getId(),
                 d.getCodigo(),
@@ -344,6 +372,8 @@ public class DocenteService {
                 d.getTelefono(),
                 d.getTipoDocente(),
                 d.getCategoria(),
+                idFacultad,
+                nombreFacultad,
                 d.getPrograma() != null ? d.getPrograma().getCodeProgram() : null,
                 d.getPrograma() != null ? d.getPrograma().getNameProgram() : null,
                 d.getFotoUrl(),
