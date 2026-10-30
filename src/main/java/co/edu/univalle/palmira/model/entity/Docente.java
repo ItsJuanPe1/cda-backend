@@ -57,7 +57,11 @@ public class Docente {
     private CategoriaDocente categoria;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "code_program", nullable = false)
+    @JoinColumn(name = "id_facultad")
+    private Facultad facultad;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "code_program")
     private Programa programa;
 
     @Column(name = "foto_url")

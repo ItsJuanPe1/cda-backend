@@ -30,13 +30,24 @@ public class DocenteDto {
 
             @JsonProperty("categoria") @NotNull(message = "La categoría es obligatoria") CategoriaDocente categoria,
 
-            @JsonProperty("code_program") @NotBlank(message = "El programa de adscripción es obligatorio") String codeProgram,
+            @JsonProperty("id_facultad") Integer idFacultad,
+
+            @JsonProperty("code_program") String codeProgram,
 
             @JsonProperty("foto_url") String fotoUrl,
 
             @JsonProperty("evaluacion_periodo") @Size(max = 10, message = "El periodo no puede exceder 10 caracteres") String evaluacionPeriodo,
 
             @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor) {
+
+        public CreateRequest(
+                String codigo, String nombres, String apellidos, TipoDocumento tipoDocumento,
+                String numeroDocumento, String correoInstitucional, String telefono,
+                TipoDocente tipoDocente, CategoriaDocente categoria, String codeProgram,
+                String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
+            this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
+                    telefono, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
+        }
     }
 
     public record UpdateRequest(
@@ -58,6 +69,8 @@ public class DocenteDto {
 
             @JsonProperty("categoria") CategoriaDocente categoria,
 
+            @JsonProperty("id_facultad") Integer idFacultad,
+
             @JsonProperty("code_program") String codeProgram,
 
             @JsonProperty("foto_url") String fotoUrl,
@@ -65,6 +78,15 @@ public class DocenteDto {
             @JsonProperty("evaluacion_periodo") @Size(max = 10, message = "El periodo no puede exceder 10 caracteres") String evaluacionPeriodo,
 
             @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor) {
+
+        public UpdateRequest(
+                String codigo, String nombres, String apellidos, TipoDocumento tipoDocumento,
+                String numeroDocumento, String correoInstitucional, String telefono,
+                TipoDocente tipoDocente, CategoriaDocente categoria, String codeProgram,
+                String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
+            this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
+                    telefono, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
+        }
     }
 
     // HU-015: datos de contacto que edita el propio docente desde "Mi perfil".
@@ -97,6 +119,8 @@ public class DocenteDto {
             @JsonProperty("telefono") String telefono,
             @JsonProperty("tipo_docente") TipoDocente tipoDocente,
             @JsonProperty("categoria") CategoriaDocente categoria,
+            @JsonProperty("id_facultad") Integer idFacultad,
+            @JsonProperty("nombre_facultad") String nombreFacultad,
             @JsonProperty("code_program") String codeProgram,
             @JsonProperty("nombre_programa") String nombrePrograma,
             @JsonProperty("foto_url") String fotoUrl,
@@ -106,5 +130,19 @@ public class DocenteDto {
             @JsonProperty("estado") Boolean estado,
             @JsonProperty("created_at") LocalDateTime createdAt,
             @JsonProperty("updated_at") LocalDateTime updatedAt) {
+
+        public Response(
+                Long id, String codigo, String nombres, String apellidos,
+                TipoDocumento tipoDocumento, String numeroDocumento,
+                String correoInstitucional, String correoPersonal, String telefono,
+                TipoDocente tipoDocente, CategoriaDocente categoria,
+                String codeProgram, String nombrePrograma, String fotoUrl, Boolean tieneFoto,
+                String evaluacionPeriodo, BigDecimal evaluacionValor,
+                Boolean estado, LocalDateTime createdAt, LocalDateTime updatedAt) {
+            this(id, codigo, nombres, apellidos, tipoDocumento, numeroDocumento,
+                    correoInstitucional, correoPersonal, telefono, tipoDocente, categoria,
+                    null, null, codeProgram, nombrePrograma, fotoUrl, tieneFoto,
+                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt);
+        }
     }
 }
