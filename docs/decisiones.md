@@ -71,3 +71,31 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   10. Migración V15 (`V15__hu040_programas_codigo_jornada_estado.sql`) aprobada para crear y probar en PostgreSQL 17 local. Aún no se aplica en la base compartida.
   11. No se bloquea reducir la duración de un programa por debajo del último semestre de su malla: si la carrera pasa, por ejemplo, de 10 a 8 semestres, después se ajusta la malla (HU-032) o se registra una nueva (HU-017), redistribuyendo o retirando asignaturas.
   12. Contrato `docs/contratos/HU-040.md` aprobado: el `DELETE` desactiva, el `PUT` es parcial y el código no se edita.
+
+
+## [2026-10-29] Catálogo de asignaturas con código y nombre únicos (HU-044)
+
+* **HU afectadas:** HU-044 (catálogo de asignaturas), HU-017, HU-032 y HU-033 (mallas curriculares), HU-045 (generación de programación).
+* **Origen:** implementado por el equipo en `develop` (commit `13d0f41`, PR #35). Se registra a partir del código; no hay contrato `docs/contratos/HU-044.md` ni ficha `docs/hu/HU-044.md`.
+* **Decisión:**
+  1. **Código de asignatura:** alfanumérico, de 1 a 8 caracteres, se guarda en mayúsculas sin espacios. Mensaje: «El código debe ser alfanumérico y tener entre 1 y 8 caracteres».
+  2. **Nombre de asignatura:** obligatorio, máximo 100 caracteres, único sin distinguir mayúsculas ni espacios al inicio o al final. Mensajes: «Ya existe una asignatura con el código: …» y «Ya existe una asignatura con el nombre: …».
+  3. **Sin borrado físico (RN-13):** `DELETE /api/asignaturas/{codeCourse}` desactiva la asignatura (`activo = false`) y se conserva por compatibilidad con clientes antiguos.
+  4. **Asignaturas inactivas:** no se pueden agregar a una malla nueva. Mensaje: «La asignatura … está inactiva y no se puede agregar a una nueva malla».
+  5. **Nombre histórico en la malla:** cada fila de `pensum_academico` guarda `name_course_snapshot` con el nombre que tenía la asignatura al registrar o actualizar esa versión de la malla. Así, si después se renombra la asignatura en el catálogo, las versiones anteriores de la malla conservan el nombre original.
+  6. **Migración V22** (`V22__hu044_snapshot_nombre_asignatura_en_pensum.sql`): agrega `name_course_snapshot VARCHAR(150)`, lo llena con el nombre actual de cada asignatura (los nombres anteriores a la migración no se pueden reconstruir) y cambia la llave foránea `pensum_academico → asignaturas` a `ON DELETE RESTRICT`.
+* **Pendientes de confirmar con el equipo:**
+  - Los duplicados responden 400 (`BadRequestException`). El proyecto ya tiene `ConflictException` (409); hay que definir cuál se usa.
+  - `name_course_snapshot` admite 150 caracteres, pero el catálogo limita el nombre a 100, porque hay nombres históricos de hasta 150. Confirmar si se acepta esta diferencia.
+  - Falta escribir el contrato `docs/contratos/HU-044.md`.
+
+
+## [2026-10-29] Ver programas académicos y sus coordinadores (HU-037)
+
+* **HU afectadas:** HU-037; relacionadas HU-020 (asignar coordinador) y HU-036 (reemplazar coordinador).
+* **Decisión:**
+  1. «Programas con resolución activa» (criterio 1) se entiende como los **programas de pregrado activos**. Todos los programas del sistema son de pregrado; no se agrega un campo de nivel. Se muestran los programas con `estado = ACTIVO`.
+  2. Si el coordinador asignado a un programa está **desactivado**, la fila muestra «Sin coordinador» y el botón «Asignar coordinador».
+  3. La **búsqueda y el filtro** «Sin coordinador» se hacen en el **servidor**, sin paginación.
+  4. Se trabaja en la rama `feature10-sanabria`.
+  5. No requiere migración.

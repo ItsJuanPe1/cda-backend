@@ -1,6 +1,7 @@
 package co.edu.univalle.palmira.repository;
 
 import co.edu.univalle.palmira.model.entity.Programa;
+import co.edu.univalle.palmira.model.enums.EstadoPrograma;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -14,6 +15,8 @@ import java.util.List;
 @Repository
 public interface ProgramaRepository extends JpaRepository<Programa, String> {
     List<Programa> findAllByOrderByNameProgramAsc();
+
+    List<Programa> findByEstadoOrderByNameProgramAsc(EstadoPrograma estado);
 
     /** Bloquea los programas implicados en orden estable para reducir interbloqueos. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

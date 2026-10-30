@@ -1,6 +1,8 @@
 package co.edu.univalle.palmira.controller;
 
+import co.edu.univalle.palmira.dto.ProgramaCoordinadorDto;
 import co.edu.univalle.palmira.dto.ProgramaDto;
+import co.edu.univalle.palmira.service.ProgramaCoordinadorService;
 import co.edu.univalle.palmira.service.ProgramaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,11 +22,22 @@ import java.util.List;
 public class ProgramaController {
 
     private final ProgramaService programaService;
+    private final ProgramaCoordinadorService programaCoordinadorService;
 
     @GetMapping
     @Operation(summary = "Listar todos los programas académicos con conteo de asignaturas")
     public ResponseEntity<List<ProgramaDto.Response>> getAll() {
         return ResponseEntity.ok(programaService.getAll());
+    }
+
+    // HU-037: ruta fija; Spring la prefiere sobre /{codeProgram}
+    @GetMapping("/coordinadores")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
+    @Operation(summary = "Listar programas de pregrado activos con su coordinador (HU-037)")
+    public ResponseEntity<List<ProgramaCoordinadorDto.Response>> getConCoordinador(
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "sinCoordinador", defaultValue = "false") boolean sinCoordinador) {
+        return ResponseEntity.ok(programaCoordinadorService.listar(q, sinCoordinador));
     }
 
     @GetMapping("/{codeProgram}")

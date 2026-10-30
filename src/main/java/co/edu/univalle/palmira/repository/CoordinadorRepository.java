@@ -47,6 +47,12 @@ public interface CoordinadorRepository extends JpaRepository<Coordinador, Intege
                @Param("correoInstitucional") String correoInstitucional);
 
 
+       // HU-037: solo los coordinadores activos cuentan como coordinador del programa
+       @Query("SELECT c FROM Coordinador c " +
+               "JOIN FETCH c.programa " +
+               "WHERE c.activo = true")
+       List<Coordinador> findActivosConPrograma();
+
        /** Bloquea coordinadores participantes en orden de ID para que el intercambio sea atómico. */
        @Lock(LockModeType.PESSIMISTIC_WRITE)
        @Query("SELECT c FROM Coordinador c WHERE c.id IN :ids ORDER BY c.id")
