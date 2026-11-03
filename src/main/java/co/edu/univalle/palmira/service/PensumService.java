@@ -8,6 +8,7 @@ import co.edu.univalle.palmira.model.entity.Asignatura;
 import co.edu.univalle.palmira.model.entity.PensumAcademico;
 import co.edu.univalle.palmira.model.entity.PensumId;
 import co.edu.univalle.palmira.model.entity.Programa;
+import co.edu.univalle.palmira.model.enums.EstadoPrograma;
 import co.edu.univalle.palmira.model.enums.Jornada;
 import co.edu.univalle.palmira.model.enums.TipoIngreso;
 import co.edu.univalle.palmira.repository.AsignaturaRepository;
@@ -154,11 +155,13 @@ public class PensumService {
     // HU-017: Registrar nueva resolución de programa (crea nueva versión con número de resolución y número de semestres, y pasa la anterior a inactiva)
     @Transactional
     public List<PensumItemDto.Response> saveVersion(PensumItemDto.SaveRequest request) {
-        String programCode = normalize(request.codeProgram());
-        Programa programa = programaRepository.findById(programCode)
-                .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado: " + programCode));
+        String sourceCode = normalize(request.codeProgram());
+        Programa sourcePrograma = programaRepository.findById(sourceCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado: " + sourceCode));
 
         validarSolicitudMalla(request);
+        Programa programa = resolverProgramaPorJornada(sourcePrograma, request);
+        String programCode = normalize(programa.getCodeProgram());
         actualizarDatosPrograma(programa, request);
 
         List<PensumAcademico> lockedRows = pensumRepository.lockByProgram(programCode);
@@ -184,13 +187,15 @@ public class PensumService {
                 ? request.numeroSemestre()
                 : programa.getNumeroSemestre();
 
+        Programa finalPrograma = programa;
+        String finalProgramCode = programCode;
         List<PensumAcademico> saved = request.items().stream().map(item -> {
             String courseCode = normalize(item.codeCourse());
             Asignatura asignatura = resolveAsignaturaFromCatalog(courseCode, false);
             String meta = buildMetadata(item, asignatura, descClean);
             return PensumAcademico.builder()
-                    .id(new PensumId(programCode, courseCode, version))
-                    .programa(programa)
+                    .id(new PensumId(finalProgramCode, courseCode, version))
+                    .programa(finalPrograma)
                     .asignatura(asignatura)
                     .nameCourseSnapshot(asignatura.getNameCourse())
                     .semestre(item.semestre())
@@ -212,12 +217,79 @@ public class PensumService {
                 .toList();
     }
 
+    private Programa resolverProgramaPorJornada(Programa sourcePrograma, PensumItemDto.SaveRequest request) {
+        String sourceCode = normalize(sourcePrograma.getCodeProgram());
+        String reqJornada = request.jornada() != null ? request.jornada().trim().toUpperCase() : "";
+        String baseCode = sourceCode.replaceAll("-(DIU|NOC)$", "");
+
+        if ("NOCTURNA".equals(reqJornada) && !sourceCode.endsWith("-NOC")) {
+            String targetCode = baseCode + "-NOC";
+            return programaRepository.findById(targetCode).orElseGet(() -> {
+                Integer numSem = request.numeroSemestre() != null
+                        ? request.numeroSemestre()
+                        : (sourcePrograma.getSemestresNocturna() != null
+                           ? sourcePrograma.getSemestresNocturna()
+                           : sourcePrograma.getNumeroSemestre());
+                Programa instanciaNocturna = Programa.builder()
+                        .codeProgram(targetCode)
+                        .nameProgram(request.nameProgram() != null && !request.nameProgram().isBlank()
+                                ? request.nameProgram().trim()
+                                : sourcePrograma.getNameProgram())
+                        .jornada(Jornada.NOCTURNA)
+                        .numeroSemestre(numSem)
+                        .semestresNocturna(numSem)
+                        .ingreso(sourcePrograma.getIngreso() != null ? sourcePrograma.getIngreso() : TipoIngreso.SEMESTRAL)
+                        .estado(EstadoPrograma.ACTIVO)
+                        .idFacultadPrograma(sourcePrograma.getIdFacultadPrograma())
+                        .apertura(sourcePrograma.getApertura())
+                        .numeroResolucion(request.numeroResolucion() != null && !request.numeroResolucion().isBlank()
+                                ? request.numeroResolucion().trim()
+                                : sourcePrograma.getNumeroResolucion())
+                        .build();
+                return programaRepository.save(instanciaNocturna);
+            });
+        }
+
+        if ("DIURNA".equals(reqJornada) && sourceCode.endsWith("-NOC")) {
+            String targetCode = baseCode + "-DIU";
+            return programaRepository.findById(targetCode).orElseGet(() -> {
+                Integer numSem = request.numeroSemestre() != null
+                        ? request.numeroSemestre()
+                        : sourcePrograma.getNumeroSemestre();
+                Programa instanciaDiurna = Programa.builder()
+                        .codeProgram(targetCode)
+                        .nameProgram(request.nameProgram() != null && !request.nameProgram().isBlank()
+                                ? request.nameProgram().trim()
+                                : sourcePrograma.getNameProgram())
+                        .jornada(Jornada.DIURNA)
+                        .numeroSemestre(numSem)
+                        .ingreso(sourcePrograma.getIngreso() != null ? sourcePrograma.getIngreso() : TipoIngreso.SEMESTRAL)
+                        .estado(EstadoPrograma.ACTIVO)
+                        .idFacultadPrograma(sourcePrograma.getIdFacultadPrograma())
+                        .apertura(sourcePrograma.getApertura())
+                        .numeroResolucion(request.numeroResolucion() != null && !request.numeroResolucion().isBlank()
+                                ? request.numeroResolucion().trim()
+                                : sourcePrograma.getNumeroResolucion())
+                        .build();
+                return programaRepository.save(instanciaDiurna);
+            });
+        }
+
+        return sourcePrograma;
+    }
+
     // HU-032: Editar la malla activa actual y dejar registro de que fue editada
     @Transactional
     public List<PensumItemDto.Response> updateActiveVersion(String codeProgram, PensumItemDto.SaveRequest request) {
         String programCode = normalize(codeProgram);
         if (!programCode.equalsIgnoreCase(normalize(request.codeProgram()))) {
             throw new BadRequestException("El programa de la ruta no coincide con el cuerpo de la solicitud");
+        }
+
+        String reqJornada = request.jornada() != null ? request.jornada().trim().toUpperCase() : "";
+        if ((programCode.endsWith("-DIU") && "NOCTURNA".equals(reqJornada))
+                || (programCode.endsWith("-NOC") && "DIURNA".equals(reqJornada))) {
+            return saveVersion(request);
         }
 
         Programa programa = programaRepository.findById(programCode)

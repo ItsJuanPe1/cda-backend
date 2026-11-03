@@ -27,7 +27,7 @@ public class ProgramaDto {
     public static final String MSG_NUMERO_RESOLUCION_OBLIGATORIO = "El número de resolución es obligatorio";
     public static final String MSG_NUMERO_RESOLUCION_LARGO = "El número de resolución no puede superar 50 caracteres";
 
-    private static final String REGEX_CODIGO = "^\\s*[0-9]{4}\\s*$";
+    private static final String REGEX_CODIGO = "^\\s*[0-9]{4}(-(?i)(DIU|NOC))?\\s*$";
     private static final String REGEX_NO_VACIO = "^(?s).*\\S.*$";
     private static final String REGEX_JORNADA = "^(DIURNA|NOCTURNA|AMBAS)$";
     private static final String REGEX_INGRESO = "^(SEMESTRAL|ANUAL)$";

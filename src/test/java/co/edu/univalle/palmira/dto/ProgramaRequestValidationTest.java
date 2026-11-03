@@ -53,7 +53,7 @@ class ProgramaRequestValidationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"272", "27245", "2724-DIU", "ABCD", ""})
+    @ValueSource(strings = {"272", "27245", "2724-XYZ", "ABCD", ""})
     @DisplayName("Criterio 1: el código debe tener exactamente 4 dígitos")
     void codigoDeCuatroDigitos(String codigo) {
         assertTrue(mensajes(crear(codigo, "Programa", "DIURNA", "SEMESTRAL", null))
