@@ -1,5 +1,5 @@
 -- ==============================================================================
--- V24: Normalizar programas diurnos con sufijo -DIU (y nocturnos con -NOC)
+-- V26: Normalizar programas diurnos con sufijo -DIU (y nocturnos con -NOC)
 -- ==============================================================================
 
 ALTER TABLE public.programas DROP CONSTRAINT IF EXISTS chk_programas_codigo;
@@ -62,6 +62,26 @@ BEGIN
         UPDATE public.docentes
         SET code_program = v_target_code
         WHERE code_program = r.code_program;
+
+        -- Actualizar referencias en cohortes_periodo (V24) si la tabla existe
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'cohortes_periodo'
+        ) THEN
+            UPDATE public.cohortes_periodo
+            SET code_program = v_target_code
+            WHERE code_program = r.code_program;
+        END IF;
+
+        -- Actualizar referencias en cursos_programacion (V25) si la tabla existe
+        IF EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'cursos_programacion'
+        ) THEN
+            UPDATE public.cursos_programacion
+            SET code_program = v_target_code
+            WHERE code_program = r.code_program;
+        END IF;
 
         -- Eliminar el registro antiguo sin sufijo
         DELETE FROM public.programas WHERE code_program = r.code_program;
