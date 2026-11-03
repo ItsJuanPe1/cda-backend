@@ -68,11 +68,45 @@ public class CohorteService {
                 throw new BadRequestException("El semestre " + req.getSemestre() + " supera la duración máxima permitida (" + duracionPermitida + ") para la jornada " + req.getJornada());
             }
 
-            // Validar que la resolución tenga materias activas en ese semestre
-            List<PensumAcademico> materias = pensumRepository.findActiveByCodeProgramAndResolucionAndSemestre(
-                    codeProgram, req.getNumeroResolucion(), req.getSemestre());
-            if (materias.isEmpty()) {
-                throw new BadRequestException("La resolución '" + req.getNumeroResolucion() + "' no tiene asignaturas activas para el semestre " + req.getSemestre() + " del programa " + programa.getNameProgram());
+            // Validar que existan materias activas para este semestre del programa.
+            // Primero intentamos con la resolución exacta enviada; si el pensum tiene
+            // numero_resolucion = NULL (datos legacy anteriores a V20) usamos un fallback
+            // que ignora el filtro de resolución y a su vez resolvemos cuál es la
+            // resolución real de la malla para almacenarla correctamente.
+            String resolucionFinal = req.getNumeroResolucion();
+            List<PensumAcademico> materias = null;
+
+            boolean resolucionEnviadaEsSignificativa = resolucionFinal != null && !resolucionFinal.isBlank();
+
+            if (resolucionEnviadaEsSignificativa) {
+                materias = pensumRepository.findActiveByCodeProgramAndResolucionAndSemestre(
+                        codeProgram, resolucionFinal, req.getSemestre());
+            }
+
+            // Fallback: la resolución no está en el pensum (datos legacy con NULL) —
+            // verificamos que existan asignaturas sin filtrar por resolución.
+            if (materias == null || materias.isEmpty()) {
+                materias = pensumRepository.findActiveByCodeProgramAndSemestre(
+                        codeProgram, req.getSemestre());
+
+                if (materias.isEmpty()) {
+                    throw new BadRequestException(
+                            "No hay asignaturas activas para el semestre " + req.getSemestre()
+                            + " del programa '" + programa.getNameProgram() + "'. "
+                            + "Verifique que la malla curricular esté configurada correctamente.");
+                }
+
+                // Tomamos la resolución real del pensum (puede ser NULL para datos legacy)
+                resolucionFinal = materias.stream()
+                        .map(PensumAcademico::getNumeroResolucion)
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElseGet(() -> {
+                            // Intentar desde el encabezado del programa
+                            List<String> vigentes = pensumRepository.findResolucionVigenteByCodeProgram(codeProgram);
+                            if (!vigentes.isEmpty()) return vigentes.get(0);
+                            return programa.getNumeroResolucion(); // puede ser null → se guarda null
+                        });
             }
 
             nuevasCohortes.add(CohortePeriodo.builder()
@@ -80,7 +114,7 @@ public class CohorteService {
                     .programa(programa)
                     .semestre(req.getSemestre())
                     .jornada(req.getJornada())
-                    .numeroResolucion(req.getNumeroResolucion())
+                    .numeroResolucion(resolucionFinal)
                     .confirmada(req.getConfirmada() != null ? req.getConfirmada() : true)
                     .build());
         }
@@ -117,7 +151,13 @@ public class CohorteService {
                     .map(PensumAcademico::getNumeroResolucion)
                     .filter(Objects::nonNull)
                     .findFirst()
-                    .orElse(prog.getNumeroResolucion() != null ? prog.getNumeroResolucion() : "Malla Inicial");
+                    .orElseGet(() -> {
+                        // Fallback 1: resolución registrada en el programa
+                        if (prog.getNumeroResolucion() != null) return prog.getNumeroResolucion();
+                        // Fallback 2: buscar en encabezados de pensum vigente
+                        List<String> vigentes = pensumRepository.findResolucionVigenteByCodeProgram(prog.getCodeProgram());
+                        return vigentes.isEmpty() ? null : vigentes.get(0);
+                    });
 
             List<CohorteDto.PropuestaCohorteItem> itemsPropuestos = new ArrayList<>();
 

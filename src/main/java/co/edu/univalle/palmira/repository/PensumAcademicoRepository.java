@@ -61,4 +61,20 @@ public interface PensumAcademicoRepository extends JpaRepository<PensumAcademico
             @Param("codeProgram") String codeProgram,
             @Param("numeroResolucion") String numeroResolucion,
             @Param("semestre") Integer semestre);
+
+    /**
+     * Fallback para programas cuyas filas en pensum_academico tienen numero_resolucion = NULL
+     * (datos anteriores a la migración V20). Ignora el filtro de resolución.
+     */
+    @Query("SELECT p FROM PensumAcademico p JOIN FETCH p.asignatura WHERE p.id.codeProgram = :codeProgram AND p.semestre = :semestre AND p.activo = true")
+    List<PensumAcademico> findActiveByCodeProgramAndSemestre(
+            @Param("codeProgram") String codeProgram,
+            @Param("semestre") Integer semestre);
+
+    /**
+     * Obtiene la resolución más reciente (vigente) del pensum de un programa.
+     * Se usa para auto-poblar la resolución cuando el programa no la tiene en su tabla.
+     */
+    @Query("SELECT p.numeroResolucion FROM PensumAcademico p WHERE p.id.codeProgram = :codeProgram AND p.vigente = true AND p.numeroResolucion IS NOT NULL ORDER BY p.id.version DESC")
+    List<String> findResolucionVigenteByCodeProgram(@Param("codeProgram") String codeProgram);
 }

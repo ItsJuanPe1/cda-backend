@@ -76,6 +76,14 @@ public class ProgramacionService {
             List<PensumAcademico> materiasMalla = pensumRepository.findActiveByCodeProgramAndResolucionAndSemestre(
                     prog.getCodeProgram(), cohorte.getNumeroResolucion(), cohorte.getSemestre());
 
+            // Las mallas creadas antes de V20 no tenían número de resolución.
+            // En ese caso, la cohorte conserva la resolución seleccionada, pero
+            // las asignaturas deben localizarse por programa y semestre.
+            if (materiasMalla.isEmpty()) {
+                materiasMalla = pensumRepository.findActiveByCodeProgramAndSemestre(
+                        prog.getCodeProgram(), cohorte.getSemestre());
+            }
+
             // Excluir electivas profesionales
             List<PensumAcademico> obligatorias = materiasMalla.stream()
                     .filter(p -> p.getIsElective() == null || !p.getIsElective())

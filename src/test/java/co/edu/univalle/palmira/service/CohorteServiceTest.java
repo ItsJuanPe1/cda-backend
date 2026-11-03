@@ -123,12 +123,16 @@ class CohorteServiceTest {
     }
 
     @Test
-    @DisplayName("Falla si la resolución no tiene materias activas para ese semestre")
+    @DisplayName("Falla si no hay materias activas para ese semestre en ninguna resolución")
     void testGuardarCohortes_SinMaterias() {
         when(periodoRepository.findById(1L)).thenReturn(Optional.of(periodo));
         when(programaRepository.findById("2711")).thenReturn(Optional.of(programa));
 
+        // Búsqueda exacta por resolución: sin resultados
         when(pensumRepository.findActiveByCodeProgramAndResolucionAndSemestre("2711", "Res. 084", 2))
+                .thenReturn(List.of());
+        // Fallback sin filtro de resolución: también sin resultados
+        when(pensumRepository.findActiveByCodeProgramAndSemestre("2711", 2))
                 .thenReturn(List.of());
 
         CohorteDto.Request req = CohorteDto.Request.builder()
@@ -141,7 +145,7 @@ class CohorteServiceTest {
         BadRequestException ex = assertThrows(BadRequestException.class, () ->
                 cohorteService.guardarCohortes(1L, "2711", List.of(req)));
 
-        assertTrue(ex.getMessage().contains("no tiene asignaturas activas"));
+        assertTrue(ex.getMessage().contains("No hay asignaturas activas para el semestre"));
     }
 
     @Test

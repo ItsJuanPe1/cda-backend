@@ -100,6 +100,32 @@ class ProgramacionServiceTest {
     }
 
     @Test
+    @DisplayName("Generar programación usa la malla legacy cuando la resolución no coincide")
+    void testGenerarProgramacion_MallaLegacySinResolucion() {
+        when(periodoRepository.findById(1L)).thenReturn(Optional.of(periodo));
+        when(cursoRepository.countByPeriodoId(1L)).thenReturn(0L);
+        when(programaRepository.findByEstadoOrderByNameProgramAsc(EstadoPrograma.ACTIVO)).thenReturn(List.of(programa));
+        when(cohorteRepository.findByPeriodoIdAndConfirmadaTrue(1L)).thenReturn(List.of(cohorte));
+
+        PensumAcademico pensumLegacy = PensumAcademico.builder()
+                .asignatura(asignatura1)
+                .semestre(1)
+                .numeroResolucion(null)
+                .isElective(false)
+                .build();
+        when(pensumRepository.findActiveByCodeProgramAndResolucionAndSemestre("2711", "Res. 084", 1))
+                .thenReturn(List.of());
+        when(pensumRepository.findActiveByCodeProgramAndSemestre("2711", 1))
+                .thenReturn(List.of(pensumLegacy));
+        when(cursoRepository.contarCursosPorPrograma(1L))
+                .thenReturn(Collections.singletonList(new Object[]{"2711", "Tecnología en Desarrollo de Software", 1L}));
+
+        programacionService.generarProgramacion(1L, false);
+
+        verify(cursoRepository).saveAll(argThat(cursos -> ((List<?>) cursos).size() == 1));
+    }
+
+    @Test
     @DisplayName("Criterio 4: Si falta alguna cohorte o malla, informa y no genera")
     void testGenerarProgramacion_FaltaCohorte() {
         when(periodoRepository.findById(1L)).thenReturn(Optional.of(periodo));
