@@ -1,4 +1,3 @@
-# 1. Fase de construcción (Build) con JDK 21
 FROM gradle:8.5-jdk21-alpine AS builder
 WORKDIR /app
 COPY gradle gradle
