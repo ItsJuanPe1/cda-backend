@@ -52,4 +52,13 @@ public interface PensumAcademicoRepository extends JpaRepository<PensumAcademico
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM PensumAcademico p WHERE p.id.codeProgram = :codeProgram")
     List<PensumAcademico> lockByProgram(@Param("codeProgram") String codeProgram);
+
+    @Query("SELECT DISTINCT p.numeroResolucion FROM PensumAcademico p WHERE p.id.codeProgram = :codeProgram AND p.numeroResolucion IS NOT NULL")
+    List<String> findDistinctNumeroResolucionByCodeProgram(@Param("codeProgram") String codeProgram);
+
+    @Query("SELECT p FROM PensumAcademico p JOIN FETCH p.asignatura WHERE p.id.codeProgram = :codeProgram AND p.numeroResolucion = :numeroResolucion AND p.semestre = :semestre AND p.activo = true")
+    List<PensumAcademico> findActiveByCodeProgramAndResolucionAndSemestre(
+            @Param("codeProgram") String codeProgram,
+            @Param("numeroResolucion") String numeroResolucion,
+            @Param("semestre") Integer semestre);
 }

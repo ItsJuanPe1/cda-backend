@@ -4,6 +4,11 @@ public class ConflictException extends RuntimeException {
 
     private final Long existingId;
 
+    public ConflictException(String message) {
+        super(message);
+        this.existingId = null;
+    }
+
     public ConflictException(String message, Long existingId) {
         super(message);
         this.existingId = existingId;
