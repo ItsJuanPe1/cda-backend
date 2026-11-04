@@ -45,6 +45,9 @@ class ProgramacionServiceTest {
     @Mock
     private DocenteRepository docenteRepository;
 
+    @Mock
+    private DocenteAsignaturaService docenteAsignaturaService;
+
     @InjectMocks
     private ProgramacionService programacionService;
 

@@ -22,4 +22,7 @@ public interface ProgramaRepository extends JpaRepository<Programa, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT p FROM Programa p WHERE p.codeProgram IN :codes ORDER BY p.codeProgram")
     List<Programa> findAllByCodeProgramInForUpdate(@Param("codes") Collection<String> codes);
+
+    @Query("SELECT p.codeProgram FROM Programa p WHERE p.idFacultadPrograma = :idFacultad")
+    List<String> findCodeProgramByIdFacultadPrograma(@Param("idFacultad") Integer idFacultad);
 }

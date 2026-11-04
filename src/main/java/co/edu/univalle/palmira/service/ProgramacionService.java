@@ -25,6 +25,7 @@ public class ProgramacionService {
     private final ProgramaRepository programaRepository;
     private final PensumAcademicoRepository pensumRepository;
     private final DocenteRepository docenteRepository;
+    private final DocenteAsignaturaService docenteAsignaturaService;
 
     @Transactional
     public ProgramacionDto.ResumenResponse generarProgramacion(Long periodoId, boolean sobrescribir) {
@@ -149,6 +150,9 @@ public class ProgramacionService {
         }
 
         cursoRepository.saveAll(nuevosCursos);
+
+        // HU-049 criterio 4: lo que el docente dicta en el periodo pasa al histórico.
+        docenteAsignaturaService.registrarDesdeCursos(nuevosCursos);
 
         return construirResumen(periodoId, "Programación generada exitosamente con " + nuevosCursos.size() + " cursos.");
     }

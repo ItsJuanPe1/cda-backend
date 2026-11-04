@@ -99,3 +99,20 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   3. La **búsqueda y el filtro** «Sin coordinador» se hacen en el **servidor**, sin paginación.
   4. Se trabaja en la rama `feature10-sanabria`.
   5. No requiere migración.
+
+
+## [2026-11-03] Histórico de asignaturas dictadas por docente (HU-049)
+
+* **HU afectadas:** HU-049 (asociar docentes a asignaturas), HU-026 (docentes), HU-040 (programas), HU-017/HU-032 (mallas), HU-045 (programación).
+* **Decisión:**
+  1. El «perfil» del docente se interpreta con la información disponible: una asignatura corresponde a su perfil si (a) tiene la misma facultad del docente o (b) está en la malla registrada de algún programa de su facultad. Si el docente no tiene facultad ni programa, no se puede validar el perfil y la asociación se rechaza.
+  2. La asociación se guarda en la tabla nueva `docente_asignatura` con `docente_id`, `code_course`, `id_facultad`, periodo opcional, origen (`MANUAL`, `PROGRAMACION`), estado y fechas. La llave única es `(docente_id, code_course, id_facultad)`. La facultad se deriva del docente; el administrador no la elige.
+  3. **Sin borrado físico (RN-13):** quitar una asociación la desactiva (`activo = false`, `desactivado_at`). Se puede reactivar; el histórico se conserva.
+  4. **No hay carga inicial.** El alcance se simplifica a la asociación manual y a la alimentación automática desde programación. El frontend permite seleccionar varias asignaturas de la facultad del docente y las envía una por una.
+  5. El origen `MANUAL` se usa para las asociaciones del administrador y `PROGRAMACION` cuando el docente queda asignado a un curso de un periodo. Las filas antiguas con origen `CARGA_INICIAL` se migran a `MANUAL` en V28.
+  6. **Criterio 4:** al generar o regenerar la programación, `ProgramacionService` registra en el histórico los cursos que tengan docente. Además, la migración V27 crea el trigger `trg_curso_docente_historico` sobre `cursos_programacion` y V28 lo actualiza para usar facultad. Ambos caminos son idempotentes por la llave única.
+  7. La migración V27 hace backfill desde `cursos_programacion`; V28 migra la columna `code_program` a `id_facultad`, elimina el programa del histórico y consolida en una sola fila las asociaciones duplicadas de programas de la misma facultad.
+  8. Los endpoints nuevos son de uso exclusivo del administrador y viven bajo `/api/docentes-asignaturas`. La consulta acepta filtros por docente, asignatura, facultad y estado (criterio 5).
+  9. El contrato se documenta en `docs/contratos/HU-049.md`.
+* **Pendiente de confirmar con el equipo:**
+  - Si se requiere conservar el programa original como dato informativo del histórico. Hoy la facultad es la unidad de asociación y el programa solo se conserva en `cursos_programacion`.

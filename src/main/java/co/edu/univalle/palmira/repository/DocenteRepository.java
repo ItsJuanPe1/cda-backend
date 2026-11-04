@@ -31,5 +31,8 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
     @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa WHERE LOWER(d.correoInstitucional) = LOWER(:correo)")
     Optional<Docente> findByCorreoInstitucionalWithDetails(@Param("correo") String correo);
 
+    @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa WHERE d.id = :id")
+    Optional<Docente> findByIdWithDetails(@Param("id") Long id);
+
     boolean existsByCodigo(String codigo);
 }
