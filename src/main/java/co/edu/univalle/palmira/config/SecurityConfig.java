@@ -39,7 +39,7 @@ public class SecurityConfig {
     private static final String[] ADMIN_Y_COORDINADOR =
             {"ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR"};
     private static final String[] ADMIN_Y_DOCENTE =
-        {"ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE"};
+            {"ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE"};
 
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private String allowedOrigins;
@@ -63,7 +63,7 @@ public class SecurityConfig {
         JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
         authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
-                        http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
@@ -86,25 +86,29 @@ public class SecurityConfig {
 
                         // 2. Períodos: los tres roles consultan; solo el administrador modifica
                         .requestMatchers(HttpMethod.GET, "/api/periodos", "/api/periodos/**")
-                                .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
 
-                        // 3. Disponibilidad docente: docentes
+                        // Rutas administrativas de disponibilidad: solo ADMIN puede actuar
+                        // sobre el ID de un docente seleccionado en la plantilla.
+                        .requestMatchers("/api/admin/**").hasAnyAuthority(ADMIN)
+
+                        // 3. Disponibilidad docente: docentes (autoservicio /me)
                         .requestMatchers(HttpMethod.GET, "/api/disponibilidades/**")
-                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers(HttpMethod.POST, "/api/disponibilidades/**")
-                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers(HttpMethod.PUT, "/api/disponibilidades/**")
-                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers(HttpMethod.DELETE, "/api/disponibilidades/**")
-                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
 
                         // 4. Asignaturas, mallas, programas, facultades, catálogos, cohortes y programación:
                         // Coordinadores solo pueden consultar (GET)
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
                                 "/api/programas/**", "/api/facultades/**", "/api/catalogos/**",
                                 "/api/cohortes/**", "/api/programacion/**")
-                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
                         // Coordinadores conservan acceso operativo a las mallas curriculares.
                         .requestMatchers("/api/pensum/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
