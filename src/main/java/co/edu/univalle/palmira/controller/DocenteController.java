@@ -4,14 +4,11 @@ import co.edu.univalle.palmira.dto.DocenteDto;
 import co.edu.univalle.palmira.service.DocenteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -57,38 +54,13 @@ public class DocenteController {
         return ResponseEntity.ok(docenteService.obtenerPorCorreo(correoAutenticado(authentication)));
     }
 
-    // HU-015: editar mi correo personal y teléfono
+    // HU-015: editar mi correo personal, teléfono y facultad
     @PutMapping("/me/contacto")
     public ResponseEntity<DocenteDto.Response> actualizarContacto(
             Authentication authentication,
             @Valid @RequestBody DocenteDto.ContactoRequest request) {
         return ResponseEntity.ok(
                 docenteService.actualizarContacto(correoAutenticado(authentication), request));
-    }
-
-    // HU-015: subir o reemplazar mi foto (JPG o PNG, máximo 5 MB)
-    @PutMapping(value = "/me/foto", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<DocenteDto.Response> actualizarFoto(
-            Authentication authentication,
-            @RequestPart("foto") MultipartFile foto) {
-        return ResponseEntity.ok(docenteService.actualizarFoto(correoAutenticado(authentication), foto));
-    }
-
-    // HU-015: obtener mi foto activa
-    @GetMapping("/me/foto")
-    public ResponseEntity<byte[]> obtenerFoto(Authentication authentication) {
-        DocenteDto.Foto foto = docenteService.obtenerFoto(correoAutenticado(authentication));
-        return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType(foto.tipoMime()))
-                .cacheControl(CacheControl.noStore())
-                .body(foto.contenido());
-    }
-
-    // HU-015: eliminar (desactivar) mi foto
-    @DeleteMapping("/me/foto")
-    public ResponseEntity<Void> eliminarFoto(Authentication authentication) {
-        docenteService.eliminarFoto(correoAutenticado(authentication));
-        return ResponseEntity.noContent().build();
     }
 
     private static String correoAutenticado(Authentication authentication) {

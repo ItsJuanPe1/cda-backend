@@ -5,44 +5,30 @@ import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ConflictException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Docente;
-import co.edu.univalle.palmira.model.entity.DocenteFoto;
 import co.edu.univalle.palmira.model.entity.Facultad;
 import co.edu.univalle.palmira.model.entity.Programa;
-import co.edu.univalle.palmira.repository.DocenteFotoRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
 import co.edu.univalle.palmira.repository.FacultadRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.math.BigDecimal;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class DocenteService {
 
-    // HU-015: límites y mensajes de "Mi perfil"
-    public static final long FOTO_TAMANO_MAXIMO = 5L * 1024 * 1024;
-    public static final String MSG_FOTO_INVALIDA = "Formato o tamaño no válido";
-    public static final String MSG_SIN_FOTO = "No tiene foto registrada";
+    // HU-015: mensajes de "Mi perfil"
     public static final String MSG_SIN_CAMBIOS = "No hay cambios para guardar";
     public static final String MSG_PERFIL_NO_ENCONTRADO = "No se encontró su perfil de docente";
-
-    private static final byte[] FIRMA_JPEG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
-    private static final byte[] FIRMA_PNG = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
 
     private final DocenteRepository docenteRepository;
     private final ProgramaRepository programaRepository;
     private final FacultadRepository facultadRepository;
-    private final DocenteFotoRepository docenteFotoRepository;
 
     // ---------------------------------------------------------------
     // HU-026: Crear perfil de docente
@@ -100,7 +86,7 @@ public class DocenteService {
                 .evaluacionValor(req.evaluacionValor())
                 .build();
 
-        return toResponse(docenteRepository.save(docente), false);
+        return toResponse(docenteRepository.save(docente));
     }
 
     // ---------------------------------------------------------------
@@ -174,10 +160,9 @@ public class DocenteService {
     // ---------------------------------------------------------------
     @Transactional(readOnly = true)
     public List<DocenteDto.Response> listarTodos() {
-        Set<Long> conFoto = docenteFotoRepository.findDocenteIdsConFotoActiva();
         return docenteRepository.findAllWithPrograma()
                 .stream()
-                .map(d -> toResponse(d, conFoto.contains(d.getId())))
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -201,7 +186,7 @@ public class DocenteService {
     }
 
     // ---------------------------------------------------------------
-    // HU-015: Editar mis datos de contacto (correo personal y teléfono).
+    // HU-015: Editar mis datos de contacto (correo personal y teléfono) y facultad.
     // Nombres, apellidos, correo institucional y demás datos no se editan aquí.
     // ---------------------------------------------------------------
     @Transactional
@@ -214,72 +199,23 @@ public class DocenteService {
         }
         String telefono = normalizarOpcional(req.telefono());
 
-        if (Objects.equals(correoPersonal, docente.getCorreoPersonal())
-                && Objects.equals(telefono, docente.getTelefono())) {
+        Integer idFacultadActual = docente.getFacultad() != null ? docente.getFacultad().getId() : null;
+        Integer nuevoIdFacultad = req.idFacultad();
+        boolean cambioFacultad = nuevoIdFacultad != null && !Objects.equals(nuevoIdFacultad, idFacultadActual);
+
+        boolean cambioContacto = !Objects.equals(correoPersonal, docente.getCorreoPersonal())
+                || !Objects.equals(telefono, docente.getTelefono());
+
+        if (!cambioContacto && !cambioFacultad) {
             throw new BadRequestException(MSG_SIN_CAMBIOS);
         }
 
+        if (cambioFacultad) {
+            docente.setFacultad(buscarFacultad(nuevoIdFacultad));
+        }
         docente.setCorreoPersonal(correoPersonal);
         docente.setTelefono(telefono);
         return toResponse(docenteRepository.save(docente));
-    }
-
-    // ---------------------------------------------------------------
-    // HU-015: Subir o reemplazar mi foto. Solo se guarda una foto por docente:
-    // la nueva reemplaza el contenido de la anterior y queda activa.
-    // ---------------------------------------------------------------
-    @Transactional
-    public DocenteDto.Response actualizarFoto(String correo, MultipartFile archivo) {
-        Docente docente = buscarPerfilPropio(correo);
-
-        if (archivo == null || archivo.isEmpty() || archivo.getSize() > FOTO_TAMANO_MAXIMO) {
-            throw new BadRequestException(MSG_FOTO_INVALIDA);
-        }
-        byte[] contenido;
-        try {
-            contenido = archivo.getBytes();
-        } catch (IOException e) {
-            throw new UncheckedIOException("No se pudo leer la imagen", e);
-        }
-        // El tipo se decide por el contenido del archivo, no por la extensión ni el Content-Type
-        String tipoMime = detectarTipoImagen(contenido);
-        if (tipoMime == null) {
-            throw new BadRequestException(MSG_FOTO_INVALIDA);
-        }
-
-        DocenteFoto foto = docenteFotoRepository.findByDocenteId(docente.getId())
-                .orElseGet(() -> DocenteFoto.builder().docente(docente).build());
-        foto.setContenido(contenido);
-        foto.setTipoMime(tipoMime);
-        foto.setTamanoBytes(contenido.length);
-        foto.setActiva(true);
-        docenteFotoRepository.save(foto);
-
-        return toResponse(docente, true);
-    }
-
-    // ---------------------------------------------------------------
-    // HU-015: Obtener mi foto activa
-    // ---------------------------------------------------------------
-    @Transactional(readOnly = true)
-    public DocenteDto.Foto obtenerFoto(String correo) {
-        Docente docente = buscarPerfilPropio(correo);
-        DocenteFoto foto = docenteFotoRepository.findByDocenteIdAndActivaTrue(docente.getId())
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_SIN_FOTO));
-        return new DocenteDto.Foto(foto.getTipoMime(), foto.getContenido());
-    }
-
-    // ---------------------------------------------------------------
-    // HU-015: Eliminar mi foto. Se desactiva (RN-13); solo el administrador
-    // la borra directamente en la base de datos.
-    // ---------------------------------------------------------------
-    @Transactional
-    public void eliminarFoto(String correo) {
-        Docente docente = buscarPerfilPropio(correo);
-        DocenteFoto foto = docenteFotoRepository.findByDocenteIdAndActivaTrue(docente.getId())
-                .orElseThrow(() -> new ResourceNotFoundException(MSG_SIN_FOTO));
-        foto.setActiva(false);
-        docenteFotoRepository.save(foto);
     }
 
     // ---------------------------------------------------------------
@@ -287,10 +223,9 @@ public class DocenteService {
     // ---------------------------------------------------------------
     @Transactional(readOnly = true)
     public List<DocenteDto.Response> listar() {
-        Set<Long> conFoto = docenteFotoRepository.findDocenteIdsConFotoActiva();
         return docenteRepository.findAllByOrderByApellidosAscNombresAsc()
                 .stream()
-                .map(d -> toResponse(d, conFoto.contains(d.getId())))
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -314,22 +249,6 @@ public class DocenteService {
         return valor.trim();
     }
 
-    /** Devuelve image/jpeg o image/png según la firma del archivo, o null si no es ninguno. */
-    static String detectarTipoImagen(byte[] contenido) {
-        if (empiezaCon(contenido, FIRMA_JPEG)) {
-            return "image/jpeg";
-        }
-        if (empiezaCon(contenido, FIRMA_PNG)) {
-            return "image/png";
-        }
-        return null;
-    }
-
-    private static boolean empiezaCon(byte[] contenido, byte[] firma) {
-        return contenido != null && contenido.length >= firma.length
-                && Arrays.equals(contenido, 0, firma.length, firma, 0, firma.length);
-    }
-
     private Facultad buscarFacultad(Integer idFacultad) {
         return facultadRepository.findById(idFacultad)
                 .orElseThrow(() -> new BadRequestException(
@@ -351,10 +270,6 @@ public class DocenteService {
     }
 
     private DocenteDto.Response toResponse(Docente d) {
-        return toResponse(d, docenteFotoRepository.existsByDocenteIdAndActivaTrue(d.getId()));
-    }
-
-    private DocenteDto.Response toResponse(Docente d, boolean tieneFoto) {
         Integer idFacultad = d.getFacultad() != null
                 ? d.getFacultad().getId()
                 : (d.getPrograma() != null ? d.getPrograma().getIdFacultadPrograma() : null);
@@ -377,7 +292,7 @@ public class DocenteService {
                 d.getPrograma() != null ? d.getPrograma().getCodeProgram() : null,
                 d.getPrograma() != null ? d.getPrograma().getNameProgram() : null,
                 d.getFotoUrl(),
-                tieneFoto,
+                false,
                 d.getEvaluacionPeriodo(),
                 d.getEvaluacionValor(),
                 d.getEstado(),
