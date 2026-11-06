@@ -29,13 +29,54 @@ public class DisponibilidadDocenteService {
     private static final LocalTime HORA_MAXIMA = LocalTime.of(21, 0);
 
     /**
-     * Devuelve el estado del registro de disponibilidad y los rangos del docente
-     * para el período académico vigente. Se identifica por el correo firmado en
-     * el JWT, no por sub, porque un coordinador también puede tener perfil docente.
+     * Consulta la disponibilidad del docente asociado al correo autenticado.
+     * Se conserva este flujo para el autoservicio del docente.
      */
     @Transactional(readOnly = true)
     public DisponibilidadDocenteDto.Response consultar(String correoInstitucional) {
-        Docente docente = obtenerDocenteActivo(correoInstitucional);
+        return consultarDocente(obtenerDocenteActivo(correoInstitucional));
+    }
+
+    /**
+     * Consulta la disponibilidad de un docente seleccionado por un administrador.
+     * El ID recibido corresponde a docentes.id, nunca a usuarios.id.
+     */
+    @Transactional(readOnly = true)
+    public DisponibilidadDocenteDto.Response consultarPorDocenteId(Long docenteId) {
+        return consultarDocente(obtenerDocenteActivoPorId(docenteId));
+    }
+
+    @Transactional
+    public DisponibilidadDocenteDto.Item registrar(
+            String correoInstitucional, DisponibilidadDocenteDto.Request request) {
+        return registrarParaDocente(obtenerDocenteActivo(correoInstitucional), request);
+    }
+
+    /** Registra disponibilidad para el docente seleccionado por un administrador. */
+    @Transactional
+    public DisponibilidadDocenteDto.Item registrarPorDocenteId(
+            Long docenteId, DisponibilidadDocenteDto.Request request) {
+        return registrarParaDocente(obtenerDocenteActivoPorId(docenteId), request);
+    }
+
+    @Transactional
+    public List<DisponibilidadDocenteDto.Item> actualizarTodo(
+            String correoInstitucional, List<DisponibilidadDocenteDto.Request> requests) {
+        return actualizarDisponibilidadDeDocente(obtenerDocenteActivo(correoInstitucional), requests);
+    }
+
+    /** Actualiza todos los intervalos del docente seleccionado por un administrador. */
+    @Transactional
+    public List<DisponibilidadDocenteDto.Item> actualizarTodoPorDocenteId(
+            Long docenteId, List<DisponibilidadDocenteDto.Request> requests) {
+        return actualizarDisponibilidadDeDocente(obtenerDocenteActivoPorId(docenteId), requests);
+    }
+
+    /*
+     * Los métodos siguientes contienen la lógica de negocio compartida por ambos
+     * flujos. Así las validaciones no se duplican ni cambian para el docente.
+     */
+    private DisponibilidadDocenteDto.Response consultarDocente(Docente docente) {
         PeriodoAcademico periodo = periodoRepository.findFirstByVigenteTrue()
                 .filter(this::esPeriodoActivo)
                 .orElse(null);
@@ -54,10 +95,8 @@ public class DisponibilidadDocenteService {
                 periodo.getPlazoDocenteFin());
     }
 
-    @Transactional
-    public DisponibilidadDocenteDto.Item registrar(
-            String correoInstitucional, DisponibilidadDocenteDto.Request request) {
-        Docente docente = obtenerDocenteActivo(correoInstitucional);
+    private DisponibilidadDocenteDto.Item registrarParaDocente(
+            Docente docente, DisponibilidadDocenteDto.Request request) {
         PeriodoAcademico periodo = periodoRepository.findFirstByVigenteTrue()
                 .filter(this::esPeriodoActivo)
                 .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
@@ -87,10 +126,8 @@ public class DisponibilidadDocenteService {
         return toItem(guardado);
     }
 
-    @Transactional
-    public List<DisponibilidadDocenteDto.Item> actualizarTodo(
-            String correoInstitucional, List<DisponibilidadDocenteDto.Request> requests) {
-        Docente docente = obtenerDocenteActivo(correoInstitucional);
+    private List<DisponibilidadDocenteDto.Item> actualizarDisponibilidadDeDocente(
+            Docente docente, List<DisponibilidadDocenteDto.Request> requests) {
         PeriodoAcademico periodo = periodoRepository.findFirstByVigenteTrue()
                 .filter(this::esPeriodoActivo)
                 .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
@@ -138,6 +175,18 @@ public class DisponibilidadDocenteService {
         }
         Docente docente = docenteRepository.findByCorreoInstitucionalWithDetails(
                         correoInstitucional.trim().toLowerCase(Locale.ROOT))
+                .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado"));
+        if (Boolean.FALSE.equals(docente.getEstado())) {
+            throw new ResourceNotFoundException("Docente no encontrado");
+        }
+        return docente;
+    }
+
+    private Docente obtenerDocenteActivoPorId(Long docenteId) {
+        if (docenteId == null || docenteId <= 0) {
+            throw new ResourceNotFoundException("Docente no encontrado");
+        }
+        Docente docente = docenteRepository.findById(docenteId)
                 .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado"));
         if (Boolean.FALSE.equals(docente.getEstado())) {
             throw new ResourceNotFoundException("Docente no encontrado");

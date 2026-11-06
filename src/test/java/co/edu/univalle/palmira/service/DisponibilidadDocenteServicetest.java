@@ -48,12 +48,62 @@ class DisponibilidadDocenteServiceTest {
                 .plazoDocenteInicio(Instant.now().minusSeconds(3600))
                 .plazoDocenteFin(Instant.now().plusSeconds(3600))
                 .build();
-        when(docenteRepository.findByCorreoInstitucionalWithDetails(EMAIL)).thenReturn(Optional.of(docente));
         lenient().when(periodoRepository.findFirstByVigenteTrue()).thenReturn(Optional.of(periodo));
+    }
+
+    /** Configura el docente autenticado solo en las pruebas que usan el flujo por correo. */
+    private void stubDocenteAutenticado() {
+        when(docenteRepository.findByCorreoInstitucionalWithDetails(EMAIL))
+                .thenReturn(Optional.of(docente));
+    }
+
+
+    @Test
+    void consultaPorIdAdministrativoUsaElIdDeDocentesYNoElCorreoDelAdministrador() {
+        when(docenteRepository.findById(42L)).thenReturn(Optional.of(docente));
+        when(disponibilidadRepository.findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(42L, 7L))
+                .thenReturn(List.of());
+
+        DisponibilidadDocenteDto.Response response = service.consultarPorDocenteId(42L);
+
+        assertEquals("HABILITADO", response.estado());
+        verify(docenteRepository).findById(42L);
+        verify(disponibilidadRepository)
+                .findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(42L, 7L);
+        verify(docenteRepository, never()).findByCorreoInstitucionalWithDetails(any());
+    }
+
+    @Test
+    void registraDisponibilidadAdministrativaEnElDocenteIndicadoPorId() {
+        when(docenteRepository.findById(42L)).thenReturn(Optional.of(docente));
+        when(disponibilidadRepository.findCruces(42L, 7L, 3,
+                LocalTime.of(10, 0), LocalTime.of(11, 30))).thenReturn(List.of());
+        when(disponibilidadRepository.save(any(DisponibilidadDocente.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        DisponibilidadDocenteDto.Item response = service.registrarPorDocenteId(
+                42L, new DisponibilidadDocenteDto.Request(3, LocalTime.of(10, 0), LocalTime.of(11, 30)));
+
+        assertEquals(3, response.dia());
+        verify(disponibilidadRepository).save(argThat(d ->
+                d.getDocente().getId().equals(42L) && d.getPeriodo().getId().equals(7L)));
+        verify(docenteRepository, never()).findByCorreoInstitucionalWithDetails(any());
+    }
+
+    @Test
+    void noPermiteGestionarPorIdUnDocenteInactivo() {
+        docente.setEstado(false);
+        when(docenteRepository.findById(42L)).thenReturn(Optional.of(docente));
+
+        assertThrows(co.edu.univalle.palmira.exception.ResourceNotFoundException.class,
+                () -> service.consultarPorDocenteId(42L));
+        verify(disponibilidadRepository, never())
+                .findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(any(), any());
     }
 
     @Test
     void consultaDevuelveEstadoHabilitadoYHorariosDelDocenteAutenticado() {
+        stubDocenteAutenticado();
         when(disponibilidadRepository.findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(42L, 7L))
                 .thenReturn(List.of());
 
@@ -66,6 +116,7 @@ class DisponibilidadDocenteServiceTest {
 
     @Test
     void consultaIndicaCuandoNoHayPeriodoAcademicoVigente() {
+        stubDocenteAutenticado();
         when(periodoRepository.findFirstByVigenteTrue()).thenReturn(Optional.empty());
 
         DisponibilidadDocenteDto.Response response = service.consultar(EMAIL);
@@ -79,6 +130,7 @@ class DisponibilidadDocenteServiceTest {
 
     @Test
     void registraRangoValidoYLoAsociaAlDocenteYPeriodoCorrectos() {
+        stubDocenteAutenticado();
         when(disponibilidadRepository.findCruces(42L, 7L, 2,
                 LocalTime.of(7, 30), LocalTime.of(9, 0))).thenReturn(List.of());
         when(disponibilidadRepository.save(any(DisponibilidadDocente.class)))
@@ -96,6 +148,7 @@ class DisponibilidadDocenteServiceTest {
 
     @Test
     void rechazaDomingo() {
+        stubDocenteAutenticado();
         BadRequestException ex = assertThrows(BadRequestException.class, () -> service.registrar(
                 EMAIL, new DisponibilidadDocenteDto.Request(7, LocalTime.of(9, 0), LocalTime.of(10, 0))));
 
@@ -105,6 +158,7 @@ class DisponibilidadDocenteServiceTest {
 
     @Test
     void rechazaHorasAntesDeLasSiete() {
+        stubDocenteAutenticado();
         BadRequestException ex = assertThrows(BadRequestException.class, () -> service.registrar(
                 EMAIL, new DisponibilidadDocenteDto.Request(1, LocalTime.of(6, 30), LocalTime.of(8, 0))));
 
@@ -114,6 +168,7 @@ class DisponibilidadDocenteServiceTest {
 
     @Test
     void rechazaHoraFinPosteriorALasVeintiuna() {
+        stubDocenteAutenticado();
         BadRequestException ex = assertThrows(BadRequestException.class, () -> service.registrar(
                 EMAIL, new DisponibilidadDocenteDto.Request(6, LocalTime.of(20, 0), LocalTime.of(21, 30))));
 
@@ -123,6 +178,7 @@ class DisponibilidadDocenteServiceTest {
 
     @Test
     void rechazaRegistrarCuandoElPlazoCerro() {
+        stubDocenteAutenticado();
         periodo.setPlazoDocenteInicio(Instant.now().minusSeconds(7200));
         periodo.setPlazoDocenteFin(Instant.now().minusSeconds(3600));
 
@@ -135,6 +191,7 @@ class DisponibilidadDocenteServiceTest {
 
     @Test
     void rechazaUnRangoQueSeCruzaConOtroRegistro() {
+        stubDocenteAutenticado();
         DisponibilidadDocente existente = DisponibilidadDocente.builder()
                 .id(99L).docente(docente).periodo(periodo).dia(2)
                 .horaInicio(LocalTime.of(8, 0)).horaFin(LocalTime.of(10, 0)).build();
