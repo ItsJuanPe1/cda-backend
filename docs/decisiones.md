@@ -116,3 +116,22 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   9. El contrato se documenta en `docs/contratos/HU-049.md`.
 * **Pendiente de confirmar con el equipo:**
   - Si se requiere conservar el programa original como dato informativo del histórico. Hoy la facultad es la unidad de asociación y el programa solo se conserva en `cursos_programacion`.
+
+
+## [2026-11-06] Se adelanta la bitácora de cambios (HU-058)
+
+* **HU afectadas:** HU-058 (bitácora), HU-047 (revisar y ajustar la programación).
+* **Decisión:**
+  1. HU-058 no tenía sprint asignado; se adelanta porque HU-047 (criterio 5: «Cada ajuste queda en la bitácora») depende de ella.
+  2. La bitácora se implementa como un **servicio reutilizable** (`BitacoraService.registrar(...)`) que cualquier servicio llama dentro de su misma transacción, además de la pantalla de consulta del administrador.
+  3. Si falla el registro en la bitácora, falla la operación: no se permiten ajustes sin rastro.
+  4. La bitácora es de solo inserción y consulta desde la aplicación (criterio 4 y RN-13).
+  5. HU-047 no se toca en esta HU.
+  6. **Persona que operó la cuenta compartida:** se registra el `nombreCompleto` del coordinador asignado al programa (campo `operador_nombre`), copiado al momento del registro. No se pide el nombre al iniciar sesión.
+  7. **Rechazo por fuera de fechas (RN-15):** se deja definido el motivo `FUERA_DE_VENTANA`, pero la validación de ventanas en el login no se implementa en HU-058; se hará con RN-15/HU-055.
+  8. **Filtro «periodo»:** es el periodo académico (`periodos_academicos`). Cada servicio envía `periodo_id` cuando la entidad pertenece a un periodo; los ingresos lo dejan en `null`.
+  9. Contrato `docs/contratos/HU-058.md` y migración V29 (`V29__hu058_create_bitacora.sql`) aprobados. La V29 se probó en PostgreSQL 17.11 local; aún no se aplica en la base compartida.
+  10. Si falla el registro de un ingreso **aceptado**, no se emite la sesión. Si falla el registro de un ingreso **rechazado**, se conserva el mensaje de rechazo para el usuario y el fallo queda en el log, sin datos personales (supuesto de implementación, confirmar).
+  11. `POST`, `PUT`, `PATCH` y `DELETE` sobre `/api/bitacora` y `/api/bitacora/**` responden 405 para el administrador y 403 para los demás roles. `GlobalExceptionHandler` ahora responde 405 a un método no soportado y 400 («Parámetros de consulta inválidos») a un parámetro con tipo inválido; antes ambos respondían 500 en toda la API.
+  12. El frontend de HU-058 se hace al final, en otra rama del repositorio del frontend.
+* **Hallazgo (2026-11-06):** las migraciones no se pueden aplicar sobre una base vacía. La V11 falla con `relation "public.disponibilidades_docentes" does not exist`, probablemente porque la tabla la creaba la V9, que no está en el repositorio. Por eso la V29 se probó aislada, con una tabla mínima `periodos_academicos`. Pendiente con el equipo: recuperar V9 y V13.

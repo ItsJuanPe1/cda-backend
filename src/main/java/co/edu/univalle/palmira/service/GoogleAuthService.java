@@ -3,9 +3,12 @@ package co.edu.univalle.palmira.service;
 import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.GoogleLoginRequest;
 import co.edu.univalle.palmira.dto.LoginResponse;
+import co.edu.univalle.palmira.exception.IngresoRechazadoException;
 import co.edu.univalle.palmira.model.entity.Coordinador;
 import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.Usuario;
+import co.edu.univalle.palmira.model.enums.MotivoRechazoIngreso;
+import co.edu.univalle.palmira.model.enums.ResultadoIngreso;
 import co.edu.univalle.palmira.repository.CoordinadorRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
 import co.edu.univalle.palmira.repository.UsuarioRepository;
@@ -13,6 +16,7 @@ import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -31,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+@Slf4j
 @Service
 public class GoogleAuthService {
 
@@ -41,12 +46,15 @@ public class GoogleAuthService {
     private final String googleClientId;
     private final long expirationMinutes;
     private GoogleIdTokenVerifier tokenVerifier;
+    /** HU-058. Se inyecta en producción; los constructores de prueba antiguos lo dejan en null. */
+    private BitacoraService bitacoraService;
 
     @Autowired
     public GoogleAuthService(UsuarioRepository usuarioRepository,
             CoordinadorRepository coordinadorRepository,
             DocenteRepository docenteRepository,
             JwtEncoder jwtEncoder,
+            BitacoraService bitacoraService,
             @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
             @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
         this.usuarioRepository = usuarioRepository;
@@ -57,6 +65,7 @@ public class GoogleAuthService {
                 ? googleClientId
                 : "699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com";
         this.expirationMinutes = expirationMinutes;
+        this.bitacoraService = bitacoraService;
     }
 
     public GoogleAuthService(UsuarioRepository usuarioRepository,
@@ -90,9 +99,13 @@ public class GoogleAuthService {
         this.tokenVerifier = tokenVerifier;
     }
 
+    public void setBitacoraService(BitacoraService bitacoraService) {
+        this.bitacoraService = bitacoraService;
+    }
+
     public LoginResponse login(GoogleLoginRequest request) {
         if (request == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
+            return login(null, null);
         }
         return login(request.credential(), request.rolEsperado());
     }
@@ -101,9 +114,46 @@ public class GoogleAuthService {
         return login(credential, null);
     }
 
+    /**
+     * HU-058 criterio 2: todo intento de ingreso queda en la bitácora, aceptado o rechazado.
+     * No se registra el token. Si no se puede registrar un ingreso aceptado, no se emite la sesión.
+     */
     public LoginResponse login(String credential, Integer rolEsperado) {
+        LoginResponse respuesta;
+        try {
+            respuesta = autenticar(credential, rolEsperado);
+        } catch (IngresoRechazadoException ex) {
+            registrarRechazo(ex, rolEsperado);
+            throw ex;
+        }
+        if (bitacoraService != null) {
+            bitacoraService.registrarIngreso(respuesta.email(), respuesta.rol(), ResultadoIngreso.ACEPTADO, null);
+        }
+        return respuesta;
+    }
+
+    private void registrarRechazo(IngresoRechazadoException ex, Integer rolEsperado) {
+        if (bitacoraService == null) {
+            return;
+        }
+        try {
+            bitacoraService.registrarIngreso(ex.getCorreo(), rolEsperado, ResultadoIngreso.RECHAZADO, ex.getMotivo());
+        } catch (RuntimeException fallo) {
+            // El ingreso ya está rechazado; se conserva el mensaje original para el usuario.
+            // No se registran datos personales en el log.
+            log.error("No se pudo registrar en la bitácora un ingreso rechazado (motivo {})", ex.getMotivo(), fallo);
+        }
+    }
+
+    private static IngresoRechazadoException rechazo(HttpStatus status, String mensaje,
+            MotivoRechazoIngreso motivo, String correo) {
+        return new IngresoRechazadoException(status, mensaje, motivo, correo);
+    }
+
+    private LoginResponse autenticar(String credential, Integer rolEsperado) {
         if (credential == null || credential.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
+            throw rechazo(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO,
+                    MotivoRechazoIngreso.TOKEN_INVALIDO, null);
         }
 
         if (googleClientId == null || googleClientId.isBlank()) {
@@ -121,33 +171,40 @@ public class GoogleAuthService {
 
             GoogleIdToken idToken = verifier.verify(credential);
             if (idToken == null) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
+                throw rechazo(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO,
+                        MotivoRechazoIngreso.TOKEN_INVALIDO, null);
             }
             payload = idToken.getPayload();
             if (payload == null) {
-                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
+                throw rechazo(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO,
+                        MotivoRechazoIngreso.TOKEN_INVALIDO, null);
             }
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (Exception ex) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO);
+            throw rechazo(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO,
+                    MotivoRechazoIngreso.TOKEN_INVALIDO, null);
         }
 
-        // 2. Correo institucional: validar dominio exacto y sufijo institucional
+        // 2. Correo institucional: validar dominio exacto y sufijo institucional.
+        // HU-058: si se rechaza aquí no se guarda el correo (puede ser personal).
         String email = payload.getEmail();
         boolean emailVerified = Boolean.TRUE.equals(payload.getEmailVerified());
         if (!emailVerified || email == null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL,
+                    MotivoRechazoIngreso.DOMINIO_NO_INSTITUCIONAL, null);
         }
 
         String cleanEmail = email.trim().toLowerCase(Locale.ROOT);
         if (!cleanEmail.endsWith(AuthConstants.DOMAIN)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL,
+                    MotivoRechazoIngreso.DOMINIO_NO_INSTITUCIONAL, null);
         }
 
         Object hdClaim = payload.get("hd");
         if (hdClaim != null && !AuthConstants.HD_CLAIM.equalsIgnoreCase(hdClaim.toString().trim())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_DOMINIO_INSTITUCIONAL,
+                    MotivoRechazoIngreso.DOMINIO_NO_INSTITUCIONAL, null);
         }
 
         // 3. Resolución por rol esperado
@@ -194,7 +251,8 @@ public class GoogleAuthService {
             }
         }
 
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA);
+        throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
+                MotivoRechazoIngreso.CUENTA_NO_REGISTRADA, cleanEmail);
     }
 
     private LoginResponse resolverLoginCoordinador(String email) {
@@ -219,10 +277,12 @@ public class GoogleAuthService {
                 || (docenteRepository != null && docenteRepository.existsByCorreoInstitucional(email));
 
         if (existeEnOtroRol) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_COORDINADOR);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_COORDINADOR,
+                MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
 
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA);
+        throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
+                MotivoRechazoIngreso.CUENTA_NO_REGISTRADA, email);
     }
 
     private LoginResponse resolverLoginDocente(String email) {
@@ -249,15 +309,18 @@ public class GoogleAuthService {
                         && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email));
 
         if (existeEnOtroRol) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_DOCENTE);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_DOCENTE,
+                MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
 
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA);
+        throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
+                MotivoRechazoIngreso.CUENTA_NO_REGISTRADA, email);
     }
 
     private LoginResponse emitirSesionUsuarioRol(Usuario usuario, int rol, String roleAuthority, String shortAuthority) {
         if (Boolean.FALSE.equals(usuario.getActivo())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
+                MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
         }
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
@@ -304,7 +367,8 @@ public class GoogleAuthService {
 
     private LoginResponse emitirSesionCoordinador(Coordinador coordinador) {
         if (Boolean.FALSE.equals(coordinador.getActivo())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
+                MotivoRechazoIngreso.PERFIL_DESACTIVADO, coordinador.getCorreoInstitucional());
         }
 
         String codeProgram = coordinador.getPrograma() != null ? coordinador.getPrograma().getCodeProgram() : null;
@@ -369,7 +433,8 @@ public class GoogleAuthService {
 
     private LoginResponse emitirSesionDocente(Docente docente) {
         if (Boolean.FALSE.equals(docente.getEstado())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
+                MotivoRechazoIngreso.PERFIL_DESACTIVADO, docente.getCorreoInstitucional());
         }
 
         String codeProgram = docente.getPrograma() != null ? docente.getPrograma().getCodeProgram() : null;
@@ -428,19 +493,23 @@ public class GoogleAuthService {
                 || (docenteRepository != null && docenteRepository.existsByCorreoInstitucional(email));
 
         if (existeEnOtroRol) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN,
+                MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
 
-        throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA);
+        throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
+                MotivoRechazoIngreso.CUENTA_NO_REGISTRADA, email);
     }
 
     private LoginResponse emitirSesionAdmin(Usuario usuario) {
         if (Boolean.FALSE.equals(usuario.getActivo())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA,
+                MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
         }
 
         if (usuario.getRol() == null || usuario.getRol() != AuthConstants.ROL_ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN);
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN,
+                MotivoRechazoIngreso.SIN_PERFIL_ROL, usuario.getEmailInstitucional());
         }
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
