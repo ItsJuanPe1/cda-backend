@@ -117,6 +117,10 @@ public class SecurityConfig {
                         // Coordinadores conservan acceso operativo a las mallas curriculares.
                         .requestMatchers("/api/pensum/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
+                        // HU-058: bitácora, solo el administrador. El controlador solo expone GET;
+                        // cualquier otro método responde 405 (criterio 4).
+                        .requestMatchers("/api/bitacora", "/api/bitacora/**").hasAnyAuthority(ADMIN)
+
                         // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
                         .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
