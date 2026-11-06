@@ -48,6 +48,9 @@ class ProgramacionServiceTest {
     @Mock
     private DocenteAsignaturaService docenteAsignaturaService;
 
+    @Mock
+    private BitacoraService bitacoraService;
+
     @InjectMocks
     private ProgramacionService programacionService;
 
@@ -159,16 +162,19 @@ class ProgramacionServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 6: Al regenerar con sobrescribir=true, conserva los docentes ya asignados a cursos que no cambian")
+    @DisplayName("Criterio 6: Al regenerar con sobrescribir=true, conserva los docentes ya asignados a cursos que no cambian y no borra cursos")
     void testGenerarProgramacion_ConservaDocente() {
         when(periodoRepository.findById(1L)).thenReturn(Optional.of(periodo));
         when(cursoRepository.countByPeriodoId(1L)).thenReturn(1L);
 
         Docente docente = Docente.builder().id(99L).nombres("Carlos").apellidos("Gómez").build();
         CursoProgramacion cursoExistente = CursoProgramacion.builder()
+                .id(500L)
+                .periodo(periodo)
                 .programa(programa)
                 .asignatura(asignatura1)
                 .jornada(Jornada.DIURNA)
+                .grupo(50)
                 .docente(docente)
                 .build();
         when(cursoRepository.findByPeriodoIdWithDetails(1L)).thenReturn(List.of(cursoExistente));
@@ -180,18 +186,21 @@ class ProgramacionServiceTest {
         when(pensumRepository.findActiveByCodeProgramAndResolucionAndSemestre("2711", "Res. 084", 1))
                 .thenReturn(List.of(pensum1));
 
-        when(docenteRepository.findById(99L)).thenReturn(Optional.of(docente));
-
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CursoProgramacion>> captor = ArgumentCaptor.forClass(List.class);
 
         programacionService.generarProgramacion(1L, true);
 
-        verify(cursoRepository).deleteByPeriodoId(1L);
+        verify(cursoRepository, never()).deleteAll(any());
+        verify(cursoRepository, never()).delete(any());
         verify(cursoRepository).saveAll(captor.capture());
+        assertEquals(1, captor.getValue().size());
         CursoProgramacion guardado = captor.getValue().get(0);
+        assertSame(cursoExistente, guardado); // HU-047: se conserva la misma fila (mismo id)
+        assertEquals(500L, guardado.getId());
         assertNotNull(guardado.getDocente());
         assertEquals(99L, guardado.getDocente().getId());
         assertEquals("ASIGNADO", guardado.getEstado());
+        assertEquals(50, guardado.getGrupo());
     }
 }
