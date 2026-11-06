@@ -89,8 +89,8 @@ public class DocenteDto {
         }
     }
 
-    // HU-015: datos de contacto que edita el propio docente desde "Mi perfil".
-    // Ambos son opcionales: null o vacío deja el campo sin valor.
+    // HU-015: datos de contacto y facultad que edita el propio docente desde "Mi perfil".
+    // Todos son opcionales: null o vacío deja el campo sin valor.
     public record ContactoRequest(
             @JsonProperty("correo_personal")
             @Size(max = 100, message = "El correo personal no puede exceder 100 caracteres")
@@ -100,11 +100,14 @@ public class DocenteDto {
 
             @JsonProperty("telefono")
             @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El teléfono solo admite de 7 a 10 dígitos")
-            String telefono) {
-    }
+            String telefono,
 
-    // HU-015: contenido de la foto activa para descargarla
-    public record Foto(String tipoMime, byte[] contenido) {
+            @JsonProperty("id_facultad")
+            Integer idFacultad) {
+
+        public ContactoRequest(String correoPersonal, String telefono) {
+            this(correoPersonal, telefono, null);
+        }
     }
 
     public record Response(

@@ -9,9 +9,6 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.server.ResponseStatusException;
@@ -63,43 +60,6 @@ class DocentePerfilControllerTest {
         docenteController.actualizarContacto(authentication, req);
 
         verify(docenteService).actualizarContacto(CORREO, req);
-    }
-
-    @Test
-    @DisplayName("HU-015 C6: PUT /api/docentes/me/foto reemplaza la foto del docente autenticado")
-    void actualizarFoto_usaCorreoDelJwt() {
-        sesionDocente();
-        MockMultipartFile foto = new MockMultipartFile("foto", "f.png", "image/png", new byte[]{1});
-
-        docenteController.actualizarFoto(authentication, foto);
-
-        verify(docenteService).actualizarFoto(CORREO, foto);
-    }
-
-    @Test
-    @DisplayName("HU-015 C6: GET /api/docentes/me/foto devuelve la imagen con su tipo y sin caché")
-    void obtenerFoto_devuelveImagen() {
-        sesionDocente();
-        byte[] contenido = {(byte) 0x89, 0x50};
-        when(docenteService.obtenerFoto(CORREO)).thenReturn(new DocenteDto.Foto("image/png", contenido));
-
-        ResponseEntity<byte[]> resp = docenteController.obtenerFoto(authentication);
-
-        assertEquals(HttpStatus.OK, resp.getStatusCode());
-        assertEquals(MediaType.IMAGE_PNG, resp.getHeaders().getContentType());
-        assertEquals("no-store", resp.getHeaders().getCacheControl());
-        assertArrayEquals(contenido, resp.getBody());
-    }
-
-    @Test
-    @DisplayName("HU-015 C6: DELETE /api/docentes/me/foto desactiva la foto y responde 204")
-    void eliminarFoto_responde204() {
-        sesionDocente();
-
-        ResponseEntity<Void> resp = docenteController.eliminarFoto(authentication);
-
-        assertEquals(HttpStatus.NO_CONTENT, resp.getStatusCode());
-        verify(docenteService).eliminarFoto(CORREO);
     }
 
     @Test

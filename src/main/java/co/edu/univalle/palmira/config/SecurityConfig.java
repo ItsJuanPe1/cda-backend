@@ -103,12 +103,16 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.DELETE, "/api/disponibilidades/**")
                         .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
 
-                        // 4. Asignaturas, mallas, programas, facultades, catálogos, cohortes y programación:
+                        // 4. Asignaturas, mallas, programas, catálogos, cohortes y programación:
                         // Coordinadores solo pueden consultar (GET)
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
-                                "/api/programas/**", "/api/facultades/**", "/api/catalogos/**",
+                                "/api/programas/**", "/api/catalogos/**",
                                 "/api/cohortes/**", "/api/programacion/**")
                         .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
+                        // Facultades: Administradores, Coordinadores y Docentes pueden consultar
+                        .requestMatchers(HttpMethod.GET, "/api/facultades", "/api/facultades/**")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
 
                         // Coordinadores conservan acceso operativo a las mallas curriculares.
                         .requestMatchers("/api/pensum/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
