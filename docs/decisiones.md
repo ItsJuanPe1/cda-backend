@@ -159,3 +159,15 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   16. Contrato `docs/contratos/HU-047.md` aprobado.
   17. La regeneración de la programación (HU-045) ya no borra cursos: concilia por programa, asignatura y jornada, conserva id, docente y exclusiones, y agrega los cursos nuevos al final de la serie de su asignatura.
 * **Hallazgo (2026-11-06):** además de `disponibilidades_docentes` (V9), la V16 espera una tabla `usuarios` que ninguna migración del repositorio crea (probablemente la V13 aplicada solo en la base compartida). Con tablas sustitutas para ambas, la cadena V1–V30 se aplica completa en PostgreSQL 17 local.
+
+
+## [2026-11-06] Cursos Programados muestra solo el número de grupo (presentación de HU-046 y HU-047)
+
+* **HU afectadas:** HU-046 criterio 2 (presentación de los grupos) y HU-047 (submódulo 3 «Cursos Programados»).
+* **Decisión (confirmada por el equipo):**
+  1. La primera columna de la tabla se llama «Grupo» y muestra solo el número de grupo (50, 51, 52…), no el identificador `CÓDIGO-GRUPO`.
+  2. Los cursos excluidos no tienen grupo: la celda muestra «—».
+  3. En el modal de exclusión, la vista previa y los mensajes del submódulo, la asignatura se nombra por su nombre y los grupos como «Grupo 52 → Grupo 51».
+  4. Es solo presentación: el curso se sigue identificando como `CÓDIGO-GRUPO` (asignatura + grupo); el backend, los DTO y el contrato `docs/contratos/HU-047.md` no cambian. Las llaves de React, las acciones y las llamadas al API usan el id del curso.
+  5. El buscador sigue encontrando por código de asignatura y los filtros por programa, asignatura y jornada no cambian.
+  6. Otras pantallas (exportación HU-014, vista del coordinador) no se modifican sin consultar. A la fecha, ninguna otra pantalla del frontend muestra el identificador compuesto.
