@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.Lock;
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -36,6 +37,8 @@ public interface PensumAcademicoRepository extends JpaRepository<PensumAcademico
     List<Object[]> contarAsignaturasPorPrograma();
 
     List<PensumAcademico> findByIdCodeCourse(String codeCourse);
+
+    boolean existsByIdCodeProgramInAndIdCodeCourse(Collection<String> codePrograms, String codeCourse);
 
     @Query("SELECT COUNT(p) FROM PensumAcademico p WHERE p.id.codeProgram = :codeProgram AND p.vigente = true")
     long countByIdCodeProgram(@Param("codeProgram") String codeProgram);
