@@ -15,6 +15,12 @@ import java.time.Instant;
 @Builder
 public class CursoProgramacion {
 
+    public static final String ESTADO_PROGRAMADO = "PROGRAMADO";
+    public static final String ESTADO_ASIGNADO = "ASIGNADO";
+    public static final String ESTADO_EXCLUIDO = "EXCLUIDO";
+    /** HU-046: los grupos de cada asignatura empiezan en 50. */
+    public static final int GRUPO_INICIAL = 50;
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -58,7 +64,22 @@ public class CursoProgramacion {
 
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String estado = "PROGRAMADO";
+    private String estado = ESTADO_PROGRAMADO;
+
+    /** HU-047: justificación obligatoria al excluir (V30). */
+    @Column(name = "justificacion_exclusion", length = 500)
+    private String justificacionExclusion;
+
+    /** HU-047: correo del administrador que excluyó el curso. */
+    @Column(name = "excluido_por", length = 150)
+    private String excluidoPor;
+
+    @Column(name = "fecha_exclusion")
+    private Instant fechaExclusion;
+
+    public boolean isExcluido() {
+        return ESTADO_EXCLUIDO.equals(estado);
+    }
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

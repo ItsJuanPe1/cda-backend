@@ -135,3 +135,39 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   11. `POST`, `PUT`, `PATCH` y `DELETE` sobre `/api/bitacora` y `/api/bitacora/**` responden 405 para el administrador y 403 para los demás roles. `GlobalExceptionHandler` ahora responde 405 a un método no soportado y 400 («Parámetros de consulta inválidos») a un parámetro con tipo inválido; antes ambos respondían 500 en toda la API.
   12. El frontend de HU-058 se hace al final, en otra rama del repositorio del frontend.
 * **Hallazgo (2026-11-06):** las migraciones no se pueden aplicar sobre una base vacía. La V11 falla con `relation "public.disponibilidades_docentes" does not exist`, probablemente porque la tabla la creaba la V9, que no está en el repositorio. Por eso la V29 se probó aislada, con una tabla mínima `periodos_academicos`. Pendiente con el equipo: recuperar V9 y V13.
+
+
+## [2026-11-06] Exclusión de cursos y renumeración de grupos (HU-047)
+
+* **HU afectadas:** HU-047 (revisar y ajustar la programación), HU-045 (generar), HU-046 (grupos), HU-058 (bitácora).
+* **Decisión (confirmada por el equipo):**
+  1. Un curso se excluye cuando no hay estudiantes de ese programa que vayan a ver esa asignatura en el periodo. Ejemplo: Cálculo la ven 3 programas (A en 1.º → grupo 50, B en 2.º → grupo 51, C en 2.º → grupo 52); C no tiene estudiantes, así que se excluye solo MAT101-52 y quedan 50 y 51.
+  2. Se excluye un curso puntual (periodo + programa + asignatura + jornada) con justificación obligatoria. Queda en estado `EXCLUIDO`, visible en la consulta y sin número de grupo.
+  3. Al excluir, los cursos activos restantes de esa asignatura en el periodo se renumeran consecutivos desde 50 conservando su orden relativo (si se excluye el 51, el antiguo 52 pasa a 51). Aplica a cualquier asignatura, común o no.
+  4. Antes de confirmar, el sistema muestra cómo quedan los grupos (antes → después).
+  5. Criterio 3: desde la pantalla «Cursos Programados» no existe forma de agregar cursos ni asignaturas fuera de la malla.
+  6. Cada exclusión y cada renumeración se registran en la bitácora (HU-058), con valor anterior y nuevo, en la misma transacción.
+  7. Al regenerar la programación, los cursos excluidos siguen excluidos con su justificación y la numeración respeta las exclusiones.
+  8. **Series de grupos:** una sola serie por asignatura en el periodo, mezclando jornadas diurna y nocturna (como hoy).
+  9. **Curso con docente asignado:** al intentar excluirlo se muestra una alerta emergente. Si el administrador confirma, se quita la asignación del docente; si cancela, no se realiza ningún cambio.
+  10. **Deshacer una exclusión:** se permite reactivar el curso excluido.
+  11. **Reordenamiento manual de grupos (C2):** queda fuera de esta HU. Solo hay renumeración automática.
+  12. **Curso que sale de la oferta al regenerar** (cohorte desmarcada o asignatura retirada de la malla): no se borra (RN-13). Se marca «Requiere revisión» con el motivo y el administrador lo excluye con justificación.
+  13. «Requiere revisión» (C4) se calcula al consultar, sin columna nueva y sin cambios en HU-032.
+  14. Migración V30 (`V30__hu047_exclusion_cursos_programacion.sql`) aprobada para crear y probar en PostgreSQL 17 local. Aún no se aplica en la base compartida.
+  15. **Curso reactivado:** toma el siguiente número de la serie (si quedan 50 y 51, pasa a 52); los demás cursos no cambian de grupo.
+  16. Contrato `docs/contratos/HU-047.md` aprobado.
+  17. La regeneración de la programación (HU-045) ya no borra cursos: concilia por programa, asignatura y jornada, conserva id, docente y exclusiones, y agrega los cursos nuevos al final de la serie de su asignatura.
+* **Hallazgo (2026-11-06):** además de `disponibilidades_docentes` (V9), la V16 espera una tabla `usuarios` que ninguna migración del repositorio crea (probablemente la V13 aplicada solo en la base compartida). Con tablas sustitutas para ambas, la cadena V1–V30 se aplica completa en PostgreSQL 17 local.
+
+
+## [2026-11-06] Cursos Programados muestra solo el número de grupo (presentación de HU-046 y HU-047)
+
+* **HU afectadas:** HU-046 criterio 2 (presentación de los grupos) y HU-047 (submódulo 3 «Cursos Programados»).
+* **Decisión (confirmada por el equipo):**
+  1. La primera columna de la tabla se llama «Grupo» y muestra solo el número de grupo (50, 51, 52…), no el identificador `CÓDIGO-GRUPO`.
+  2. Los cursos excluidos no tienen grupo: la celda muestra «—».
+  3. En el modal de exclusión, la vista previa y los mensajes del submódulo, la asignatura se nombra por su nombre y los grupos como «Grupo 52 → Grupo 51».
+  4. Es solo presentación: el curso se sigue identificando como `CÓDIGO-GRUPO` (asignatura + grupo); el backend, los DTO y el contrato `docs/contratos/HU-047.md` no cambian. Las llaves de React, las acciones y las llamadas al API usan el id del curso.
+  5. El buscador sigue encontrando por código de asignatura y los filtros por programa, asignatura y jornada no cambian.
+  6. Otras pantallas (exportación HU-014, vista del coordinador) no se modifican sin consultar. A la fecha, ninguna otra pantalla del frontend muestra el identificador compuesto.
