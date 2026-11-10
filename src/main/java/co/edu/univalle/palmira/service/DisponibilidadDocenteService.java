@@ -46,6 +46,19 @@ public class DisponibilidadDocenteService {
         return consultarDocente(obtenerDocenteActivoPorId(docenteId));
     }
 
+    @Transactional(readOnly = true)
+    public java.util.Map<Long, List<DisponibilidadDocenteDto.Item>> consultarPorPeriodo(Long periodoId) {
+        List<DisponibilidadDocente> lista = disponibilidadRepository.findAllByPeriodoIdOrderByDiaAscHoraInicioAsc(periodoId);
+        return lista.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        d -> d.getDocente().getId(),
+                        java.util.stream.Collectors.mapping(
+                                d -> new DisponibilidadDocenteDto.Item(d.getId(), d.getDia(), d.getHoraInicio(), d.getHoraFin()),
+                                java.util.stream.Collectors.toList()
+                        )
+                ));
+    }
+
     @Transactional
     public DisponibilidadDocenteDto.Item registrar(
             String correoInstitucional, DisponibilidadDocenteDto.Request request) {

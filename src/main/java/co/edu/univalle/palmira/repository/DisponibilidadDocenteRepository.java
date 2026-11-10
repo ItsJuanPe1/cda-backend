@@ -8,6 +8,8 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface DisponibilidadDocenteRepository extends JpaRepository<DisponibilidadDocente, Long> {
+    List<DisponibilidadDocente> findAllByPeriodoIdOrderByDiaAscHoraInicioAsc(Long periodoId);
+
     List<DisponibilidadDocente> findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(
             Long docenteId, Long periodoId);
 

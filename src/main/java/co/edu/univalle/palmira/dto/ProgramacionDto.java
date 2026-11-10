@@ -104,4 +104,17 @@ public class ProgramacionDto {
         /** Excluido después del ajuste. */
         private boolean excluido;
     }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class AsignarDocenteRequest {
+        private Long idDocente;
+        private Long periodoId;
+        private String codeProgram;
+        private String codeCourse;
+        private Integer semestre;
+    }
 }

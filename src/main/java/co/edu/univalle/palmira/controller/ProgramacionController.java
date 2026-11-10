@@ -71,4 +71,26 @@ public class ProgramacionController {
             @RequestBody(required = false) ProgramacionDto.JustificacionRequest request) {
         return ResponseEntity.ok(programacionService.reactivar(id, request));
     }
+
+    @PatchMapping("/cursos/{id}/docente")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @Operation(summary = "Designar o desasignar un docente a un curso programado")
+    public ResponseEntity<ProgramacionDto.CursoResponse> asignarDocente(
+            @PathVariable("id") Long id,
+            @RequestBody(required = false) ProgramacionDto.AsignarDocenteRequest request) {
+        Long idDocente = request != null ? request.getIdDocente() : null;
+        return ResponseEntity.ok(programacionService.asignarDocente(id, idDocente));
+    }
+
+    @PostMapping("/asignar-docente")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @Operation(summary = "Designar o desasignar un docente por materia y semestre")
+    public ResponseEntity<ProgramacionDto.CursoResponse> asignarDocentePorMateria(
+            @RequestBody ProgramacionDto.AsignarDocenteRequest request) {
+        if (request == null || request.getPeriodoId() == null || request.getCodeProgram() == null || request.getCodeCourse() == null) {
+            throw new co.edu.univalle.palmira.exception.BadRequestException("Faltan parámetros obligatorios para la asignación");
+        }
+        return ResponseEntity.ok(programacionService.asignarDocentePorMateria(
+                request.getPeriodoId(), request.getCodeProgram(), request.getCodeCourse(), request.getSemestre(), request.getIdDocente()));
+    }
 }

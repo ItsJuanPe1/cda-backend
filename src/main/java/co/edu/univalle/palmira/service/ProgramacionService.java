@@ -46,6 +46,8 @@ public class ProgramacionService {
     private final PensumAcademicoRepository pensumRepository;
     private final DocenteAsignaturaService docenteAsignaturaService;
     private final BitacoraService bitacoraService;
+    private final DocenteRepository docenteRepository;
+    private final AsignaturaRepository asignaturaRepository;
 
     /** Curso que corresponde según las cohortes confirmadas y la malla. */
     private record CursoOfertado(CohortePeriodo cohorte, PensumAcademico pensum) {
@@ -515,6 +517,81 @@ public class ProgramacionService {
                 .programas(items)
                 .mensaje(mensaje)
                 .build();
+    }
+
+    @Transactional
+    public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente) {
+        CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado con id " + cursoId));
+
+        if (curso.isExcluido()) {
+            throw new BadRequestException("No se puede asignar un docente a un curso excluido");
+        }
+
+        if (idDocente != null) {
+            Docente docente = docenteRepository.findById(idDocente)
+                    .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + idDocente));
+            if (Boolean.FALSE.equals(docente.getEstado())) {
+                throw new BadRequestException("El docente seleccionado está inactivo");
+            }
+            curso.setDocente(docente);
+            curso.setEstado(CursoProgramacion.ESTADO_ASIGNADO);
+
+            try {
+                docenteAsignaturaService.registrarDesdeCursos(List.of(curso));
+            } catch (Exception ignored) {}
+        } else {
+            curso.setDocente(null);
+            curso.setEstado(CursoProgramacion.ESTADO_PROGRAMADO);
+        }
+
+        CursoProgramacion guardado = cursoRepository.save(curso);
+        return toResponse(guardado, null);
+    }
+
+    @Transactional
+    public ProgramacionDto.CursoResponse asignarDocentePorMateria(
+            Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente) {
+        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Período no encontrado"));
+        Programa programa = programaRepository.findById(codeProgram)
+                .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código " + codeProgram));
+        Asignatura asignatura = asignaturaRepository.findById(codeCourse)
+                .orElseThrow(() -> new ResourceNotFoundException("Asignatura no encontrada con código " + codeCourse));
+
+        List<CursoProgramacion> existentes = cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse);
+        CursoProgramacion curso = existentes.stream()
+                .filter(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram) && !c.isExcluido())
+                .findFirst()
+                .orElse(null);
+
+        if (curso == null) {
+            int grupo = existentes.isEmpty()
+                    ? CursoProgramacion.GRUPO_INICIAL
+                    : (existentes.size() + CursoProgramacion.GRUPO_INICIAL);
+
+            String resolucion = pensumRepository.findByCodeProgramWithDetails(codeProgram).stream()
+                    .filter(p -> p.getPrograma() != null)
+                    .findFirst()
+                    .map(p -> programa.getCodeProgram())
+                    .orElse("VIGENTE");
+
+            curso = CursoProgramacion.builder()
+                    .periodo(periodo)
+                    .programa(programa)
+                    .asignatura(asignatura)
+                    .semestre(semestre != null ? semestre : 1)
+                    .jornada(programa.getJornada() != null ? programa.getJornada() : Jornada.DIURNA)
+                    .numeroResolucion(resolucion)
+                    .grupo(grupo)
+                    .credits(asignatura.getCredits() != null ? asignatura.getCredits() : 0)
+                    .nombreAsignatura(asignatura.getNameCourse())
+                    .estado(CursoProgramacion.ESTADO_PROGRAMADO)
+                    .build();
+            curso = cursoRepository.save(curso);
+        }
+
+        return asignarDocente(curso.getId(), idDocente);
     }
 
     private ProgramacionDto.CursoResponse toResponse(CursoProgramacion c, String motivoRevision) {
