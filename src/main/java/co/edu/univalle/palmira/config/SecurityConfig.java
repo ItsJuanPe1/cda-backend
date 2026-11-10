@@ -82,6 +82,7 @@ public class SecurityConfig {
 
                         // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
                         .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers(HttpMethod.GET, "/api/docentes", "/api/docentes/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
                         // 2. Períodos: los tres roles consultan; solo el administrador modifica
@@ -89,8 +90,9 @@ public class SecurityConfig {
                         .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
                         .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
 
-                        // Rutas administrativas de disponibilidad: solo ADMIN puede actuar
-                        // sobre el ID de un docente seleccionado en la plantilla.
+                        // Rutas administrativas de disponibilidad:
+                        .requestMatchers(HttpMethod.GET, "/api/admin/docentes/*/disponibilidades").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.GET, "/api/disponibilidades/periodo/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers("/api/admin/**").hasAnyAuthority(ADMIN)
 
                         // 3. Disponibilidad docente: docentes (autoservicio /me)
@@ -120,6 +122,10 @@ public class SecurityConfig {
                         // HU-058: bitácora, solo el administrador. El controlador solo expone GET;
                         // cualquier otro método responde 405 (criterio 4).
                         .requestMatchers("/api/bitacora", "/api/bitacora/**").hasAnyAuthority(ADMIN)
+
+                        // Coordinadores y administradores pueden asignar docentes a cursos programados:
+                        .requestMatchers(HttpMethod.PATCH, "/api/programacion/cursos/*/docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.POST, "/api/programacion/asignar-docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
                         // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)

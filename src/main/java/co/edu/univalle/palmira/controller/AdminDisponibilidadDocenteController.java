@@ -16,17 +16,18 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/docentes/{docenteId}/disponibilidades")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
 public class AdminDisponibilidadDocenteController {
 
     private final DisponibilidadDocenteService service;
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
     public DisponibilidadDocenteDto.Response consultar(@PathVariable("docenteId") Long docenteId) {
         return service.consultarPorDocenteId(docenteId);
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
     public DisponibilidadDocenteDto.Item registrar(
             @PathVariable("docenteId") Long docenteId,
             @Valid @RequestBody DisponibilidadDocenteDto.Request request) {
@@ -34,6 +35,7 @@ public class AdminDisponibilidadDocenteController {
     }
 
     @PutMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
     public List<DisponibilidadDocenteDto.Item> actualizarTodo(
             @PathVariable("docenteId") Long docenteId,
             @Valid @RequestBody List<DisponibilidadDocenteDto.Request> requests) {

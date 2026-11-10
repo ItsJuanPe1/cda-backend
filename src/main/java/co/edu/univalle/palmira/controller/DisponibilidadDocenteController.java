@@ -19,6 +19,12 @@ public class DisponibilidadDocenteController {
         return service.consultar(jwt.getClaimAsString("email"));
     }
 
+    @GetMapping("/periodo/{periodoId}")
+    public java.util.Map<Long, java.util.List<DisponibilidadDocenteDto.Item>> consultarPorPeriodo(
+            @PathVariable("periodoId") Long periodoId) {
+        return service.consultarPorPeriodo(periodoId);
+    }
+
     @PostMapping("/me")
     public DisponibilidadDocenteDto.Item registrar(
             @AuthenticationPrincipal Jwt jwt,
