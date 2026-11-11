@@ -135,4 +135,71 @@ class DocentePerfilServiceTest {
         assertEquals("No hay cambios para guardar", ex.getMessage());
         verify(docenteRepository, never()).save(any());
     }
+
+    // ---------------------------------------------------------------
+    // Celular (decisión del 2026-11-10): opcional, distinto del teléfono
+    // ---------------------------------------------------------------
+
+    @Test
+    @DisplayName("HU-015 C2: el docente registra su celular sin cambiar el teléfono")
+    void celular_seGuardaSinTocarElTelefono() {
+        perfilEncontrado();
+        when(docenteRepository.save(any(Docente.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DocenteDto.Response resp = docenteService.actualizarContacto(CORREO,
+                new DocenteDto.ContactoRequest("ana@example.com", "3001234567", null, " 3157654321 "));
+
+        assertEquals("3157654321", resp.celular());
+        assertEquals("3001234567", resp.telefono());
+    }
+
+    @Test
+    @DisplayName("HU-015 C2: el celular es opcional; vacío deja el campo sin valor")
+    void celular_vacioQuedaNulo() {
+        docente.setCelular("3157654321");
+        perfilEncontrado();
+        when(docenteRepository.save(any(Docente.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DocenteDto.Response resp = docenteService.actualizarContacto(CORREO,
+                new DocenteDto.ContactoRequest("ana@example.com", "3001234567", null, "  "));
+
+        assertNull(resp.celular());
+        assertEquals("3001234567", resp.telefono());
+    }
+
+    @Test
+    @DisplayName("HU-015 C7: cambiar solo el celular cuenta como cambio")
+    void celular_unicoCambioSeGuarda() {
+        perfilEncontrado();
+        when(docenteRepository.save(any(Docente.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        DocenteDto.Response resp = docenteService.actualizarContacto(CORREO,
+                new DocenteDto.ContactoRequest("ana@example.com", "3001234567", null, "6022700"));
+
+        assertEquals("6022700", resp.celular());
+        verify(docenteRepository).save(any(Docente.class));
+    }
+
+    @Test
+    @DisplayName("HU-015 C7: con el mismo celular guardado muestra «No hay cambios para guardar»")
+    void celular_mismoValorSinCambios() {
+        docente.setCelular("3157654321");
+        perfilEncontrado();
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> docenteService.actualizarContacto(CORREO,
+                        new DocenteDto.ContactoRequest("ana@example.com", "3001234567", null, "3157654321")));
+
+        assertEquals("No hay cambios para guardar", ex.getMessage());
+        verify(docenteRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("HU-022: el perfil muestra el celular guardado")
+    void celular_seMuestraEnElPerfil() {
+        docente.setCelular("3157654321");
+        perfilEncontrado();
+
+        assertEquals("3157654321", docenteService.obtenerPorCorreo(CORREO).celular());
+    }
 }

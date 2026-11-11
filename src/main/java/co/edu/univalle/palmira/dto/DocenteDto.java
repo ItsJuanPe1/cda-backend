@@ -103,10 +103,19 @@ public class DocenteDto {
             String telefono,
 
             @JsonProperty("id_facultad")
-            Integer idFacultad) {
+            Integer idFacultad,
+
+            // HU-015 (2026-11-10): celular opcional, distinto del teléfono.
+            @JsonProperty("celular")
+            @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "Por favor complete este campo correctamente")
+            String celular) {
 
         public ContactoRequest(String correoPersonal, String telefono) {
-            this(correoPersonal, telefono, null);
+            this(correoPersonal, telefono, null, null);
+        }
+
+        public ContactoRequest(String correoPersonal, String telefono, Integer idFacultad) {
+            this(correoPersonal, telefono, idFacultad, null);
         }
     }
 
@@ -132,7 +141,8 @@ public class DocenteDto {
             @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor,
             @JsonProperty("estado") Boolean estado,
             @JsonProperty("created_at") LocalDateTime createdAt,
-            @JsonProperty("updated_at") LocalDateTime updatedAt) {
+            @JsonProperty("updated_at") LocalDateTime updatedAt,
+            @JsonProperty("celular") String celular) {
 
         public Response(
                 Long id, String codigo, String nombres, String apellidos,
@@ -145,7 +155,7 @@ public class DocenteDto {
             this(id, codigo, nombres, apellidos, tipoDocumento, numeroDocumento,
                     correoInstitucional, correoPersonal, telefono, tipoDocente, categoria,
                     null, null, codeProgram, nombrePrograma, fotoUrl, tieneFoto,
-                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt);
+                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, null);
         }
     }
 }
