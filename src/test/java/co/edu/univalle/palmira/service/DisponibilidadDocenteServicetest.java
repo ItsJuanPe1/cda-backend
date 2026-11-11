@@ -322,4 +322,46 @@ class DisponibilidadDocenteServiceTest {
         verify(disponibilidadRepository, never()).save(any());
         verify(docenteRepository, never()).findByCorreoInstitucionalWithDetails(any());
     }
+
+    /*
+     * Segunda ronda de usabilidad (2026-11-10): «Limpiar selección» con disponibilidad
+     * registrada usa el PUT existente con una lista vacía (HU-007/HU-008 y HU-051).
+     */
+
+    @Test
+    void limpiarSeleccionConListaVaciaEliminaLaDisponibilidadRegistradaDelDocente() {
+        stubDocenteAutenticado();
+
+        List<DisponibilidadDocenteDto.Item> resultado = service.actualizarTodo(EMAIL, List.of());
+
+        assertTrue(resultado.isEmpty());
+        verify(disponibilidadRepository).deleteAllByDocenteIdAndPeriodoId(42L, 7L);
+        verify(disponibilidadRepository, never()).save(any());
+    }
+
+    @Test
+    void administradorPuedeLimpiarLaDisponibilidadDeUnDocente() {
+        when(docenteRepository.findById(42L)).thenReturn(Optional.of(docente));
+
+        List<DisponibilidadDocenteDto.Item> resultado = service.actualizarTodoPorDocenteId(42L, List.of());
+
+        assertTrue(resultado.isEmpty());
+        verify(disponibilidadRepository).deleteAllByDocenteIdAndPeriodoId(42L, 7L);
+        verify(disponibilidadRepository, never()).save(any());
+        verify(docenteRepository, never()).findByCorreoInstitucionalWithDetails(any());
+    }
+
+    @Test
+    void limpiarSeleccionRespetaElPlazoDocente() {
+        stubDocenteAutenticado();
+        periodo.setPlazoDocenteInicio(Instant.now().minusSeconds(7200));
+        periodo.setPlazoDocenteFin(Instant.now().minusSeconds(3600));
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.actualizarTodo(EMAIL, List.of()));
+
+        assertEquals("Fuera del período habilitado", ex.getMessage());
+        verify(disponibilidadRepository, never()).deleteAllByDocenteIdAndPeriodoId(any(), any());
+        verify(disponibilidadRepository, never()).saveAll(any());
+    }
 }
