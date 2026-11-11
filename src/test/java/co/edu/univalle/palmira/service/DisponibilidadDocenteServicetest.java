@@ -204,4 +204,122 @@ class DisponibilidadDocenteServiceTest {
         assertTrue(ex.getMessage().contains("El horario se cruza con otro ya registrado"));
         verify(disponibilidadRepository, never()).save(any());
     }
+
+    /*
+     * Prueba de usabilidad (2026-11-10): registro mínimo de 1 hora y sábado sin
+     * disponibilidad de 19:00 a 21:00. Aplica al docente (HU-007/HU-008) y al
+     * administrador (HU-051).
+     */
+    private static final String MENSAJE_MINIMO =
+            "No se puede seleccionar 30 minutos, el registro mínimo es 1 hora";
+    private static final String MENSAJE_FUERA_DE_RANGO = "Hora fuera del rango permitido";
+
+    private void stubGuardadoDevuelveLaEntidad() {
+        when(disponibilidadRepository.save(any(DisponibilidadDocente.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void rechazaUnBloqueDeTreintaMinutosPorqueElRegistroMinimoEsUnaHora() {
+        stubDocenteAutenticado();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.registrar(
+                EMAIL, new DisponibilidadDocenteDto.Request(2, LocalTime.of(8, 0), LocalTime.of(8, 30))));
+
+        assertEquals(MENSAJE_MINIMO, ex.getMessage());
+        verify(disponibilidadRepository, never()).save(any());
+    }
+
+    @Test
+    void permiteUnBloqueDeExactamenteUnaHora() {
+        stubDocenteAutenticado();
+        stubGuardadoDevuelveLaEntidad();
+
+        DisponibilidadDocenteDto.Item response = service.registrar(
+                EMAIL, new DisponibilidadDocenteDto.Request(2, LocalTime.of(8, 0), LocalTime.of(9, 0)));
+
+        assertEquals(LocalTime.of(8, 0), response.horaInicio());
+        assertEquals(LocalTime.of(9, 0), response.horaFin());
+        verify(disponibilidadRepository).save(any(DisponibilidadDocente.class));
+    }
+
+    @Test
+    void rechazaDisponibilidadElSabadoDeSieteANueveDeLaNoche() {
+        stubDocenteAutenticado();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.registrar(
+                EMAIL, new DisponibilidadDocenteDto.Request(6, LocalTime.of(19, 0), LocalTime.of(21, 0))));
+
+        assertEquals(MENSAJE_FUERA_DE_RANGO, ex.getMessage());
+        verify(disponibilidadRepository, never()).save(any());
+    }
+
+    @Test
+    void rechazaUnRangoDelSabadoQueTerminaDespuesDeLasSieteDeLaNoche() {
+        stubDocenteAutenticado();
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.registrar(
+                EMAIL, new DisponibilidadDocenteDto.Request(6, LocalTime.of(17, 0), LocalTime.of(19, 30))));
+
+        assertEquals(MENSAJE_FUERA_DE_RANGO, ex.getMessage());
+        verify(disponibilidadRepository, never()).save(any());
+    }
+
+    @Test
+    void permiteElSabadoHastaLasSieteDeLaNoche() {
+        stubDocenteAutenticado();
+        stubGuardadoDevuelveLaEntidad();
+
+        DisponibilidadDocenteDto.Item response = service.registrar(
+                EMAIL, new DisponibilidadDocenteDto.Request(6, LocalTime.of(17, 0), LocalTime.of(19, 0)));
+
+        assertEquals(6, response.dia());
+        assertEquals(LocalTime.of(19, 0), response.horaFin());
+        verify(disponibilidadRepository).save(any(DisponibilidadDocente.class));
+    }
+
+    @Test
+    void permiteOtrosDiasDeSieteANueveDeLaNoche() {
+        stubDocenteAutenticado();
+        stubGuardadoDevuelveLaEntidad();
+
+        DisponibilidadDocenteDto.Item response = service.registrar(
+                EMAIL, new DisponibilidadDocenteDto.Request(5, LocalTime.of(19, 0), LocalTime.of(21, 0)));
+
+        assertEquals(5, response.dia());
+        assertEquals(LocalTime.of(21, 0), response.horaFin());
+        verify(disponibilidadRepository).save(any(DisponibilidadDocente.class));
+    }
+
+    @Test
+    void edicionCompletaRechazaUnIntervaloDeTreintaMinutosSinBorrarLoRegistrado() {
+        stubDocenteAutenticado();
+        List<DisponibilidadDocenteDto.Request> requests = List.of(
+                new DisponibilidadDocenteDto.Request(1, LocalTime.of(7, 0), LocalTime.of(9, 0)),
+                new DisponibilidadDocenteDto.Request(1, LocalTime.of(10, 0), LocalTime.of(10, 30)));
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.actualizarTodo(EMAIL, requests));
+
+        assertEquals(MENSAJE_MINIMO, ex.getMessage());
+        verify(disponibilidadRepository, never()).deleteAllByDocenteIdAndPeriodoId(any(), any());
+        verify(disponibilidadRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void administradorTambienQuedaSujetoALasReglasDelSabadoYDelMinimo() {
+        when(docenteRepository.findById(42L)).thenReturn(Optional.of(docente));
+
+        BadRequestException sabado = assertThrows(BadRequestException.class,
+                () -> service.registrarPorDocenteId(42L,
+                        new DisponibilidadDocenteDto.Request(6, LocalTime.of(19, 0), LocalTime.of(21, 0))));
+        BadRequestException minimo = assertThrows(BadRequestException.class,
+                () -> service.registrarPorDocenteId(42L,
+                        new DisponibilidadDocenteDto.Request(3, LocalTime.of(14, 0), LocalTime.of(14, 30))));
+
+        assertEquals(MENSAJE_FUERA_DE_RANGO, sabado.getMessage());
+        assertEquals(MENSAJE_MINIMO, minimo.getMessage());
+        verify(disponibilidadRepository, never()).save(any());
+        verify(docenteRepository, never()).findByCorreoInstitucionalWithDetails(any());
+    }
 }

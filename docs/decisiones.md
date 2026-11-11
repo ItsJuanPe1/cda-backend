@@ -171,3 +171,24 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   4. Es solo presentación: el curso se sigue identificando como `CÓDIGO-GRUPO` (asignatura + grupo); el backend, los DTO y el contrato `docs/contratos/HU-047.md` no cambian. Las llaves de React, las acciones y las llamadas al API usan el id del curso.
   5. El buscador sigue encontrando por código de asignatura y los filtros por programa, asignatura y jornada no cambian.
   6. Otras pantallas (exportación HU-014, vista del coordinador) no se modifican sin consultar. A la fecha, ninguna otra pantalla del frontend muestra el identificador compuesto.
+
+
+## [2026-11-10] Ajustes de usabilidad en el registro de disponibilidad (HU-007 y HU-051)
+
+* **HU afectadas:** HU-007 (registrar disponibilidad), HU-008 (editar disponibilidad), HU-051 (el administrador registra en nombre del docente).
+* **Origen:** prueba de usabilidad con un docente. Requisitos confirmados por el equipo el 2026-11-10.
+* **Decisión:**
+  1. **R1. Registro mínimo de 1 hora.** La tabla conserva casillas de 30 minutos, pero cada intervalo continuo del mismo día dura mínimo 1 hora (se permiten 1 h, 1 h 30 min, 2 h…). Si el usuario deja un bloque de 30 minutos, se revierte el gesto y se muestra «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora». El backend rechaza con el mismo mensaje (400) cualquier franja de menos de 60 minutos.
+  2. **R2. Sábado sin disponibilidad de 19:00 a 21:00.** Las casillas se muestran bloqueadas («No habilitado»). El backend rechaza con «Hora fuera del rango permitido» (criterio 3.2 de HU-007) toda franja del sábado que termine después de las 19:00. La validación general de 07:00 a 21:00 se evalúa primero y conserva su mensaje.
+  3. **R3. Botón «Seleccionar todo».** Marca todas las horas habilitadas (lunes a sábado de 07:00 a 21:00, excepto el sábado de 19:00 a 21:00) para luego guardar.
+  4. **R4. Confirmación al guardar.** Se muestra «¿Desea guardar esta disponibilidad de horario?». Si se acepta, se guarda y aparece «Disponibilidad horaria registrada exitosamente». Si se cancela, se vuelve a la tabla sin perder lo marcado.
+  5. Las cuatro reglas aplican igual al registro (POST), a la edición completa (PUT, HU-008) y a los flujos del administrador por `docenteId` (HU-051), porque todos usan `validarHorario`. Cuando la edición completa trae una franja inválida, se rechaza antes de borrar lo registrado.
+  6. **Sin cambios en la base de datos.** El contrato de la API no cambia; solo se agregan dos respuestas 400 nuevas.
+  7. Las franjas antiguas que violen las reglas (de 30 minutos, o del sábado después de las 19:00) **no se borran** (RN-13), pero se rechazan si se vuelven a enviar. En la interfaz, un dato antiguo de 30 minutos no bloquea otros cambios; se pide corregirlo al guardar. Al editar, las casillas bloqueadas del sábado se quitan de la selección.
+* **Contradicción con el Excel (no se modifica el Excel ni el CSV):** HU-007 2.5 dice «¿Desea registrar este horario?» y 4.1 dice «Horario registrado». Se usan los textos nuevos de la prueba de usabilidad. Texto propuesto para el Excel:
+  - **2.5.** Dado que el docente completa la información requerida, cuando presione «Guardar disponibilidad», entonces el sistema debe solicitar la confirmación con «¿Desea guardar esta disponibilidad de horario?». Si cancela, vuelve a la tabla de selección sin perder lo marcado.
+  - **2.6. (nuevo)** El sistema debe ofrecer el botón «Seleccionar todo», que marca todas las horas habilitadas (lunes a sábado de 7:00 a. m. a 9:00 p. m., excepto el sábado de 7:00 p. m. a 9:00 p. m.).
+  - **3.5. (nuevo)** Dado que el docente selecciona un intervalo continuo de menos de 1 hora, entonces el sistema debe revertir la selección y mostrar «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora».
+  - **3.6. (nuevo)** Dado que el docente intenta registrar disponibilidad el sábado de 7:00 p. m. a 9:00 p. m., entonces el sistema no debe permitirlo: las casillas aparecen como no habilitadas y, si se envía, se muestra «Hora fuera del rango permitido».
+  - **4.1.** Dado que la disponibilidad fue registrada correctamente, cuando finalice la operación, entonces el sistema debe mostrar «Disponibilidad horaria registrada exitosamente» y el horario debe aparecer en el listado del docente.
+* **Pendiente (no se implementa aquí):** el criterio 2 de HU-051 dice que el administrador registra aunque la ventana esté cerrada, indicando el motivo. Hoy el backend lo impide con `estaEnPlazo` en los flujos por `docenteId`.

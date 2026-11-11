@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -27,6 +28,15 @@ public class DisponibilidadDocenteService {
 
     private static final LocalTime HORA_MINIMA = LocalTime.of(7, 0);
     private static final LocalTime HORA_MAXIMA = LocalTime.of(21, 0);
+
+    // Prueba de usabilidad (2026-11-10): cada intervalo dura mínimo 1 hora y el
+    // sábado no se registra disponibilidad de 19:00 a 21:00 (HU-007 y HU-051).
+    static final int DURACION_MINIMA_MINUTOS = 60;
+    static final int SABADO = 6;
+    static final LocalTime SABADO_HORA_MAXIMA = LocalTime.of(19, 0);
+    static final String MENSAJE_FUERA_DE_RANGO = "Hora fuera del rango permitido";
+    static final String MENSAJE_MINIMO_UNA_HORA =
+            "No se puede seleccionar 30 minutos, el registro mínimo es 1 hora";
 
     /**
      * Consulta la disponibilidad del docente asociado al correo autenticado.
@@ -243,6 +253,14 @@ public class DisponibilidadDocenteService {
         }
         if (request.horaInicio().isBefore(HORA_MINIMA) || request.horaFin().isAfter(HORA_MAXIMA)) {
             throw new BadRequestException("El horario debe estar entre las 07:00 y las 21:00");
+        }
+        // Prueba de usabilidad (2026-11-10): van después del rango general para
+        // conservar su mensaje cuando el horario se sale de 07:00 a 21:00.
+        if (request.dia() == SABADO && request.horaFin().isAfter(SABADO_HORA_MAXIMA)) {
+            throw new BadRequestException(MENSAJE_FUERA_DE_RANGO);
+        }
+        if (Duration.between(request.horaInicio(), request.horaFin()).toMinutes() < DURACION_MINIMA_MINUTOS) {
+            throw new BadRequestException(MENSAJE_MINIMO_UNA_HORA);
         }
     }
 
