@@ -198,13 +198,15 @@ public class DocenteService {
             correoPersonal = correoPersonal.toLowerCase();
         }
         String telefono = normalizarOpcional(req.telefono());
+        String celular = normalizarOpcional(req.celular());
 
         Integer idFacultadActual = docente.getFacultad() != null ? docente.getFacultad().getId() : null;
         Integer nuevoIdFacultad = req.idFacultad();
         boolean cambioFacultad = nuevoIdFacultad != null && !Objects.equals(nuevoIdFacultad, idFacultadActual);
 
         boolean cambioContacto = !Objects.equals(correoPersonal, docente.getCorreoPersonal())
-                || !Objects.equals(telefono, docente.getTelefono());
+                || !Objects.equals(telefono, docente.getTelefono())
+                || !Objects.equals(celular, docente.getCelular());
 
         if (!cambioContacto && !cambioFacultad) {
             throw new BadRequestException(MSG_SIN_CAMBIOS);
@@ -215,6 +217,7 @@ public class DocenteService {
         }
         docente.setCorreoPersonal(correoPersonal);
         docente.setTelefono(telefono);
+        docente.setCelular(celular);
         return toResponse(docenteRepository.save(docente));
     }
 
@@ -297,6 +300,7 @@ public class DocenteService {
                 d.getEvaluacionValor(),
                 d.getEstado(),
                 d.getCreatedAt(),
-                d.getUpdatedAt());
+                d.getUpdatedAt(),
+                d.getCelular());
     }
 }

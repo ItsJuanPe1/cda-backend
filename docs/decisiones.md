@@ -192,3 +192,16 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - **3.6. (nuevo)** Dado que el docente intenta registrar disponibilidad el sábado de 7:00 p. m. a 9:00 p. m., entonces el sistema no debe permitirlo: las casillas aparecen como no habilitadas y, si se envía, se muestra «Hora fuera del rango permitido».
   - **4.1.** Dado que la disponibilidad fue registrada correctamente, cuando finalice la operación, entonces el sistema debe mostrar «Disponibilidad horaria registrada exitosamente» y el horario debe aparecer en el listado del docente.
 * **Pendiente (no se implementa aquí):** el criterio 2 de HU-051 dice que el administrador registra aunque la ventana esté cerrada, indicando el motivo. Hoy el backend lo impide con `estaEnPlazo` en los flujos por `docenteId`.
+
+
+## [2026-11-10] Celular del docente en «Mi perfil» (HU-015)
+
+* **HU afectadas:** HU-015 (editar mi perfil), HU-022 (ver mi perfil).
+* **Decisión (confirmada por el usuario):**
+  1. Se agrega el **celular** del docente, distinto del teléfono. Lo edita el propio docente desde «Mi perfil», como dato de contacto (RN-08).
+  2. Es **opcional**: si el docente no lo llena, se guarda sin valor (`NULL`).
+  3. Si lo llena: **solo dígitos, de 7 a 10**, igual que el teléfono. Si tiene menos de 7 dígitos, o caracteres que no son dígitos, se muestra «Por favor complete este campo correctamente». El campo del formulario no admite más de 10 dígitos.
+  4. El administrador no lo ve ni lo edita en Plantilla (HU-026/029); no se pidió.
+  5. **Migración V31** (`V31__hu015_celular_docente.sql`), aprobada: agrega `docentes.celular VARCHAR(10)` y la restricción `chk_docentes_celular_digitos` (`celular IS NULL OR celular ~ '^[0-9]{7,10}$'`). No transforma ni borra datos. Probada el 2026-11-10 en un clúster PostgreSQL 17.11 local temporal: V1–V31 aplican (con tablas sustitutas de V9 y V13) y la restricción acepta NULL, 7 y 10 dígitos y rechaza 6 dígitos, letras y 11 dígitos. Aún no se aplica en la base compartida.
+  6. El `PUT /api/docentes/me/contacto` reemplaza todos los datos de contacto: si el cliente omite `celular`, se borra. El frontend lo envía siempre.
+  7. El mensaje se escribe con la primera letra en mayúscula, como los demás mensajes de la aplicación.

@@ -84,4 +84,37 @@ class DocenteContactoRequestValidationTest {
     void telefonoInvalido(String telefono) {
         assertEquals(Set.of("El teléfono solo admite de 7 a 10 dígitos"), mensajes(null, telefono));
     }
+
+    // Celular (decisión del 2026-11-10): opcional, de 7 a 10 dígitos, distinto del teléfono.
+    private static final String MENSAJE_CELULAR = "Por favor complete este campo correctamente";
+
+    private Set<String> mensajesCelular(String celular) {
+        return validator.validate(new DocenteDto.ContactoRequest(null, null, null, celular))
+                .stream()
+                .map(ConstraintViolation::getMessage)
+                .collect(Collectors.toSet());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "3001234", "3157654321", "0123456"})
+    @DisplayName("HU-015 C2: celular opcional o con 7 a 10 dígitos no tiene errores")
+    void celularValido(String celular) {
+        assertTrue(mensajesCelular(celular).isEmpty());
+        assertTrue(mensajesCelular(null).isEmpty());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"1", "300123", "31576543210", "315-765-4321", "315 7654321", "+573157654321", "abcdefg"})
+    @DisplayName("HU-015 C2: celular con menos de 7 dígitos, más de 10 o con otros caracteres muestra «Por favor complete este campo correctamente»")
+    void celularInvalido(String celular) {
+        assertEquals(Set.of(MENSAJE_CELULAR), mensajesCelular(celular));
+    }
+
+    @Test
+    @DisplayName("HU-015 C2: el mensaje del celular no se confunde con el del teléfono")
+    void celularYTelefonoSeValidanPorSeparado() {
+        Set<String> msgs = validator.validate(new DocenteDto.ContactoRequest(null, "123", null, "123"))
+                .stream().map(ConstraintViolation::getMessage).collect(Collectors.toSet());
+        assertEquals(Set.of("El teléfono solo admite de 7 a 10 dígitos", MENSAJE_CELULAR), msgs);
+    }
 }
