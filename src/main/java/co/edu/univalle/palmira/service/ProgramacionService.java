@@ -520,7 +520,8 @@ public class ProgramacionService {
     }
 
     @Transactional
-    public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente) {
+    public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
+                                                         boolean reemplazarDocente) {
         CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado con id " + cursoId));
 
@@ -528,7 +529,13 @@ public class ProgramacionService {
             throw new BadRequestException("No se puede asignar un docente a un curso excluido");
         }
 
+        Docente docenteAnterior = curso.getDocente();
         if (idDocente != null) {
+            if (docenteAnterior != null && !docenteAnterior.getId().equals(idDocente)
+                    && !reemplazarDocente) {
+                throw new ConflictException(
+                        "El curso ya tiene un docente asignado. Confirme si desea reemplazarlo.");
+            }
             Docente docente = docenteRepository.findById(idDocente)
                     .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + idDocente));
             if (Boolean.FALSE.equals(docente.getEstado())) {
@@ -537,9 +544,13 @@ public class ProgramacionService {
             curso.setDocente(docente);
             curso.setEstado(CursoProgramacion.ESTADO_ASIGNADO);
 
-            try {
-                docenteAsignaturaService.registrarDesdeCursos(List.of(curso));
-            } catch (Exception ignored) {}
+            docenteAsignaturaService.registrarDesdeCursos(List.of(curso));
+            if (docenteAnterior != null && !docenteAnterior.getId().equals(idDocente)
+                    && cursoRepository.countActivosByPeriodoAsignaturaDocenteExcludingCurso(
+                    curso.getPeriodo().getId(), curso.getAsignatura().getCodeCourse(),
+                    docenteAnterior.getId(), curso.getId()) == 0) {
+                docenteAsignaturaService.desactivarAsociacion(docenteAnterior, curso);
+            }
         } else {
             curso.setDocente(null);
             curso.setEstado(CursoProgramacion.ESTADO_PROGRAMADO);
@@ -551,7 +562,8 @@ public class ProgramacionService {
 
     @Transactional
     public ProgramacionDto.CursoResponse asignarDocentePorMateria(
-            Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente) {
+            Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente,
+            boolean reemplazarDocente) {
         PeriodoAcademico periodo = periodoRepository.findById(periodoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Período no encontrado"));
         Programa programa = programaRepository.findById(codeProgram)
@@ -591,7 +603,7 @@ public class ProgramacionService {
             curso = cursoRepository.save(curso);
         }
 
-        return asignarDocente(curso.getId(), idDocente);
+        return asignarDocente(curso.getId(), idDocente, reemplazarDocente);
     }
 
     private ProgramacionDto.CursoResponse toResponse(CursoProgramacion c, String motivoRevision) {
