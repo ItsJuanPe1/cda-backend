@@ -57,3 +57,7 @@ auth:
 disponibilidad:
   hora-inicio: ${DISPONIBILIDAD_HORA_INICIO:06:00}
   hora-fin: ${DISPONIBILIDAD_HORA_FIN:22:00}
+
+cda:
+  carga:
+    max-horas-docente: 20
