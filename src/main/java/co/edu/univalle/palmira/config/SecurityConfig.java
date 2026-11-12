@@ -129,6 +129,8 @@ public class SecurityConfig {
                         // Coordinadores y administradores pueden asignar docentes a cursos programados:
                         .requestMatchers(HttpMethod.PATCH, "/api/programacion/cursos/*/docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers(HttpMethod.POST, "/api/programacion/asignar-docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        // HU-059: cupos de estudiantes
+                        .requestMatchers(HttpMethod.PATCH, "/api/programacion/cupos").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
                         // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)

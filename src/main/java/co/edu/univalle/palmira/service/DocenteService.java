@@ -335,7 +335,7 @@ public class DocenteService {
         try {
             docenteAsignaturaService.sincronizarDesdeCurso(curso.getId());
         } catch (Exception ex) {
-            log.warn("HU-049: no se pudo sincronizar el histórico para el curso {}", curso.getId(), ex);
+            log.warn("No se pudo sincronizar el histórico para el curso {}", curso.getId(), ex);
         }
 
         return new EvaluacionDocenteDto.Resumen(

@@ -310,3 +310,21 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   7. No hay cambios en endpoints, DTO ni frontend: la pantalla sigue consultando `GET /api/docentes-asignaturas`.
   8. **Sin migración nueva.** La V34 sigue reservada para HU-050.
   9. Rama de trabajo: `feature/HU-049-sincronizar-historico`. Sin pruebas automatizadas por indicación del usuario; la verificación será manual.
+
+
+## [2026-11-12] Cupos de estudiantes por curso/grupo (HU-059)
+
+* **HU afectadas:** HU-059 (cupos), HU-014 (exportación), HU-045/HU-046 (programación), HU-047 (exclusiones), HU-058 (bitácora).
+* **Decisión (confirmada por el usuario):**
+  1. El **administrador** puede editar cupos de cualquier programa; el **coordinador** solo de su programa.
+  2. El máximo de cupos por grupo es **configurable** (`CUPOS_MAX_POR_GRUPO` / `cda.cupos.max-por-grupo`), con valor inicial **60**.
+  3. El **administrador puede editar siempre**; el plazo de coordinador solo bloquea al coordinador con el mensaje `El plazo de edición ya cerró`.
+  4. El **guardado es por fila**: el lápiz de la columna Acciones habilita solo el campo de cupos de ese grupo y la solicitud envía únicamente la fila editada. Se eliminó la exigencia de cubrir todos los cursos activos y el botón global de guardado para que el registro sea rápido.
+  5. **No se asignan cupos a cursos `EXCLUIDO`**; se muestran con `—`.
+  6. Cada cambio de cupos se registra en la **bitácora** (acción `EDITAR`, entidad `CURSO`, valor anterior y nuevo).
+  7. Se **reutiliza `ProgramacionCohortesView`** para el coordinador, con la pestaña «Cupos de estudiantes»; no se crea una vista nueva.
+  8. **Sin pruebas automatizadas** por indicación del usuario; la verificación será manual.
+  9. Migración **V34** (`V34__hu059_cupos_cursos_programacion.sql`) aprobada: agrega `cupos` a `cursos_programacion` con restricción `cupos IS NULL OR cupos > 0`. Queda registrada la posible colisión con la V34 reservada para HU-050; si HU-050 se implementa primero, su migración debe renumerarse.
+  10. Contrato `docs/contratos/HU-059.md` y ficha `docs/hu/HU-059.md` creados. Rama de trabajo: `feature/HU-059`.
+  11. **Ajuste de rendimiento (2026-11-12):** se agregó el botón de lápiz por fila y el backend carga todos los cursos enviados en una sola consulta (`findAllByIdWithDetails`), en lugar de una consulta por curso. El frontend envía solo la fila habilitada.
+  12. **Guardado inmediato (2026-11-12):** «Listo» valida el campo y guarda ese grupo en el mismo instante. Si el campo está vacío o el valor es inválido, no cierra la edición y muestra el error. Se retiraron el botón «Guardar cambios» y los modales de confirmación/descarte de cupos.

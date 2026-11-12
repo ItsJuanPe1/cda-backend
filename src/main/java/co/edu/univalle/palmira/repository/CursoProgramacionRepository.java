@@ -58,6 +58,15 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
            "WHERE c.id = :id")
     Optional<CursoProgramacion> findByIdWithDetails(@Param("id") Long id);
 
+    /** HU-059: carga en una sola consulta los cursos que se van a actualizar. */
+    @Query("SELECT c FROM CursoProgramacion c " +
+           "JOIN FETCH c.programa " +
+           "JOIN FETCH c.asignatura " +
+           "JOIN FETCH c.periodo " +
+           "LEFT JOIN FETCH c.docente " +
+           "WHERE c.id IN :ids")
+    List<CursoProgramacion> findAllByIdWithDetails(@Param("ids") List<Long> ids);
+
     /**
      * HU-047: cursos de una asignatura en el periodo, bloqueados mientras se renumeran sus grupos
      * para que dos ajustes simultáneos no choquen.

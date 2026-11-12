@@ -61,3 +61,5 @@ disponibilidad:
 cda:
   carga:
     max-horas-docente: 20
+  cupos:
+    max-por-grupo: ${CUPOS_MAX_POR_GRUPO:60}
