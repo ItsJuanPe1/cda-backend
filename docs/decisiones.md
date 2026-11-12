@@ -224,6 +224,32 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - **4.4. (nuevo)** Dado que el docente tiene disponibilidad registrada, cuando presione «Limpiar selección», entonces el sistema debe pedir confirmación con «¿Está seguro de eliminar el registro actual de disponibilidad horaria?». Si acepta, se eliminan los registros y el cambio se guarda sin pulsar «Guardar»; si cancela, la pantalla queda como estaba.
 
 
+## [2026-11-11] Evaluación docente por asignatura y periodo, y reemplazo de docente (HU-060, migración V32)
+
+* **HU afectadas:** HU-060 (consultar docentes asociados, disponibilidad y evaluación), HU-026 y HU-029 (perfil docente), HU-049 (histórico docente-asignatura), HU-012 (editar docentes asignados).
+* **Origen:** implementado por el equipo en `develop` (commit `3111242`, PR #49). Se registra a partir del código; no hay contrato `docs/contratos/HU-060.md` ni ficha `docs/hu/HU-060.md`, y el commit no trae pruebas.
+* **Qué quedó en el código:**
+  1. **Migración V32** (`V32__create_evaluaciones_docentes.sql`): crea `evaluaciones_docentes` (`docente_id`, `code_course`, `periodo_id`, `calificacion NUMERIC(4,2)` entre 0 y 5), con llaves foráneas `ON DELETE RESTRICT` y llave única `(docente_id, code_course, periodo_id)`. Copia `docentes.evaluacion_valor` a cada asignatura y periodo del histórico (`docente_asignatura` con `periodo_id` no nulo). Las evaluaciones de docentes sin periodo en el histórico no se migran. No borra las columnas `docentes.evaluacion_periodo` ni `docentes.evaluacion_valor`.
+  2. La evaluación deja de registrarse en el perfil del docente: crear y editar docente (HU-026 y HU-029) ya no la reciben, y la respuesta del docente devuelve `evaluacionPeriodo` y `evaluacionValor` en `null`.
+  3. **Endpoints nuevos** bajo `/api/docentes`:
+     - `GET /evaluaciones?periodoId&codeCourse` (administrador y coordinador): calificaciones de la asignatura en el **periodo inmediatamente anterior** al indicado (por `fecha_inicio_semestre`).
+     - `GET /{id}/evaluaciones?periodoId` (administrador y coordinador): asignaturas que el docente dictó en el periodo anterior, con su calificación si existe.
+     - `PUT /{id}/evaluacion` (solo administrador): registra o actualiza la calificación de una asignatura que el docente dictó en el periodo anterior. Mensajes: «La asignatura es obligatoria», «La calificación debe estar entre 0 y 5», «No existe un período anterior para registrar la calificación», «El docente no dictó esa asignatura en el período anterior».
+  4. **Reemplazo de docente en un curso:** `PATCH /api/programacion/cursos/{id}/docente` y `POST /api/programacion/asignar-docente` reciben `reemplazarDocente` (booleano). Si el curso ya tiene otro docente y no se confirma, responden 409 «El curso ya tiene un docente asignado. Confirme si desea reemplazarlo.».
+  5. Al reemplazar, si el docente anterior no queda con otro curso de esa asignatura en el periodo, **se desactiva su asociación** en `docente_asignatura`.
+  6. El registro en el histórico al asignar ya no ignora errores: si falla, falla la asignación.
+* **Pendiente de confirmar con el equipo (no se cambia nada todavía):**
+  - **Criterio 1.2:** pide «la última evaluación docente registrada»; el código muestra solo la del periodo inmediatamente anterior. Si el docente no dictó la asignatura en ese periodo, aparece sin evaluación aunque tenga una más antigua.
+  - **Punto 5 contra HU-049 y RN-05:** el histórico registra lo que el docente **ya dictó** y solo el administrador lo desactiva. Desactivar la asociación al reemplazar un docente hace que deje de ser recomendado para esa asignatura. Confirmar si es lo deseado.
+  - **Criterio 2.2 (RN-04, máximo 20 horas):** no se valida la carga al asignar.
+  - **Criterios 3.1 y 3.2:** «Sin docente asignado» deja el curso en estado `PROGRAMADO`; no existe el estado «Pendiente de asignación».
+  - **Bitácora (HU-058):** la asignación, el reemplazo y el registro de evaluaciones no quedan en la bitácora.
+  - **Filtro por programa:** confirmar que un coordinador solo pueda asignar en los cursos de su programa.
+  - Si se retiran las columnas `docentes.evaluacion_periodo` y `docentes.evaluacion_valor` (requiere una migración nueva, V33 o superior).
+  - Si la V32 ya se aplicó en la base compartida de Supabase.
+  - Faltan el contrato `docs/contratos/HU-060.md` y las pruebas de cada criterio.
+
+
 ## [2026-11-11] Materias pendientes de asignación docente (HU-016)
 
 * **HU afectadas:** HU-016 (materias pendientes), HU-060 (designar docente), HU-046 (grupos), HU-002 (plazo del coordinador).
