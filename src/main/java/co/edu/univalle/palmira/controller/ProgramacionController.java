@@ -80,7 +80,7 @@ public class ProgramacionController {
             @RequestBody(required = false) ProgramacionDto.AsignarDocenteRequest request) {
         Long idDocente = request != null ? request.getIdDocente() : null;
         return ResponseEntity.ok(programacionService.asignarDocente(id, idDocente,
-                request != null && request.isReemplazarDocente()));
+                request != null && Boolean.TRUE.equals(request.getReemplazarDocente())));
     }
 
     @PostMapping("/asignar-docente")
@@ -93,6 +93,6 @@ public class ProgramacionController {
         }
         return ResponseEntity.ok(programacionService.asignarDocentePorMateria(
                 request.getPeriodoId(), request.getCodeProgram(), request.getCodeCourse(), request.getSemestre(),
-                request.getIdDocente(), request.isReemplazarDocente()));
+                request.getIdDocente(), Boolean.TRUE.equals(request.getReemplazarDocente())));
     }
 }

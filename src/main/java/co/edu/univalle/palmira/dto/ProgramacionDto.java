@@ -6,6 +6,7 @@ import lombok.*;
 import java.time.Instant;
 import java.util.List;
 
+
 public class ProgramacionDto {
 
     @Getter
@@ -112,7 +113,7 @@ public class ProgramacionDto {
     @Builder
     public static class AsignarDocenteRequest {
         private Long idDocente;
-        private boolean reemplazarDocente;
+        private Boolean reemplazarDocente;
         private Long periodoId;
         private String codeProgram;
         private String codeCourse;
