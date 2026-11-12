@@ -123,6 +123,9 @@ public class SecurityConfig {
                         // cualquier otro método responde 405 (criterio 4).
                         .requestMatchers("/api/bitacora", "/api/bitacora/**").hasAnyAuthority(ADMIN)
 
+                        // Carga académica docente: consulta para admin y coordinador
+                        .requestMatchers(HttpMethod.GET, "/api/carga/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
                         // Coordinadores y administradores pueden asignar docentes a cursos programados:
                         .requestMatchers(HttpMethod.PATCH, "/api/programacion/cursos/*/docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers(HttpMethod.POST, "/api/programacion/asignar-docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)

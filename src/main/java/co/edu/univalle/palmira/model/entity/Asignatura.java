@@ -44,4 +44,8 @@ public class Asignatura {
     @Column(nullable = false)
     @Builder.Default
     private Boolean activo = true;
+
+    /** Carga docente: horas semanales de la asignatura; null hasta que el admin las defina. */
+    @Column(name = "horas_semanales")
+    private Integer horasSemanales;
 }
