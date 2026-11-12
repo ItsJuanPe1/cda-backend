@@ -31,6 +31,12 @@ public class ProgramacionService {
     public static final String MSG_YA_EXCLUIDO = "El curso ya está excluido";
     public static final String MSG_NO_EXCLUIDO = "El curso no está excluido";
 
+    // Carga docente
+    public static final String MSG_ASIGNATURA_SIN_HORAS =
+            "La asignatura no tiene horas semanales definidas; defínalas antes de asignar docente";
+    public static final String MSG_CURSO_NO_PROGRAMADO =
+            "La asignatura no está programada en este período para el programa";
+
     // HU-047 criterio 4: motivos de «Requiere revisión»
     public static final String REVISION_FUERA_DE_MALLA = "La asignatura ya no está en la malla del programa";
     public static final String REVISION_ASIGNATURA_INACTIVA = "La asignatura está inactiva en el catálogo";
@@ -48,6 +54,8 @@ public class ProgramacionService {
     private final BitacoraService bitacoraService;
     private final DocenteRepository docenteRepository;
     private final AsignaturaRepository asignaturaRepository;
+    private final AccesoProgramaService accesoProgramaService;
+    private final CargaDocenteService cargaDocenteService;
 
     /** Curso que corresponde según las cohortes confirmadas y la malla. */
     private record CursoOfertado(CohortePeriodo cohorte, PensumAcademico pensum) {
@@ -519,11 +527,14 @@ public class ProgramacionService {
                 .build();
     }
 
-    @Transactional
+        @Transactional
     public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
                                                          boolean reemplazarDocente) {
         CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado con id " + cursoId));
+
+        // El coordinador solo asigna en su programa
+        accesoProgramaService.exigirProgramaPropio(curso.getPrograma().getCodeProgram());
 
         if (curso.isExcluido()) {
             throw new BadRequestException("No se puede asignar un docente a un curso excluido");
@@ -536,11 +547,18 @@ public class ProgramacionService {
                 throw new ConflictException(
                         "El curso ya tiene un docente asignado. Confirme si desea reemplazarlo.");
             }
-            Docente docente = docenteRepository.findById(idDocente)
+            // Bloquea la fila del docente: dos asignaciones simultáneas no pueden pasar de 20 h
+            Docente docente = docenteRepository.findByIdForUpdate(idDocente)
                     .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + idDocente));
             if (Boolean.FALSE.equals(docente.getEstado())) {
                 throw new BadRequestException("El docente seleccionado está inactivo");
             }
+            Integer horas = curso.getAsignatura().getHorasSemanales();
+            if (horas == null) {
+                throw new BadRequestException(MSG_ASIGNATURA_SIN_HORAS);
+            }
+            cargaDocenteService.validar(idDocente, curso.getPeriodo().getId(), curso.getId(), horas);
+
             curso.setDocente(docente);
             curso.setEstado(CursoProgramacion.ESTADO_ASIGNADO);
 
@@ -560,48 +578,29 @@ public class ProgramacionService {
         return toResponse(guardado, null);
     }
 
-    @Transactional
+        @Transactional
     public ProgramacionDto.CursoResponse asignarDocentePorMateria(
             Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente,
             boolean reemplazarDocente) {
-        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Período no encontrado"));
-        Programa programa = programaRepository.findById(codeProgram)
-                .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código " + codeProgram));
-        Asignatura asignatura = asignaturaRepository.findById(codeCourse)
-                .orElseThrow(() -> new ResourceNotFoundException("Asignatura no encontrada con código " + codeCourse));
+        // El coordinador solo asigna en su programa (antes de tocar nada)
+        accesoProgramaService.exigirProgramaPropio(codeProgram);
 
-        List<CursoProgramacion> existentes = cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse);
-        CursoProgramacion curso = existentes.stream()
+        if (!periodoRepository.existsById(periodoId)) {
+            throw new ResourceNotFoundException("Período no encontrado");
+        }
+        if (!programaRepository.existsById(codeProgram)) {
+            throw new ResourceNotFoundException("Programa no encontrado con código " + codeProgram);
+        }
+        if (!asignaturaRepository.existsById(codeCourse)) {
+            throw new ResourceNotFoundException("Asignatura no encontrada con código " + codeCourse);
+        }
+
+        // Solo se asigna docente a cursos ya generados desde la malla; este método no crea cursos.
+        // (semestre se conserva en la firma por compatibilidad con el endpoint.)
+        CursoProgramacion curso = cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
                 .filter(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram) && !c.isExcluido())
                 .findFirst()
-                .orElse(null);
-
-        if (curso == null) {
-            int grupo = existentes.isEmpty()
-                    ? CursoProgramacion.GRUPO_INICIAL
-                    : (existentes.size() + CursoProgramacion.GRUPO_INICIAL);
-
-            String resolucion = pensumRepository.findByCodeProgramWithDetails(codeProgram).stream()
-                    .filter(p -> p.getPrograma() != null)
-                    .findFirst()
-                    .map(p -> programa.getCodeProgram())
-                    .orElse("VIGENTE");
-
-            curso = CursoProgramacion.builder()
-                    .periodo(periodo)
-                    .programa(programa)
-                    .asignatura(asignatura)
-                    .semestre(semestre != null ? semestre : 1)
-                    .jornada(programa.getJornada() != null ? programa.getJornada() : Jornada.DIURNA)
-                    .numeroResolucion(resolucion)
-                    .grupo(grupo)
-                    .credits(asignatura.getCredits() != null ? asignatura.getCredits() : 0)
-                    .nombreAsignatura(asignatura.getNameCourse())
-                    .estado(CursoProgramacion.ESTADO_PROGRAMADO)
-                    .build();
-            curso = cursoRepository.save(curso);
-        }
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_CURSO_NO_PROGRAMADO));
 
         return asignarDocente(curso.getId(), idDocente, reemplazarDocente);
     }

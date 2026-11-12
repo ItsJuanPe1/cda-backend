@@ -11,6 +11,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -73,6 +74,20 @@ public class GlobalExceptionHandler {
         body.put("error", "Bad Request");
         body.put("message", "El cuerpo de la petición es inválido o contiene un valor no permitido");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
+    }
+
+    // Acceso denegado lanzado desde un servicio o @PreAuthorize: 403, no 500
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        String mensaje = ex.getMessage() == null || "Access Denied".equals(ex.getMessage())
+                ? "No tiene permisos para esta acción"
+                : ex.getMessage();
+        Map<String, Object> body = new HashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.FORBIDDEN.value());
+        body.put("error", "Forbidden");
+        body.put("message", mensaje);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
     }
 
     @ExceptionHandler(MissingServletRequestParameterException.class)

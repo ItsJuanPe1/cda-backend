@@ -75,6 +75,28 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
     List<CursoProgramacion> findByPeriodoAndAsignatura(@Param("periodoId") Long periodoId,
                                                        @Param("codeCourse") String codeCourse);
 
+    @Query("SELECT c FROM CursoProgramacion c " +
+           "JOIN FETCH c.asignatura " +
+           "JOIN FETCH c.programa " +
+           "WHERE c.docente.id = :docenteId AND c.periodo.id = :periodoId " +
+           "ORDER BY c.programa.nameProgram ASC, c.nombreAsignatura ASC, c.grupo ASC")
+    List<CursoProgramacion> findByDocenteYPeriodo(@Param("docenteId") Long docenteId,
+                                                  @Param("periodoId") Long periodoId);
+
+    @Query("SELECT COALESCE(SUM(a.horasSemanales), 0) FROM CursoProgramacion c " +
+           "JOIN c.asignatura a " +
+           "WHERE c.docente.id = :docenteId AND c.periodo.id = :periodoId " +
+           "AND c.id <> :cursoIdExcluido")
+    Long sumarHorasExcluyendo(@Param("docenteId") Long docenteId,
+                              @Param("periodoId") Long periodoId,
+                              @Param("cursoIdExcluido") Long cursoIdExcluido);
+
+    @Query("SELECT c.docente.id, COALESCE(SUM(a.horasSemanales), 0), " +
+           "SUM(CASE WHEN a.horasSemanales IS NULL THEN 1 ELSE 0 END) " +
+           "FROM CursoProgramacion c JOIN c.asignatura a " +
+           "WHERE c.periodo.id = :periodoId AND c.docente IS NOT NULL " +
+           "GROUP BY c.docente.id")
+    List<Object[]> totalesPorDocente(@Param("periodoId") Long periodoId);
     @Query("SELECT COUNT(c) FROM CursoProgramacion c " +
            "WHERE c.periodo.id = :periodoId AND c.asignatura.codeCourse = :codeCourse " +
            "AND c.docente.id = :docenteId AND c.estado <> 'EXCLUIDO' AND c.id <> :cursoId")
@@ -89,5 +111,6 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
            "WHERE c.periodo.id = :periodoId " +
            "GROUP BY c.programa.codeProgram, c.programa.nameProgram " +
            "ORDER BY c.programa.nameProgram ASC")
+
     List<Object[]> contarCursosPorPrograma(@Param("periodoId") Long periodoId);
 }
