@@ -320,7 +320,9 @@ class ProgramacionAjusteServiceTest {
                 .filter(m -> m.isAnnotationPresent(PostMapping.class))
                 .map(Method::getName)
                 .toList();
-        assertEquals(List.of("generarProgramacion"), posts);
+        // asignarDocentePorMateria (HU de asignación) crea el curso al designar un docente
+        assertEquals(java.util.Set.of("generarProgramacion", "asignarDocentePorMateria"),
+                new java.util.HashSet<>(posts));
         // El único cuerpo que reciben los ajustes es la justificación
         assertEquals(1, ProgramacionDto.JustificacionRequest.class.getRecordComponents().length);
     }
