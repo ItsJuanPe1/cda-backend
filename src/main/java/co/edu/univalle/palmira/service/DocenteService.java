@@ -18,6 +18,7 @@ import co.edu.univalle.palmira.repository.DocenteRepository;
 import co.edu.univalle.palmira.repository.FacultadRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +28,7 @@ import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocenteService {
 
     // HU-015: mensajes de "Mi perfil"
@@ -39,6 +41,7 @@ public class DocenteService {
     private final EvaluacionDocenteRepository evaluacionDocenteRepository;
     private final PeriodoAcademicoRepository periodoAcademicoRepository;
     private final CursoProgramacionRepository cursoProgramacionRepository;
+    private final DocenteAsignaturaService docenteAsignaturaService;
 
     // ---------------------------------------------------------------
     // HU-026: Crear perfil de docente
@@ -328,6 +331,12 @@ public class DocenteService {
                         .build());
         evaluacion.setCalificacion(request.calificacion());
         evaluacionDocenteRepository.save(evaluacion);
+
+        try {
+            docenteAsignaturaService.sincronizarDesdeCurso(curso.getId());
+        } catch (Exception ex) {
+            log.warn("HU-049: no se pudo sincronizar el histórico para el curso {}", curso.getId(), ex);
+        }
 
         return new EvaluacionDocenteDto.Resumen(
                 docenteId, anterior.getId(), anterior.getNombre(),

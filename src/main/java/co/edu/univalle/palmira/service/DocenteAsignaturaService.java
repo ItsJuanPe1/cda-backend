@@ -8,13 +8,21 @@ import co.edu.univalle.palmira.model.entity.*;
 import co.edu.univalle.palmira.model.enums.OrigenAsociacion;
 import co.edu.univalle.palmira.repository.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * HU-049: asociar docentes a las asignaturas que han dictado.
@@ -23,6 +31,7 @@ import java.util.Objects;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocenteAsignaturaService {
 
     static final String MSG_DOCENTE_NO_EXISTE = "No existe un docente con el id indicado";
@@ -42,6 +51,8 @@ public class DocenteAsignaturaService {
     private final ProgramaRepository programaRepository;
     private final PensumAcademicoRepository pensumRepository;
     private final FacultadRepository facultadRepository;
+    private final CursoProgramacionRepository cursoProgramacionRepository;
+    private final EvaluacionDocenteRepository evaluacionDocenteRepository;
 
     // ---------------------------------------------------------------
     // Criterio 5: consulta por docente, asignatura, facultad o estado
@@ -142,6 +153,53 @@ public class DocenteAsignaturaService {
         }
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int sincronizarDesdeHistorico() {
+        List<CursoProgramacion> cursos = cursoProgramacionRepository.findHistorialDocenteAsignatura();
+        List<EvaluacionDocente> evaluaciones = evaluacionDocenteRepository.findAllWithDetails();
+
+        Map<ClaveAsociacion, Candidato> candidatos = new HashMap<>();
+        Map<Integer, Facultad> facultades = new HashMap<>();
+        Map<ClaveCursoPeriodo, CursoProgramacion> cursosExactos = new HashMap<>();
+        Map<ClaveDocenteAsignatura, CursoProgramacion> cursosPorDocenteAsignatura = new HashMap<>();
+
+        for (CursoProgramacion curso : cursos) {
+            indexarCurso(curso, cursosExactos, cursosPorDocenteAsignatura);
+            fusionar(candidatos, candidatoDeCurso(curso, facultades));
+        }
+        for (EvaluacionDocente evaluacion : evaluaciones) {
+            fusionar(candidatos, candidatoDeEvaluacion(
+                    evaluacion, cursosExactos, cursosPorDocenteAsignatura, facultades));
+        }
+
+        int creadas = crearAsociacionesFaltantes(candidatos);
+        log.info("HU-049: sincronización del histórico completada; asociaciones nuevas: {}", creadas);
+        return creadas;
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean sincronizarDesdeCurso(Long cursoId) {
+        if (cursoId == null) {
+            return false;
+        }
+        return cursoProgramacionRepository.findByIdWithDetails(cursoId)
+                .filter(curso -> !curso.isExcluido())
+                .map(curso -> {
+                    Candidato candidato = candidatoDeCurso(curso, new HashMap<>());
+                    if (candidato == null) {
+                        return false;
+                    }
+                    ClaveAsociacion clave = claveDe(candidato);
+                    if (asociacionRepository.existsByDocenteIdAndAsignaturaCodeCourseAndFacultadId(
+                            clave.docenteId(), clave.codeCourse(), clave.idFacultad())) {
+                        return false;
+                    }
+                    asociacionRepository.save(nuevaAsociacion(candidato));
+                    return true;
+                })
+                .orElse(false);
+    }
+
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
@@ -187,6 +245,169 @@ public class DocenteAsignaturaService {
         return new Resultado(asociacionRepository.save(asociacion), reactivada);
     }
 
+    private void indexarCurso(CursoProgramacion curso,
+                              Map<ClaveCursoPeriodo, CursoProgramacion> exactos,
+                              Map<ClaveDocenteAsignatura, CursoProgramacion> porDocenteAsignatura) {
+        if (curso.getDocente() == null || curso.getAsignatura() == null || curso.getPeriodo() == null) {
+            return;
+        }
+        String codeCourse = normalizarCodigo(curso.getAsignatura().getCodeCourse());
+        exactos.putIfAbsent(
+                new ClaveCursoPeriodo(curso.getDocente().getId(), codeCourse, curso.getPeriodo().getId()),
+                curso);
+
+        ClaveDocenteAsignatura simple = new ClaveDocenteAsignatura(
+                curso.getDocente().getId(), codeCourse);
+        CursoProgramacion actual = porDocenteAsignatura.get(simple);
+        if (actual == null || esPeriodoMasReciente(curso.getPeriodo(), actual.getPeriodo())) {
+            porDocenteAsignatura.put(simple, curso);
+        }
+    }
+
+    private Candidato candidatoDeCurso(CursoProgramacion curso, Map<Integer, Facultad> facultades) {
+        if (curso.getDocente() == null || curso.getAsignatura() == null) {
+            return null;
+        }
+        Facultad facultad = resolverFacultadDeCurso(curso, facultades);
+        if (facultad == null) {
+            return null;
+        }
+        return new Candidato(curso.getDocente(), curso.getAsignatura(), facultad, curso.getPeriodo());
+    }
+
+    private Candidato candidatoDeEvaluacion(
+            EvaluacionDocente evaluacion,
+            Map<ClaveCursoPeriodo, CursoProgramacion> cursosExactos,
+            Map<ClaveDocenteAsignatura, CursoProgramacion> cursosPorDocenteAsignatura,
+            Map<Integer, Facultad> facultades) {
+        if (evaluacion.getDocente() == null || evaluacion.getAsignatura() == null) {
+            return null;
+        }
+        String codeCourse = normalizarCodigo(evaluacion.getAsignatura().getCodeCourse());
+        CursoProgramacion curso = cursosExactos.get(new ClaveCursoPeriodo(
+                evaluacion.getDocente().getId(), codeCourse, evaluacion.getPeriodo().getId()));
+        if (curso == null) {
+            curso = cursosPorDocenteAsignatura.get(new ClaveDocenteAsignatura(
+                    evaluacion.getDocente().getId(), codeCourse));
+        }
+
+        Facultad facultad = curso != null ? resolverFacultadDeCurso(curso, facultades) : null;
+        if (facultad == null) {
+            facultad = buscarFacultad(evaluacion.getAsignatura().getIdFacultad(), facultades);
+        }
+        if (facultad == null) {
+            facultad = resolverFacultadOpcional(evaluacion.getDocente(), facultades);
+        }
+        if (facultad == null) {
+            return null;
+        }
+        return new Candidato(
+                evaluacion.getDocente(), evaluacion.getAsignatura(), facultad, evaluacion.getPeriodo());
+    }
+
+    private void fusionar(Map<ClaveAsociacion, Candidato> candidatos, Candidato candidato) {
+        if (candidato == null) {
+            return;
+        }
+        candidatos.merge(claveDe(candidato), candidato,
+                (actual, nuevo) -> esPeriodoMasReciente(nuevo.periodo(), actual.periodo())
+                        ? nuevo
+                        : actual);
+    }
+
+    private int crearAsociacionesFaltantes(Map<ClaveAsociacion, Candidato> candidatos) {
+        if (candidatos.isEmpty()) {
+            return 0;
+        }
+        Set<ClaveAsociacion> existentes = new HashSet<>();
+        for (DocenteAsignatura asociacion : asociacionRepository.findAllWithDetails()) {
+            existentes.add(claveDe(asociacion));
+        }
+
+        List<DocenteAsignatura> nuevas = new ArrayList<>();
+        for (Map.Entry<ClaveAsociacion, Candidato> entry : candidatos.entrySet()) {
+            if (existentes.add(entry.getKey())) {
+                nuevas.add(nuevaAsociacion(entry.getValue()));
+            }
+        }
+        if (nuevas.isEmpty()) {
+            return 0;
+        }
+        asociacionRepository.saveAll(nuevas);
+        return nuevas.size();
+    }
+
+    private DocenteAsignatura nuevaAsociacion(Candidato candidato) {
+        return DocenteAsignatura.builder()
+                .docente(candidato.docente())
+                .asignatura(candidato.asignatura())
+                .facultad(candidato.facultad())
+                .periodo(candidato.periodo())
+                .origen(OrigenAsociacion.PROGRAMACION)
+                .activo(true)
+                .desactivadoAt(null)
+                .build();
+    }
+
+    private static ClaveAsociacion claveDe(Candidato candidato) {
+        return claveDe(candidato.docente(), candidato.asignatura(), candidato.facultad());
+    }
+
+    private static ClaveAsociacion claveDe(DocenteAsignatura asociacion) {
+        return claveDe(asociacion.getDocente(), asociacion.getAsignatura(), asociacion.getFacultad());
+    }
+
+    private static ClaveAsociacion claveDe(Docente docente, Asignatura asignatura, Facultad facultad) {
+        return new ClaveAsociacion(
+                docente.getId(),
+                normalizarCodigo(asignatura.getCodeCourse()),
+                facultad.getId());
+    }
+
+    private static boolean esPeriodoMasReciente(PeriodoAcademico candidato, PeriodoAcademico actual) {
+        if (candidato == null) {
+            return false;
+        }
+        if (actual == null) {
+            return true;
+        }
+        LocalDate fechaCandidata = candidato.getFechaInicioSemestre();
+        LocalDate fechaActual = actual.getFechaInicioSemestre();
+        if (fechaCandidata == null) {
+            return false;
+        }
+        if (fechaActual == null) {
+            return true;
+        }
+        if (!fechaCandidata.equals(fechaActual)) {
+            return fechaCandidata.isAfter(fechaActual);
+        }
+        return candidato.getId() != null && actual.getId() != null
+                && candidato.getId() > actual.getId();
+    }
+
+    private Facultad resolverFacultadOpcional(Docente docente, Map<Integer, Facultad> facultades) {
+        if (docente.getFacultad() != null) {
+            return docente.getFacultad();
+        }
+        if (docente.getPrograma() != null) {
+            return buscarFacultad(docente.getPrograma().getIdFacultadPrograma(), facultades);
+        }
+        return null;
+    }
+
+    private Facultad buscarFacultad(Integer idFacultad, Map<Integer, Facultad> facultades) {
+        if (idFacultad == null) {
+            return null;
+        }
+        if (facultades.containsKey(idFacultad)) {
+            return facultades.get(idFacultad);
+        }
+        Facultad facultad = facultadRepository.findById(idFacultad).orElse(null);
+        facultades.put(idFacultad, facultad);
+        return facultad;
+    }
+
     /**
      * Criterio 3: el docente solo se asocia a asignaturas de su facultad.
      * Se acepta si la asignatura está marcada con esa facultad o si aparece en
@@ -220,6 +441,10 @@ public class DocenteAsignaturaService {
     }
 
     private Facultad resolverFacultadDeCurso(CursoProgramacion curso) {
+        return resolverFacultadDeCurso(curso, new HashMap<>());
+    }
+
+    private Facultad resolverFacultadDeCurso(CursoProgramacion curso, Map<Integer, Facultad> facultades) {
         Integer idFacultad = null;
         if (curso.getPrograma() != null) {
             idFacultad = curso.getPrograma().getIdFacultadPrograma();
@@ -227,10 +452,7 @@ public class DocenteAsignaturaService {
         if (idFacultad == null && curso.getAsignatura() != null) {
             idFacultad = curso.getAsignatura().getIdFacultad();
         }
-        if (idFacultad == null) {
-            return null;
-        }
-        return facultadRepository.findById(idFacultad).orElse(null);
+        return buscarFacultad(idFacultad, facultades);
     }
 
     private static String normalizarCodigo(String valor) {
@@ -269,6 +491,19 @@ public class DocenteAsignaturaService {
                 da.getCreatedAt(),
                 da.getUpdatedAt(),
                 da.getDesactivadoAt());
+    }
+
+    private record ClaveAsociacion(Long docenteId, String codeCourse, Integer idFacultad) {
+    }
+
+    private record ClaveCursoPeriodo(Long docenteId, String codeCourse, Long periodoId) {
+    }
+
+    private record ClaveDocenteAsignatura(Long docenteId, String codeCourse) {
+    }
+
+    private record Candidato(Docente docente, Asignatura asignatura, Facultad facultad,
+                             PeriodoAcademico periodo) {
     }
 
     private record Resultado(DocenteAsignatura asociacion, boolean reactivada) {

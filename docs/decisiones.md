@@ -221,7 +221,7 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
 * **Texto propuesto para el Excel de HU-007 (no se modifica el Excel ni el CSV):**
   - **2.7. (nuevo)** El sistema debe ofrecer, en cada día del esquema (lunes a sábado), un botón «Seleccionar todo» que marca todas las horas habilitadas de ese día (el sábado, de 7:00 a. m. a 7:00 p. m.), sin modificar la selección de los demás días.
   - **3.5. (reemplaza el propuesto en la primera ronda)** Dado que el docente deja un intervalo continuo de menos de 1 hora, cuando presione «Guardar disponibilidad» o «Guardar cambios», entonces el sistema no debe guardar y debe mostrar «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora», conservando la selección.
-  - **4.4. (nuevo)** Dado que el docente tiene disponibilidad registrada, cuando presione «Limpiar selección», entonces el sistema debe pedir confirmación con «¿Está seguro de eliminar el registro actual de disponibilidad horaria?». Si acepta, se eliminan los registros y el cambio se guarda sin pulsar «Guardar»; si cancela, la pantalla queda como estaba.
+   - **4.4. (nuevo)** Dado que el docente tiene disponibilidad registrada, cuando presione «Limpiar selección», entonces el sistema debe pedir confirmación con «¿Está seguro de eliminar el registro actual de disponibilidad horaria?». Si acepta, se eliminan los registros y el cambio se guarda sin pulsar «Guardar»; si cancela, la pantalla queda como estaba.
 
 
 ## [2026-11-11] Evaluación docente por asignatura y periodo, y reemplazo de docente (HU-060, migración V32)
@@ -294,3 +294,19 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
 * **Pendientes:**
   - **Permisos del coordinador:** el backend no valida que el curso pertenezca al programa del coordinador (`asignarDocente` y `asignarDocentePorMateria` en `ProgramacionService`). Un coordinador de `2839-DIU` puede asignar docentes en `2839-NOC`. No se cambia el backend en esta HU.
   - No se verificó en la base de datos que existan programas con sufijo `-NOC`; la regla se probó con datos de ejemplo.
+
+
+## [2026-11-12] Sincronización del histórico de asociaciones docentes (HU-049)
+
+* **HU afectadas:** HU-049 (asociar docentes a asignaturas), HU-050 (numeración de migración), HU-060 (docentes asociados).
+* **Origen:** corrección solicitada por el usuario: la pantalla «Asociaciones docentes» debe mostrar también las asignaturas que cada docente ya dictó, además de las asociaciones manuales.
+* **Decisión (confirmada por el usuario):**
+  1. El histórico visible se complementa con dos fuentes: `cursos_programacion` (cursos con docente y no excluidos) y `evaluaciones_docentes`. `evaluaciones_docentes` no contiene todo el histórico, solo las asignaturas con calificación registrada; por eso se usa como complemento.
+  2. Las filas faltantes se guardan como asociaciones reales en `docente_asignatura`, para conservar las acciones de quitar y reactivar y para que el resto del sistema las use. No se crean filas duplicadas por la llave `(docente_id, code_course, id_facultad)`.
+  3. Si la asociación ya existe, **no se modifica**: se respeta su origen, su periodo y su estado. Una asociación manual inactiva sigue inactiva.
+  4. Las filas nuevas usan `origen = PROGRAMACION` y el periodo más reciente de las fuentes. No se agrega un origen `EVALUACION`, para no requerir una migración nueva.
+  5. La sincronización es idempotente y se ejecuta al iniciar la aplicación y después de guardar una evaluación para el curso evaluado. Se ejecuta en una transacción independiente: si falla, no bloquea el guardado de la calificación y queda registrada en el log.
+  6. El comportamiento existente de `registrarDesdeCursos` al asignar un docente desde programación no cambia: esa asignación explícita sigue reactivando la asociación. La regla de «respetar el estado manual» aplica a la sincronización del histórico.
+  7. No hay cambios en endpoints, DTO ni frontend: la pantalla sigue consultando `GET /api/docentes-asignaturas`.
+  8. **Sin migración nueva.** La V34 sigue reservada para HU-050.
+  9. Rama de trabajo: `feature/HU-049-sincronizar-historico`. Sin pruebas automatizadas por indicación del usuario; la verificación será manual.
