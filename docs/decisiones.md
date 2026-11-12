@@ -247,3 +247,24 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - `GET /api/programacion` acepta cualquier `codeProgram` para el rol coordinador: falta el filtro por programa en el servidor.
   - `getProgramacion` del frontend recurre a Supabase cuando el backend no responde; con el backend caído y Supabase disponible no aparece «No se pudo cargar».
   - El plazo se evalúa al dibujar la vista; si la ventana cierra con la vista abierta, cambia al recargar o al interactuar.
+
+
+## [2026-11-12] HU-016: filtros sobre la tarjeta del programa y programa según la jornada
+
+* **HU afectadas:** HU-016 (materias pendientes), HU-040 (programas y jornadas), HU-060 (designar docente).
+* **Alcance:** frontend (`AsignacionDocenteView.jsx` y `.css`, y una línea en `App.jsx` que pasa el prop `programasTodos`, porque al coordinador `programas` le llega solo con el suyo). Sin cambios en el backend ni en la base de datos.
+* **Decisión (confirmada por el usuario):**
+  1. **Ubicación:** la barra de filtros va sola, a todo el ancho, entre la cabecera y la tarjeta del programa: Jornada a la izquierda y Docentes a su lado. En pantallas angostas pasan uno debajo del otro. El administrador tiene además el selector de programa en esa barra. La barra de semestres vuelve a ocupar todo el ancho.
+  2. **Programas relacionados** (función pura `programasRelacionados`): el programa de referencia (el del coordinador o el que elige el administrador) más los programas **activos** con el mismo código base, que es la parte antes del guion (`2839-DIU` y `2839-NOC` → `2839`). Si el código no tiene guion, se compara el `name_program` sin tildes, sin mayúsculas y sin espacios extra.
+  3. **Programa por jornada:** Diurna muestra el relacionado con jornada `DIURNA` o `AMBAS`; Nocturna, el de `NOCTURNA` o `AMBAS`; Ambas, todos los relacionados.
+  4. **Duración:** con Nocturna, `semestres_nocturna` (si falta, `numero_semestre`); con Diurna, `numero_semestre`. Con Ambas, cada programa usa su propia jornada (uno de jornada `AMBAS` toma la mayor de las dos) y la barra de semestres llega hasta la mayor duración entre los programas visibles.
+  5. **Qué cambia con la jornada:** las tarjetas de programa (código, nombre, facultad, jornada, duración y total de materias en malla), los semestres y sus contadores, la malla, y los cursos. Estos se cargan con `GET /api/programacion?periodoId&codeProgram&jornada` para cada programa visible (sin `jornada` cuando el filtro es Ambas).
+  6. **Ambas con dos programas:** una tarjeta por programa, una debajo de la otra. Cada materia muestra su programa y su jornada. La clave de cada materia es el `id` del curso.
+  7. **Sin programa en la jornada:** «Su programa no se oferta en jornada {Diurna/Nocturna}». Se ocultan los semestres y la lista; los filtros siguen activos.
+  8. **Valores iniciales:** Jornada Diurna y Todos los docentes; si el programa de referencia es solo nocturno, Jornada Nocturna. Se aplican al entrar y al cambiar de programa.
+  9. **Al cambiar de jornada:** vuelve al Semestre 1, se muestra el estado de carga y se ignora la respuesta de una carga anterior. El filtro Docentes se conserva. «Actualizar» recarga los programas visibles.
+  10. **Asignar docente:** el modal (HU-060) usa el programa del curso elegido, tanto en `codeProgram` como en el filtro «Solo docentes relacionados al programa». Después de asignar o quitar un docente, solo se recargan los cursos de ese programa.
+* **Contradicción registrada (pendiente de resolver con el equipo):** la decisión 3 del 2026-10-27 (HU-040) dice que todos los programas tienen código de 4 dígitos sin sufijo de jornada, y la decisión 2 dice que la malla es una sola con jornada `AMBAS`. La migración V26 (`V26__normalizar_programas_diu.sql`), aplicada después, volvió a poner los sufijos `-DIU` y `-NOC`, el DTO de programas los acepta y `createPrograma` del frontend los agrega. Esta HU sigue el patrón con sufijo porque es el que usan hoy los datos y el código. El agrupamiento por nombre cubre los programas sin guion.
+* **Pendientes:**
+  - **Permisos del coordinador:** el backend no valida que el curso pertenezca al programa del coordinador (`asignarDocente` y `asignarDocentePorMateria` en `ProgramacionService`). Un coordinador de `2839-DIU` puede asignar docentes en `2839-NOC`. No se cambia el backend en esta HU.
+  - No se verificó en la base de datos que existan programas con sufijo `-NOC`; la regla se probó con datos de ejemplo.
