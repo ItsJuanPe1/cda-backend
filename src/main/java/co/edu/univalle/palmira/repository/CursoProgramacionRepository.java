@@ -39,6 +39,16 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
     List<CursoProgramacion> findByPeriodoIdAndDocenteId(
             @Param("periodoId") Long periodoId, @Param("docenteId") Long docenteId);
 
+    @Query("SELECT c FROM CursoProgramacion c " +
+           "JOIN FETCH c.docente d " +
+           "LEFT JOIN FETCH d.facultad " +
+           "LEFT JOIN FETCH d.programa " +
+           "JOIN FETCH c.asignatura " +
+           "JOIN FETCH c.programa " +
+           "JOIN FETCH c.periodo " +
+           "WHERE c.estado <> 'EXCLUIDO'")
+    List<CursoProgramacion> findHistorialDocenteAsignatura();
+
     // HU-047: ya no se borran los cursos al regenerar (RN-13); se concilian por programa, asignatura y jornada.
 
     @Query("SELECT c FROM CursoProgramacion c " +
