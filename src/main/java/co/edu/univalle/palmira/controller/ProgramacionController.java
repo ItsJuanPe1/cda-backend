@@ -79,7 +79,8 @@ public class ProgramacionController {
             @PathVariable("id") Long id,
             @RequestBody(required = false) ProgramacionDto.AsignarDocenteRequest request) {
         Long idDocente = request != null ? request.getIdDocente() : null;
-        return ResponseEntity.ok(programacionService.asignarDocente(id, idDocente));
+        return ResponseEntity.ok(programacionService.asignarDocente(id, idDocente,
+                request != null && request.isReemplazarDocente()));
     }
 
     @PostMapping("/asignar-docente")
@@ -91,6 +92,7 @@ public class ProgramacionController {
             throw new co.edu.univalle.palmira.exception.BadRequestException("Faltan parámetros obligatorios para la asignación");
         }
         return ResponseEntity.ok(programacionService.asignarDocentePorMateria(
-                request.getPeriodoId(), request.getCodeProgram(), request.getCodeCourse(), request.getSemestre(), request.getIdDocente()));
+                request.getPeriodoId(), request.getCodeProgram(), request.getCodeCourse(), request.getSemestre(),
+                request.getIdDocente(), request.isReemplazarDocente()));
     }
 }

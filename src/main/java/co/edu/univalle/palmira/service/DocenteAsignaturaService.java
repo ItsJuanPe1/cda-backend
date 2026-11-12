@@ -90,6 +90,21 @@ public class DocenteAsignaturaService {
         return toResponse(asociacionRepository.save(asociacion));
     }
 
+    @Transactional
+    public void desactivarAsociacion(Docente docente, CursoProgramacion curso) {
+        Facultad facultad = resolverFacultadDeCurso(curso);
+        if (facultad == null) {
+            return;
+        }
+        asociacionRepository.findByDocenteIdAndAsignaturaCodeCourseAndFacultadId(
+                        docente.getId(), curso.getAsignatura().getCodeCourse(), facultad.getId())
+                .ifPresent(asociacion -> {
+                    asociacion.setActivo(false);
+                    asociacion.setDesactivadoAt(Instant.now());
+                    asociacionRepository.save(asociacion);
+                });
+    }
+
     // ---------------------------------------------------------------
     // Criterio 4: si un docente dicta una asignatura en un periodo, se
     // agrega al histórico automáticamente. Lo llama ProgramacionService y

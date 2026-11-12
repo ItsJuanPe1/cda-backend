@@ -32,6 +32,13 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
 
     long countByPeriodoId(Long periodoId);
 
+    @Query("SELECT DISTINCT c FROM CursoProgramacion c " +
+           "JOIN FETCH c.asignatura " +
+           "WHERE c.periodo.id = :periodoId AND c.docente.id = :docenteId " +
+           "AND c.estado <> 'EXCLUIDO'")
+    List<CursoProgramacion> findByPeriodoIdAndDocenteId(
+            @Param("periodoId") Long periodoId, @Param("docenteId") Long docenteId);
+
     // HU-047: ya no se borran los cursos al regenerar (RN-13); se concilian por programa, asignatura y jornada.
 
     @Query("SELECT c FROM CursoProgramacion c " +
@@ -57,6 +64,15 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
            "WHERE c.periodo.id = :periodoId AND c.asignatura.codeCourse = :codeCourse")
     List<CursoProgramacion> findByPeriodoAndAsignatura(@Param("periodoId") Long periodoId,
                                                        @Param("codeCourse") String codeCourse);
+
+    @Query("SELECT COUNT(c) FROM CursoProgramacion c " +
+           "WHERE c.periodo.id = :periodoId AND c.asignatura.codeCourse = :codeCourse " +
+           "AND c.docente.id = :docenteId AND c.estado <> 'EXCLUIDO' AND c.id <> :cursoId")
+    long countActivosByPeriodoAsignaturaDocenteExcludingCurso(
+            @Param("periodoId") Long periodoId,
+            @Param("codeCourse") String codeCourse,
+            @Param("docenteId") Long docenteId,
+            @Param("cursoId") Long cursoId);
 
     @Query("SELECT c.programa.codeProgram, c.programa.nameProgram, COUNT(c) " +
            "FROM CursoProgramacion c " +

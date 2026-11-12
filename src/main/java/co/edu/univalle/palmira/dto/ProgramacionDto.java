@@ -112,6 +112,7 @@ public class ProgramacionDto {
     @Builder
     public static class AsignarDocenteRequest {
         private Long idDocente;
+        private boolean reemplazarDocente;
         private Long periodoId;
         private String codeProgram;
         private String codeCourse;
