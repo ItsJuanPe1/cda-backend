@@ -222,3 +222,28 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - **2.7. (nuevo)** El sistema debe ofrecer, en cada día del esquema (lunes a sábado), un botón «Seleccionar todo» que marca todas las horas habilitadas de ese día (el sábado, de 7:00 a. m. a 7:00 p. m.), sin modificar la selección de los demás días.
   - **3.5. (reemplaza el propuesto en la primera ronda)** Dado que el docente deja un intervalo continuo de menos de 1 hora, cuando presione «Guardar disponibilidad» o «Guardar cambios», entonces el sistema no debe guardar y debe mostrar «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora», conservando la selección.
   - **4.4. (nuevo)** Dado que el docente tiene disponibilidad registrada, cuando presione «Limpiar selección», entonces el sistema debe pedir confirmación con «¿Está seguro de eliminar el registro actual de disponibilidad horaria?». Si acepta, se eliminan los registros y el cambio se guarda sin pulsar «Guardar»; si cancela, la pantalla queda como estaba.
+
+
+## [2026-11-11] Materias pendientes de asignación docente (HU-016)
+
+* **HU afectadas:** HU-016 (materias pendientes), HU-060 (designar docente), HU-046 (grupos), HU-002 (plazo del coordinador).
+* **Alcance:** solo frontend (`AsignacionDocenteView.jsx` y `.css`). No hay cambios en la API ni en la base de datos.
+* **Decisión (confirmada por el usuario):**
+  1. **Materia pendiente:** curso del programa en el periodo sin `idDocente` y con estado distinto de `EXCLUIDO`.
+  2. **Corrección del CSV:** el criterio 3 de HU-016 decía «(HU-041)»; la acción «Asignar docente» es el modal de designación de HU-060. Se corrige en `docs/Roses_corp_HU.csv`. **El equipo debe corregir también el `.xlsx`** (no se modifica desde aquí).
+  3. **Filtros de la vista** (en la fila de semestres, a la derecha):
+     - Jornada: «Diurna» (`DIURNA`), «Nocturna» (`NOCTURNA`) y «Ambas» (`AMBAS`, no filtra). Se filtra por `curso.jornada`.
+     - Docentes: «Todos los docentes» (`TODOS`) y «Sin docente asignado» (`SIN_DOCENTE`, solo pendientes).
+     - Valores por defecto `DIURNA` y `TODOS`, al entrar y al cambiar de programa. No se guardan en localStorage. «Actualizar» conserva los filtros.
+  4. **Asignaturas de la malla sin curso programado** (`existeEnProgramacion: false`): toman la jornada del programa; si el programa es `AMBAS`, aparecen con cualquier filtro de jornada.
+  5. **Grupo:** cada curso ya trae su grupo de HU-046. La tarjeta muestra `codigoCurso` (o «Grupo N»). Ya no se inventa «Grupo 50» cuando falta: una asignatura de la malla sin curso (la malla cambió después de generar) muestra «Sin grupo». Al asignarle docente, el backend crea el curso con el siguiente grupo de la serie.
+  6. **Contadores** con la jornada filtrada: con `TODOS`, «X/Y asignadas» por semestre y «X de Y materias con docente designado»; con `SIN_DOCENTE`, «N pendientes» o «Sin pendientes» por semestre y «N materias pendientes en el semestre · Total del programa: M pendientes» (criterio 1).
+  7. **Plazo del coordinador:** abierto si la hora actual está entre `plazoCoordinadorInicio` y `plazoCoordinadorFin` del periodo (bordes incluidos). Sin fechas definidas, el plazo está cerrado (HU-002, criterio 3: «solo consultan»). Con el plazo cerrado se ocultan «Asignar docente», «Cambiar docente» y «Quitar», y se muestra «Fuera del período habilitado: solo consulta». El administrador conserva el comportamiento anterior (siempre puede asignar).
+  8. **Orden de los mensajes:** (1) «Aún no tiene un programa asignado. Contacte al administrador»; (2) «No se pudo cargar» con «Reintentar»; (3) «Aún no hay programación iniciada» (el programa no tiene cursos en el periodo, contando los excluidos, o no hay periodo); (4) con `SIN_DOCENTE`, «No hay materias pendientes de asignación»; (5) con `TODOS`, «No hay materias de la jornada {Diurna/Nocturna} en el Semestre N» (con «Ambas», «No hay materias registradas en el Semestre N»).
+  9. Un coordinador sin programa ya no ve el primer programa del sistema: antes la vista tomaba `programas[0]`.
+  10. Sin programación iniciada no se listan las asignaturas de la malla, así que el coordinador no crea cursos desde la malla antes de que el administrador genere la programación (HU-045).
+* **Pendientes (no se hacen en esta HU):**
+  - El backend (`PATCH /api/programacion/cursos/{id}/docente` y `POST /api/programacion/asignar-docente`) **no valida el plazo del coordinador**; hoy solo lo restringe la interfaz.
+  - `GET /api/programacion` acepta cualquier `codeProgram` para el rol coordinador: falta el filtro por programa en el servidor.
+  - `getProgramacion` del frontend recurre a Supabase cuando el backend no responde; con el backend caído y Supabase disponible no aparece «No se pudo cargar».
+  - El plazo se evalúa al dibujar la vista; si la ventana cierra con la vista abierta, cambia al recargar o al interactuar.

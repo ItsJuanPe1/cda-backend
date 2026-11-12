@@ -230,7 +230,7 @@
 12,Si falla al guardar, muestra “No se pudo guardar. Intente de nuevo” y conserva lo escrito. Si falla la carga de la foto, muestra “No se pudo cargar la imagen”.","Gestión de perfil y usuario","3","M","","Hecha"
 "HU-016","Yo como coordinador, requiero ver las materias pendientes de asignación docente, para completar la programación de  mi programa.","1. El sistema muestra las materias “Sin docente asignado” de mi programa, agrupadas por semestre, con el total de pendientes.
 2. Cada una muestra su nombre, código y grupo.
-3. Con mi período de asignación abierto, cada materia muestra “Asignar docente” (HU-041). Con el período cerrado, es solo consulta.
+3. Con mi período de asignación abierto, cada materia muestra “Asignar docente” (HU-060). Con el período cerrado, es solo consulta.
 4. Si no hay pendientes, muestra “No hay materias pendientes de asignación”.
 5. Si no hay programación iniciada, muestra “Aún no hay programación iniciada”.
 6. Si no tengo programa asignado, muestra “Aún no tiene un programa asignado. Contacte al administrador”.
