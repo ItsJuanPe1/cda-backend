@@ -84,7 +84,8 @@ public class DocenteService {
                 .tipoDocumento(req.tipoDocumento())
                 .numeroDocumento(req.numeroDocumento())
                 .correoInstitucional(req.correoInstitucional().trim().toLowerCase())
-                .telefono(req.telefono())
+                .telefono(normalizarOpcional(req.telefono()))
+                .celular(normalizarOpcional(req.celular()))
                 .tipoDocente(req.tipoDocente())
                 .categoria(req.categoria())
                 .facultad(facultad)
@@ -137,7 +138,9 @@ public class DocenteService {
         if (req.tipoDocumento() != null)
             docente.setTipoDocumento(req.tipoDocumento());
         if (req.telefono() != null)
-            docente.setTelefono(req.telefono());
+            docente.setTelefono(normalizarOpcional(req.telefono()));
+        if (req.celular() != null)
+            docente.setCelular(normalizarOpcional(req.celular()));
         if (req.tipoDocente() != null)
             docente.setTipoDocente(req.tipoDocente());
         if (req.categoria() != null)
