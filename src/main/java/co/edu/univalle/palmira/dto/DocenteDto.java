@@ -24,7 +24,9 @@ public class DocenteDto {
 
             @JsonProperty("correo_institucional") @NotBlank(message = "El correo institucional es obligatorio") @Size(max = 50, message = "El correo no puede exceder 50 caracteres") @Email(message = "El correo debe tener un formato válido") @Pattern(regexp = "^[a-zA-Z0-9._%+\\-]+@correounivalle\\.edu\\.co$", message = "El correo debe tener dominio @correounivalle.edu.co") String correoInstitucional,
 
-            @JsonProperty("telefono") @Size(max = 20, message = "El teléfono no puede exceder 20 caracteres") String telefono,
+            @JsonProperty("telefono") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El teléfono solo admite de 7 a 10 dígitos") String telefono,
+
+            @JsonProperty("celular") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El celular solo admite de 7 a 10 dígitos") String celular,
 
             @JsonProperty("tipo_docente") @NotNull(message = "El tipo de docente es obligatorio") TipoDocente tipoDocente,
 
@@ -46,7 +48,7 @@ public class DocenteDto {
                 TipoDocente tipoDocente, CategoriaDocente categoria, String codeProgram,
                 String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
             this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
-                    telefono, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
+                    telefono, null, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
         }
     }
 
@@ -63,7 +65,9 @@ public class DocenteDto {
 
             @JsonProperty("correo_institucional") @Size(max = 50, message = "El correo no puede exceder 50 caracteres") @Email(message = "El correo debe tener un formato válido") @Pattern(regexp = "^[a-zA-Z0-9._%+\\-]+@correounivalle\\.edu\\.co$", message = "El correo debe tener dominio @correounivalle.edu.co") String correoInstitucional,
 
-            @JsonProperty("telefono") @Size(max = 20, message = "El teléfono no puede exceder 20 caracteres") String telefono,
+            @JsonProperty("telefono") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El teléfono solo admite de 7 a 10 dígitos") String telefono,
+
+            @JsonProperty("celular") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El celular solo admite de 7 a 10 dígitos") String celular,
 
             @JsonProperty("tipo_docente") TipoDocente tipoDocente,
 
@@ -85,7 +89,7 @@ public class DocenteDto {
                 TipoDocente tipoDocente, CategoriaDocente categoria, String codeProgram,
                 String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
             this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
-                    telefono, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
+                    telefono, null, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
         }
     }
 
