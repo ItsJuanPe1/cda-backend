@@ -1,5 +1,6 @@
 package co.edu.univalle.palmira.service;
 
+import co.edu.univalle.palmira.config.CuposProperties;
 import co.edu.univalle.palmira.dto.ProgramacionDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ConflictException;
@@ -42,6 +43,15 @@ public class ProgramacionService {
     public static final String REVISION_ASIGNATURA_INACTIVA = "La asignatura está inactiva en el catálogo";
     public static final String REVISION_SIN_COHORTE = "La cohorte ya no está confirmada en el periodo";
 
+    // HU-059: mensajes
+    public static final String MSG_CUPO_INVALIDO = "Debe ingresar un número de cupos válido";
+    public static final String MSG_CUPO_EXCEDE_MAX = "El número de cupos no puede superar el máximo permitido (%d)";
+    public static final String MSG_CUPO_EXCLUIDO = "No se pueden asignar cupos a un curso excluido";
+    public static final String MSG_PLAZO_CERRADO = "El plazo de edición ya cerró";
+    public static final String MSG_CUPOS_GUARDADOS = "Cupos de estudiantes registrados correctamente";
+    public static final String MSG_CUPOS_SIN_DATOS = "No se recibieron cupos para actualizar";
+    public static final String MSG_CURSO_OTRO_PERIODO = "El curso no pertenece al período indicado";
+
     static final int MAX_JUSTIFICACION = 500;
     static final String ENTIDAD_CURSO = "CURSO";
 
@@ -56,6 +66,7 @@ public class ProgramacionService {
     private final AsignaturaRepository asignaturaRepository;
     private final AccesoProgramaService accesoProgramaService;
     private final CargaDocenteService cargaDocenteService;
+    private final CuposProperties cuposProperties;
 
     /** Curso que corresponde según las cohortes confirmadas y la malla. */
     private record CursoOfertado(CohortePeriodo cohorte, PensumAcademico pensum) {
@@ -309,6 +320,120 @@ public class ProgramacionService {
         Set<Long> excluidos = cursos.stream().filter(CursoProgramacion::isExcluido)
                 .map(CursoProgramacion::getId).collect(Collectors.toSet());
         return construirAjuste(objetivo, cursos, antes, despues, excluidos);
+    }
+    
+    /** HU-059: parámetros de edición para el frontend. El administrador siempre puede editar. */
+    @Transactional(readOnly = true)
+    public ProgramacionDto.CuposConfigResponse obtenerConfiguracionCupos(Long periodoId) {
+        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+        AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+        boolean plazoAbierto = plazoCoordinadorAbierto(periodo);
+        return ProgramacionDto.CuposConfigResponse.builder()
+                .maxPorGrupo(cuposProperties.getMaxPorGrupo())
+                .plazoAbierto(plazoAbierto)
+                .puedeEditar(alcance.admin() || plazoAbierto)
+                .admin(alcance.admin())
+                .build();
+    }
+
+    /**
+     * HU-059: registra los cupos de los cursos activos. El coordinador solo edita su programa y
+     * dentro del plazo; el administrador siempre puede. Cada cambio queda en la bitácora.
+     */
+    @Transactional
+    public ProgramacionDto.ActualizarCuposResponse actualizarCupos(ProgramacionDto.ActualizarCuposRequest request) {
+        if (request == null || request.periodoId() == null) {
+            throw new BadRequestException(MSG_CUPOS_SIN_DATOS);
+        }
+        if (request.cursos() == null || request.cursos().isEmpty()) {
+            throw new BadRequestException(MSG_CUPOS_SIN_DATOS);
+        }
+
+        Long periodoId = request.periodoId();
+        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+        AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+
+        if (!alcance.admin() && !plazoCoordinadorAbierto(periodo)) {
+            throw new ConflictException(MSG_PLAZO_CERRADO);
+        }
+
+        Map<Long, Integer> cuposSolicitados = new LinkedHashMap<>();
+        for (ProgramacionDto.CupoItemRequest item : request.cursos()) {
+            if (item == null || item.cursoId() == null) {
+                throw new BadRequestException(MSG_CUPO_INVALIDO);
+            }
+            validarCupo(item.cupos());
+            cuposSolicitados.put(item.cursoId(), item.cupos());
+        }
+
+        // Una sola consulta para todos los cursos enviados; evita el N+1 al guardar fila por fila.
+        List<CursoProgramacion> encontrados = cursoRepository
+                .findAllByIdWithDetails(new ArrayList<>(cuposSolicitados.keySet()));
+        Map<Long, CursoProgramacion> cursos = new LinkedHashMap<>();
+        for (CursoProgramacion curso : encontrados) {
+            cursos.put(curso.getId(), curso);
+        }
+
+        for (Long cursoId : cuposSolicitados.keySet()) {
+            CursoProgramacion curso = cursos.get(cursoId);
+            if (curso == null) {
+                throw new ResourceNotFoundException(MSG_CURSO_NO_ENCONTRADO);
+            }
+            if (!curso.getPeriodo().getId().equals(periodoId)) {
+                throw new BadRequestException(MSG_CURSO_OTRO_PERIODO);
+            }
+            if (!alcance.admin()) {
+                accesoProgramaService.exigirProgramaPropio(curso.getPrograma().getCodeProgram());
+            }
+            if (curso.isExcluido()) {
+                throw new BadRequestException(MSG_CUPO_EXCLUIDO);
+            }
+        }
+
+        for (Map.Entry<Long, Integer> entrada : cuposSolicitados.entrySet()) {
+            CursoProgramacion curso = cursos.get(entrada.getKey());
+            Integer anteriorCupos = curso.getCupos();
+            Integer nuevoCupos = entrada.getValue();
+            if (Objects.equals(anteriorCupos, nuevoCupos)) {
+                continue;
+            }
+            Map<String, Object> anterior = new LinkedHashMap<>();
+            anterior.put("codigoCurso", codigoCurso(curso));
+            anterior.put("cupos", anteriorCupos);
+            Map<String, Object> nuevo = new LinkedHashMap<>();
+            nuevo.put("codigoCurso", codigoCurso(curso));
+            nuevo.put("cupos", nuevoCupos);
+            curso.setCupos(nuevoCupos);
+            bitacoraService.registrar(AccionBitacora.EDITAR, ENTIDAD_CURSO, String.valueOf(curso.getId()),
+                    periodoId, anterior, nuevo);
+        }
+
+        cursoRepository.saveAll(cursos.values());
+
+        List<ProgramacionDto.CursoResponse> respuesta = cursos.values().stream()
+                .map(c -> toResponse(c, null))
+                .toList();
+        return new ProgramacionDto.ActualizarCuposResponse(respuesta, MSG_CUPOS_GUARDADOS);
+    }
+
+    private void validarCupo(Integer cupos) {
+        if (cupos == null || cupos <= 0) {
+            throw new BadRequestException(MSG_CUPO_INVALIDO);
+        }
+        if (cupos > cuposProperties.getMaxPorGrupo()) {
+            throw new BadRequestException(String.format(MSG_CUPO_EXCEDE_MAX, cuposProperties.getMaxPorGrupo()));
+        }
+    }
+
+    private static boolean plazoCoordinadorAbierto(PeriodoAcademico periodo) {
+        Instant ahora = Instant.now();
+        Instant fin = periodo.getPlazoCoordinadorFin();
+        Instant inicio = periodo.getPlazoCoordinadorInicio();
+        return fin != null
+                && !ahora.isAfter(fin)
+                && (inicio == null || !ahora.isBefore(inicio));
     }
 
     // ------------------------------------------------------------------ apoyo
@@ -625,6 +750,7 @@ public class ProgramacionService {
                 .jornada(c.getJornada())
                 .numeroResolucion(c.getNumeroResolucion())
                 .grupo(c.getGrupo())
+                .cupos(c.getCupos())
                 .idDocente(idDocente)
                 .nombreDocente(nombreDocente)
                 .estado(c.getEstado())

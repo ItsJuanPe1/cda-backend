@@ -19,7 +19,7 @@ public class AsociacionesHistoricoInitializer {
         try {
             docenteAsignaturaService.sincronizarDesdeHistorico();
         } catch (Exception ex) {
-            log.error("HU-049: no se pudo sincronizar el histórico de asociaciones al iniciar", ex);
+            log.error("No se pudo sincronizar el histórico de asociaciones al iniciar", ex);
         }
     }
 }

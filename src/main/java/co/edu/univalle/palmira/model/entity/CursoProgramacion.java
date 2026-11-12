@@ -51,6 +51,10 @@ public class CursoProgramacion {
     @Column
     private Integer grupo;
 
+    /** HU-059: cupos de estudiantes habilitados para el curso/grupo. */
+    @Column(name = "cupos")
+    private Integer cupos;
+
     @Column(nullable = false)
     @Builder.Default
     private Integer credits = 0;
