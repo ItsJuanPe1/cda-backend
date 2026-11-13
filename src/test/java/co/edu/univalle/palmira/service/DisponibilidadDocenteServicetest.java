@@ -33,6 +33,8 @@ class DisponibilidadDocenteServiceTest {
     private PeriodoAcademicoRepository periodoRepository;
     @Mock
     private DocenteRepository docenteRepository;
+    @Mock 
+    private AccesoExtraordinarioService accesoExtraordinarioService;
 
     private DisponibilidadDocenteService service;
     private Docente docente;
@@ -41,7 +43,7 @@ class DisponibilidadDocenteServiceTest {
     @BeforeEach
     void setUp() {
         service = new DisponibilidadDocenteService(
-                disponibilidadRepository, periodoRepository, docenteRepository);
+                disponibilidadRepository, periodoRepository, docenteRepository,accesoExtraordinarioService);
         docente = Docente.builder().id(42L).estado(true).correoInstitucional(EMAIL).build();
         periodo = PeriodoAcademico.builder()
                 .id(7L)
