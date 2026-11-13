@@ -7,6 +7,7 @@ import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Asignatura;
 import co.edu.univalle.palmira.model.entity.CursoProgramacion;
 import co.edu.univalle.palmira.model.entity.Docente;
+import co.edu.univalle.palmira.model.entity.DisponibilidadDocente;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
 import co.edu.univalle.palmira.model.entity.Programa;
 import co.edu.univalle.palmira.repository.*;
@@ -26,6 +27,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -41,6 +43,7 @@ class ProgramacionServiceAsignarDocenteTest {
     @Mock DocenteAsignaturaService docenteAsignaturaService;
     @Mock BitacoraService bitacoraService;
     @Mock DocenteRepository docenteRepository;
+    @Mock DisponibilidadDocenteRepository disponibilidadDocenteRepository;
     @Mock AsignaturaRepository asignaturaRepository;
     @Mock AccesoProgramaService accesoProgramaService;
     @Mock CargaDocenteService cargaDocenteService;
@@ -62,6 +65,8 @@ class ProgramacionServiceAsignarDocenteTest {
         when(periodoRepository.existsById(5L)).thenReturn(true);
         when(programaRepository.existsById("P1")).thenReturn(true);
         when(asignaturaRepository.existsById("MAT101")).thenReturn(true);
+        when(accesoProgramaService.alcanceActual())
+                .thenReturn(new AccesoProgramaService.Alcance(true, null));
     }
 
     private CursoProgramacion curso(Integer horas, String estado, Docente docente) {
@@ -84,6 +89,14 @@ class ProgramacionServiceAsignarDocenteTest {
 
     private void docenteBloqueado(Docente d) {
         when(docenteRepository.findByIdForUpdate(d.getId())).thenReturn(Optional.of(d));
+        when(disponibilidadDocenteRepository.findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(d.getId(), 5L))
+                .thenReturn(List.of(franja(1, "08:00", "16:00")));
+    }
+
+    private DisponibilidadDocente franja(int dia, String inicio, String fin) {
+        return DisponibilidadDocente.builder().dia(dia)
+                .horaInicio(java.time.LocalTime.parse(inicio))
+                .horaFin(java.time.LocalTime.parse(fin)).build();
     }
 
     // ------------------------------------------------------------ alcance del coordinador
@@ -144,6 +157,75 @@ class ProgramacionServiceAsignarDocenteTest {
 
         assertEquals(12L, r.getIdDocente());
         verify(cursoRepository, times(1)).save(any(CursoProgramacion.class));
+    }
+
+    // ------------------------------------------------------------ disponibilidad y plazo
+
+    @Test
+    void asignar_docenteSinDisponibilidadEnPeriodo_rechazaYNoGuarda() {
+        cursoCargado(curso(4, CursoProgramacion.ESTADO_PROGRAMADO, null));
+        docenteBloqueado(ana);
+        when(disponibilidadDocenteRepository.findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(12L, 5L))
+                .thenReturn(List.of());
+
+        BadRequestException ex = assertThrows(BadRequestException.class,
+                () -> service.asignarDocente(101L, 12L, false));
+
+        assertEquals("El docente seleccionado no tiene disponibilidad horaria registrada para este período",
+                ex.getMessage());
+        verify(cursoRepository, never()).save(any());
+        verify(cargaDocenteService, never()).validar(anyLong(), anyLong(), anyLong(), anyInt());
+    }
+
+    @Test
+    void asignar_disponibilidadMenorQueHorasMateria_rechaza() {
+        cursoCargado(curso(3, CursoProgramacion.ESTADO_PROGRAMADO, null));
+        docenteBloqueado(ana);
+        when(disponibilidadDocenteRepository.findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(12L, 5L))
+                .thenReturn(List.of(franja(5, "13:00", "15:00")));
+        assertThrows(ConflictException.class, () -> service.asignarDocente(101L, 12L, false));
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void asignar_descuentaHorasYaAsignadasDeDisponibilidad() {
+        cursoCargado(curso(4, CursoProgramacion.ESTADO_PROGRAMADO, null));
+        docenteBloqueado(ana);
+        when(cursoRepository.sumarHorasExcluyendo(12L, 5L, 101L)).thenReturn(5L);
+        // 8 horas registradas - 5 ya comprometidas = 3; no alcanza para 4.
+        assertThrows(ConflictException.class, () -> service.asignarDocente(101L, 12L, false));
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void asignar_conHorasSuficientesYAsignacionesPrevias_permite() {
+        cursoCargado(curso(3, CursoProgramacion.ESTADO_PROGRAMADO, null));
+        docenteBloqueado(ana);
+        when(cursoRepository.sumarHorasExcluyendo(12L, 5L, 101L)).thenReturn(5L);
+        assertDoesNotThrow(() -> service.asignarDocente(101L, 12L, false));
+        verify(cursoRepository).save(any());
+    }
+
+    @Test
+    void asignar_coordinadorFueraDelPlazo_rechazaYNoGuarda() {
+        PeriodoAcademico cerrado = PeriodoAcademico.builder()
+                .id(5L)
+                .plazoCoordinadorInicio(java.time.Instant.now().minusSeconds(7200))
+                .plazoCoordinadorFin(java.time.Instant.now().minusSeconds(3600))
+                .build();
+        cursoCargado(CursoProgramacion.builder()
+                .id(101L).periodo(cerrado).programa(programa)
+                .asignatura(Asignatura.builder().codeCourse("MAT101").horasSemanales(4).build())
+                .estado(CursoProgramacion.ESTADO_PROGRAMADO).build());
+        when(accesoProgramaService.alcanceActual())
+                .thenReturn(new AccesoProgramaService.Alcance(false, "P1"));
+
+        ConflictException ex = assertThrows(ConflictException.class,
+                () -> service.asignarDocente(101L, 12L, false));
+
+        assertEquals(ProgramacionService.MSG_PLAZO_CERRADO, ex.getMessage());
+        verify(cursoRepository, never()).save(any());
+        verifyNoInteractions(docenteRepository, disponibilidadDocenteRepository, cargaDocenteService);
     }
 
     // ------------------------------------------------------------ límite de horas

@@ -71,18 +71,22 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
                                 "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
 
-                        // 0. Mi perfil (GET): cualquier usuario autenticado (Admin, Coordinador o Docente).
-                        // DEBE ir antes de las reglas /** porque gana la primera que coincide.
-                        .requestMatchers(HttpMethod.GET, "/api/docentes/me", "/api/coordinadores/me").authenticated()
+                        // Perfiles propios: el coordinador consulta solo su perfil de coordinador.
+                        // Aunque también tenga fila en docentes, no obtiene el endpoint /docentes/me.
+                        // Estas reglas deben ir antes del GET general de /api/docentes/**.
+                        .requestMatchers("/api/docentes/me", "/api/docentes/me/**").hasAnyAuthority(ADMIN_Y_DOCENTE)
+                        .requestMatchers(HttpMethod.GET, "/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
                         // Otros métodos sobre el perfil propio (p. ej. PUT): según el rol
                         .requestMatchers("/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                        // HU-015: contacto y foto del propio perfil docente
-                        .requestMatchers("/api/docentes/me", "/api/docentes/me/**").hasAnyAuthority(ADMIN_Y_DOCENTE)
-
                         // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
                         .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
-                        .requestMatchers(HttpMethod.GET, "/api/docentes", "/api/docentes/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        // El coordinador solo necesita el catálogo de candidatos y sus evaluaciones
+                        // anteriores para la asignación. Las rutas de perfil/evaluación individual
+                        // quedan reservadas a administración o al propio rol docente.
+                        .requestMatchers(HttpMethod.GET, "/api/docentes", "/api/docentes/evaluaciones")
+                        .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.GET, "/api/docentes/*/evaluaciones").hasAnyAuthority(ADMIN)
                         .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
                         // 2. Períodos: los tres roles consultan; solo el administrador modifica
