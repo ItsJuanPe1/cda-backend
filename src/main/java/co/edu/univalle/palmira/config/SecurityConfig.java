@@ -41,6 +41,8 @@ public class SecurityConfig {
     private static final String[] ADMIN_Y_DOCENTE =
             {"ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE"};
 
+    private static final String[] DOCENTE = {"ROLE_DOCENTE", "DOCENTE"};        
+
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private String allowedOrigins;
 
@@ -127,6 +129,9 @@ public class SecurityConfig {
                         // cualquier otro método responde 405 (criterio 4).
                         .requestMatchers("/api/bitacora", "/api/bitacora/**").hasAnyAuthority(ADMIN)
 
+                         // Mis cursos: solo el docente consulta los suyos (antes de /api/carga/**)
+                        .requestMatchers(HttpMethod.GET, "/api/carga/mis-cursos").hasAnyAuthority(DOCENTE)
+                        
                         // Carga académica docente: consulta para admin y coordinador
                         .requestMatchers(HttpMethod.GET, "/api/carga/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
