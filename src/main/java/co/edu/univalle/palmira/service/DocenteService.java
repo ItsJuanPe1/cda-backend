@@ -25,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -238,27 +240,23 @@ public class DocenteService {
     }
 
     /**
-     * Devuelve la calificación de cada docente en la última edición anterior
-     * al período vigente para la asignatura solicitada.
+     * Devuelve la última evaluación registrada de cada docente para la asignatura,
+     * en cualquier período anterior al período activo.
      */
     @Transactional(readOnly = true)
     public List<EvaluacionDocenteDto> listarEvaluacionesAnteriores(Long periodoId, String codeCourse) {
         PeriodoAcademico actual = periodoAcademicoRepository.findById(periodoId)
                 .orElseThrow(() -> new BadRequestException("El período académico no existe"));
-        PeriodoAcademico anterior = periodoAcademicoRepository
-                .findAllByOrderByFechaInicioSemestreDesc()
-                .stream()
-                .filter(p -> p.getFechaInicioSemestre() != null
-                        && p.getFechaInicioSemestre().isBefore(actual.getFechaInicioSemestre()))
-                .findFirst()
-                .orElse(null);
-        if (anterior == null) {
-            return List.of();
-        }
 
-        return evaluacionDocenteRepository
-                .findAllByPeriodoIdAndAsignaturaCodeCourse(anterior.getId(), codeCourse)
-                .stream()
+        List<EvaluacionDocente> evaluaciones = evaluacionDocenteRepository
+                .findAllByAsignaturaBeforePeriodo(codeCourse, actual.getFechaInicioSemestre());
+
+        // La consulta viene ordenada de más reciente a más antigua; la primera por docente es la vigente.
+        Map<Long, EvaluacionDocente> ultimaPorDocente = new LinkedHashMap<>();
+        for (EvaluacionDocente evaluacion : evaluaciones) {
+            ultimaPorDocente.putIfAbsent(evaluacion.getDocente().getId(), evaluacion);
+        }
+        return ultimaPorDocente.values().stream()
                 .map(this::toEvaluacionResponse)
                 .toList();
     }

@@ -54,6 +54,8 @@ public class ProgramacionDto {
         private String codeCourse;
         private String nombreAsignatura;
         private Integer credits;
+        /** Horas semanales requeridas para elegir docente, sin planificar horarios. */
+        private Integer horasSemanales;
         private Integer semestre;
         private Jornada jornada;
         private String numeroResolucion;

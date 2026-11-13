@@ -4,6 +4,7 @@ import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.GoogleLoginRequest;
 import co.edu.univalle.palmira.dto.LoginResponse;
 import co.edu.univalle.palmira.model.entity.Coordinador;
+import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.Programa;
 import co.edu.univalle.palmira.model.entity.Usuario;
 import co.edu.univalle.palmira.repository.CoordinadorRepository;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -26,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -96,8 +99,6 @@ class GoogleAuthServiceTest {
                 .activo(true)
                 .build();
 
-        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("admin.sistema@correounivalle.edu.co"))
-                .thenReturn(Optional.empty());
         when(usuarioRepository.buscarPorCorreoInstitucional("admin.sistema@correounivalle.edu.co"))
                 .thenReturn(Optional.of(admin));
 
@@ -196,8 +197,6 @@ class GoogleAuthServiceTest {
                 .activo(false)
                 .build();
 
-        when(coordinadorRepository.findByCorreoInstitucionalWithDetails("inactivo@correounivalle.edu.co"))
-                .thenReturn(Optional.empty());
         when(usuarioRepository.buscarPorCorreoInstitucional("inactivo@correounivalle.edu.co"))
                 .thenReturn(Optional.of(usuarioInactivo));
 
@@ -287,6 +286,11 @@ class GoogleAuthServiceTest {
 
         when(coordinadorRepository.findByCorreoInstitucionalWithDetails("coordinador.sistemas@correounivalle.edu.co"))
                 .thenReturn(Optional.of(coordinador));
+        // Simula que también existe la fila docente sin agregarla a las autoridades del coordinador.
+        lenient().when(docenteRepository.existsByCorreoInstitucional("coordinador.sistemas@correounivalle.edu.co"))
+                .thenReturn(true);
+        // La sesión coordinador emite solo sus autoridades funcionales; el perfil docente se usa
+        // únicamente como registro académico en la programación, no para ampliar el JWT.
 
         Jwt mockJwt = mock(Jwt.class);
         when(mockJwt.getTokenValue()).thenReturn("coord-jwt-token");
@@ -303,6 +307,67 @@ class GoogleAuthServiceTest {
         assertEquals("Juan Pérez", response.nombre());
         assertEquals("Gómez", response.apellido());
         assertEquals(AuthConstants.LOGIN_SUCCESS_MESSAGE, response.mensaje());
+
+        ArgumentCaptor<JwtEncoderParameters> jwtCaptor = ArgumentCaptor.forClass(JwtEncoderParameters.class);
+        verify(jwtEncoder).encode(jwtCaptor.capture());
+        @SuppressWarnings("unchecked")
+        List<String> authorities = jwtCaptor.getValue().getClaims().getClaim("authorities");
+        assertEquals(List.of("ROLE_COORDINADOR", "COORDINADOR"), authorities);
+    }
+
+    @Test
+    @DisplayName("HU-013: Un coordinador con fila en docentes no puede iniciar sesión con rol docente")
+    void login_Error_CoordinadorConPerfilDocenteNoPuedeObtenerRolDocente() throws GeneralSecurityException, IOException {
+        String email = "coord.docente@correounivalle.edu.co";
+        String tokenStr = "coord-intenta-login-docente";
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail(email);
+        payload.setEmailVerified(true);
+        payload.set("hd", "correounivalle.edu.co");
+
+        when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+        when(googleIdToken.getPayload()).thenReturn(payload);
+        Usuario coordinador = Usuario.builder()
+                .id(25).nombre("Ana").apellido("López").emailInstitucional(email)
+                .rol(AuthConstants.ROL_COORDINADOR).activo(true).build();
+        when(usuarioRepository.buscarPorCorreoInstitucional(email)).thenReturn(Optional.of(coordinador));
+        // Simula que también existe el perfil académico, pero ese registro no cambia el rol de la sesión.
+        lenient().when(docenteRepository.findByCorreoInstitucionalWithDetails(email))
+                .thenReturn(Optional.of(Docente.builder().id(80L).nombres("Ana").apellidos("López")
+                        .correoInstitucional(email).estado(true).build()));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
+                googleAuthService.login(new GoogleLoginRequest(tokenStr, AuthConstants.ROL_DOCENTE)));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals(AuthConstants.ERROR_SIN_PERFIL_DOCENTE, ex.getReason());
+        verifyNoInteractions(jwtEncoder);
+    }
+
+    @Test
+    @DisplayName("El rol 3 de usuarios prevalece sobre una fila adicional en coordinadores")
+    void login_Error_DocenteConPerfilCoordinadorNoPuedeObtenerRolCoordinador() throws GeneralSecurityException, IOException {
+        String email = "docente.coord@correounivalle.edu.co";
+        String tokenStr = "docente-intenta-login-coordinador";
+        GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
+        payload.setEmail(email);
+        payload.setEmailVerified(true);
+        payload.set("hd", "correounivalle.edu.co");
+
+        when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
+        when(googleIdToken.getPayload()).thenReturn(payload);
+        Usuario docente = Usuario.builder()
+                .id(26).nombre("Luis").apellido("Pérez").emailInstitucional(email)
+                .rol(AuthConstants.ROL_DOCENTE).activo(true).build();
+        when(usuarioRepository.buscarPorCorreoInstitucional(email)).thenReturn(Optional.of(docente));
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
+                googleAuthService.login(new GoogleLoginRequest(tokenStr, AuthConstants.ROL_COORDINADOR)));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertEquals(AuthConstants.ERROR_SIN_PERFIL_COORDINADOR, ex.getReason());
+        verify(coordinadorRepository, never()).findByCorreoInstitucionalWithDetails(email);
+        verifyNoInteractions(jwtEncoder);
     }
 
     @Test

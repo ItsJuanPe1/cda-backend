@@ -63,6 +63,7 @@ public class ProgramacionService {
     private final DocenteAsignaturaService docenteAsignaturaService;
     private final BitacoraService bitacoraService;
     private final DocenteRepository docenteRepository;
+    private final DisponibilidadDocenteRepository disponibilidadDocenteRepository;
     private final AsignaturaRepository asignaturaRepository;
     private final AccesoProgramaService accesoProgramaService;
     private final CargaDocenteService cargaDocenteService;
@@ -321,7 +322,7 @@ public class ProgramacionService {
                 .map(CursoProgramacion::getId).collect(Collectors.toSet());
         return construirAjuste(objetivo, cursos, antes, despues, excluidos);
     }
-    
+
     /** HU-059: parámetros de edición para el frontend. El administrador siempre puede editar. */
     @Transactional(readOnly = true)
     public ProgramacionDto.CuposConfigResponse obtenerConfiguracionCupos(Long periodoId) {
@@ -428,12 +429,21 @@ public class ProgramacionService {
     }
 
     private static boolean plazoCoordinadorAbierto(PeriodoAcademico periodo) {
+        if (periodo == null || periodo.getPlazoCoordinadorInicio() == null
+                || periodo.getPlazoCoordinadorFin() == null) {
+            return false;
+        }
         Instant ahora = Instant.now();
-        Instant fin = periodo.getPlazoCoordinadorFin();
-        Instant inicio = periodo.getPlazoCoordinadorInicio();
-        return fin != null
-                && !ahora.isAfter(fin)
-                && (inicio == null || !ahora.isBefore(inicio));
+        return !ahora.isBefore(periodo.getPlazoCoordinadorInicio())
+                && !ahora.isAfter(periodo.getPlazoCoordinadorFin());
+    }
+
+    /** El administrador siempre puede; el coordinador respeta el plazo del período. */
+    private void exigirPlazoCoordinadorAbierto(PeriodoAcademico periodo) {
+        AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+        if (!alcance.admin() && !plazoCoordinadorAbierto(periodo)) {
+            throw new ConflictException(MSG_PLAZO_CERRADO);
+        }
     }
 
     // ------------------------------------------------------------------ apoyo
@@ -565,8 +575,8 @@ public class ProgramacionService {
     }
 
     private ProgramacionDto.AjusteGruposResponse construirAjuste(CursoProgramacion curso, List<CursoProgramacion> cursos,
-                                                                Map<Long, Integer> antes, Map<Long, Integer> despues,
-                                                                Set<Long> excluidos) {
+                                                                 Map<Long, Integer> antes, Map<Long, Integer> despues,
+                                                                 Set<Long> excluidos) {
         List<ProgramacionDto.GrupoCambio> cambios = cursos.stream()
                 .map(c -> ProgramacionDto.GrupoCambio.builder()
                         .id(c.getId())
@@ -652,14 +662,15 @@ public class ProgramacionService {
                 .build();
     }
 
-        @Transactional
+    @Transactional
     public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
-                                                         boolean reemplazarDocente) {
+                                                        boolean reemplazarDocente) {
         CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado con id " + cursoId));
 
-        // El coordinador solo asigna en su programa
+        // El coordinador solo asigna en su programa y dentro del plazo configurado.
         accesoProgramaService.exigirProgramaPropio(curso.getPrograma().getCodeProgram());
+        exigirPlazoCoordinadorAbierto(curso.getPeriodo());
 
         if (curso.isExcluido()) {
             throw new BadRequestException("No se puede asignar un docente a un curso excluido");
@@ -682,6 +693,32 @@ public class ProgramacionService {
             if (horas == null) {
                 throw new BadRequestException(MSG_ASIGNATURA_SIN_HORAS);
             }
+
+            // HU-013: la disponibilidad semanal se consume por las asignaciones vigentes
+            // de TODO el período, sin comparar días ni construir horarios de clase.
+            // Se excluye el curso actual para permitir guardar sin descontarlo dos veces.
+            List<DisponibilidadDocente> franjas = disponibilidadDocenteRepository
+                    .findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(
+                            idDocente, curso.getPeriodo().getId());
+            if (franjas.isEmpty()) {
+                throw new BadRequestException(
+                        "El docente seleccionado no tiene disponibilidad horaria registrada para este período");
+            }
+            long minutosDisponibles = franjas.stream()
+                    .filter(f -> f.getHoraInicio() != null && f.getHoraFin() != null)
+                    .mapToLong(f -> java.time.Duration.between(f.getHoraInicio(), f.getHoraFin()).toMinutes())
+                    .filter(m -> m > 0)
+                    .sum();
+            long horasYaAsignadas = cursoRepository.sumarHorasExcluyendo(
+                    idDocente, curso.getPeriodo().getId(), curso.getId());
+            long minutosRestantes = minutosDisponibles - horasYaAsignadas * 60L;
+            if (minutosRestantes < horas * 60L) {
+                throw new ConflictException(String.format(
+                        "El docente tiene %.2f h disponibles, %d h ya asignadas y necesita %d h para esta materia",
+                        minutosDisponibles / 60.0, horasYaAsignadas, horas));
+            }
+
+            // La carga se valida para cualquier fila de docentes.id, sin importar el rol en usuarios.
             cargaDocenteService.validar(idDocente, curso.getPeriodo().getId(), curso.getId(), horas);
 
             curso.setDocente(docente);
@@ -703,7 +740,7 @@ public class ProgramacionService {
         return toResponse(guardado, null);
     }
 
-        @Transactional
+    @Transactional
     public ProgramacionDto.CursoResponse asignarDocentePorMateria(
             Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente,
             boolean reemplazarDocente) {
@@ -746,6 +783,7 @@ public class ProgramacionService {
                 .codeCourse(c.getAsignatura().getCodeCourse())
                 .nombreAsignatura(c.getNombreAsignatura())
                 .credits(c.getCredits())
+                .horasSemanales(c.getAsignatura().getHorasSemanales())
                 .semestre(c.getSemestre())
                 .jornada(c.getJornada())
                 .numeroResolucion(c.getNumeroResolucion())
