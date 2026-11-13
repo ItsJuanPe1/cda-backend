@@ -3,6 +3,7 @@ package co.edu.univalle.palmira.service;
 import co.edu.univalle.palmira.dto.DisponibilidadDocenteDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
+import co.edu.univalle.palmira.model.entity.AccesoExtraordinarioDocente;
 import co.edu.univalle.palmira.model.entity.DisponibilidadDocente;
 import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
@@ -18,6 +19,7 @@ import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +27,7 @@ public class DisponibilidadDocenteService {
     private final DisponibilidadDocenteRepository disponibilidadRepository;
     private final PeriodoAcademicoRepository periodoRepository;
     private final DocenteRepository docenteRepository;
+    private final AccesoExtraordinarioService accesoExtraordinarioService;
 
     private static final LocalTime HORA_MINIMA = LocalTime.of(7, 0);
     private static final LocalTime HORA_MAXIMA = LocalTime.of(21, 0);
@@ -109,13 +112,24 @@ public class DisponibilidadDocenteService {
         }
 
         List<DisponibilidadDocenteDto.Item> horarios = listar(docente.getId(), periodo.getId());
-        boolean abierto = estaEnPlazo(periodo, Instant.now());
+        Instant ahora = Instant.now();
+        if (estaEnPlazo(periodo, ahora)) {
+            return new DisponibilidadDocenteDto.Response(
+                    "HABILITADO", "Registrar disponibilidad", horarios,
+                    periodo.getPlazoDocenteInicio(), periodo.getPlazoDocenteFin());
+        }
+        // Ventana general cerrada: puede estar habilitado por un acceso extraordinario del administrador.
+        Optional<AccesoExtraordinarioDocente> extraordinario =
+                accesoExtraordinarioService.vigente(docente.getId(), ahora);
+        if (extraordinario.isPresent()) {
+            return new DisponibilidadDocenteDto.Response(
+                    "HABILITADO", "Acceso extraordinario habilitado", horarios,
+                    periodo.getPlazoDocenteInicio(), periodo.getPlazoDocenteFin(),
+                    extraordinario.get().getFechaFin());
+        }
         return new DisponibilidadDocenteDto.Response(
-                abierto ? "HABILITADO" : "FUERA_DE_PLAZO",
-                abierto ? "Registrar disponibilidad" : "Fuera del período habilitado",
-                horarios,
-                periodo.getPlazoDocenteInicio(),
-                periodo.getPlazoDocenteFin());
+                "FUERA_DE_PLAZO", "Fuera del período habilitado", horarios,
+                periodo.getPlazoDocenteInicio(), periodo.getPlazoDocenteFin());
     }
 
     private DisponibilidadDocenteDto.Item registrarParaDocente(
@@ -124,7 +138,7 @@ public class DisponibilidadDocenteService {
                 .filter(this::esPeriodoActivo)
                 .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
 
-        if (!estaEnPlazo(periodo, Instant.now())) {
+        if (!estaHabilitado(periodo, docente, Instant.now())) {
             throw new BadRequestException("Fuera del período habilitado");
         }
 
@@ -155,7 +169,7 @@ public class DisponibilidadDocenteService {
                 .filter(this::esPeriodoActivo)
                 .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
 
-        if (!estaEnPlazo(periodo, Instant.now())) {
+        if (!estaHabilitado(periodo, docente, Instant.now())) {
             throw new BadRequestException("Fuera del período habilitado");
         }
 
@@ -230,6 +244,12 @@ public class DisponibilidadDocenteService {
             return "VIGENTE".equals(norm) || "ACTIVO".equals(norm);
         }
         return true;
+    }
+
+    /** Ventana general del período, o un acceso extraordinario vigente de este docente. */
+    private boolean estaHabilitado(PeriodoAcademico periodo, Docente docente, Instant ahora) {
+        return estaEnPlazo(periodo, ahora)
+                || accesoExtraordinarioService.vigente(docente.getId(), ahora).isPresent();
     }
 
     private boolean estaEnPlazo(PeriodoAcademico periodo, Instant ahora) {
