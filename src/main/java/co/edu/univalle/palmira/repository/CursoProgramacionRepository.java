@@ -122,4 +122,64 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
            "ORDER BY c.programa.nameProgram ASC")
 
     List<Object[]> contarCursosPorPrograma(@Param("periodoId") Long periodoId);
+
+    @Query(value = """
+            SELECT p.code_program,
+                   p.name_program,
+                   COUNT(c.id) FILTER (WHERE c.estado <> 'EXCLUIDO') AS generados,
+                   COUNT(c.id) FILTER (WHERE c.estado <> 'EXCLUIDO' AND c.id_docente IS NOT NULL) AS con_docente,
+                   COUNT(c.id) FILTER (
+                       WHERE c.estado <> 'EXCLUIDO' AND c.id_docente IS NULL AND EXISTS (
+                           SELECT 1
+                           FROM docente_asignatura da
+                           WHERE da.code_course = c.code_course
+                             AND da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                             AND da.activo = TRUE
+                       )
+                   ) AS pendientes_asignacion,
+                   COUNT(c.id) FILTER (
+                       WHERE c.estado <> 'EXCLUIDO' AND c.id_docente IS NULL AND NOT EXISTS (
+                           SELECT 1
+                           FROM docente_asignatura da
+                           WHERE da.code_course = c.code_course
+                             AND da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                             AND da.activo = TRUE
+                       )
+                   ) AS pendientes_contratacion,
+                   COUNT(c.id) FILTER (WHERE c.estado = 'EXCLUIDO') AS excluidos
+            FROM programas p
+            LEFT JOIN cursos_programacion c
+                   ON c.code_program = p.code_program AND c.periodo_id = :periodoId
+            LEFT JOIN asignaturas a ON a.code_course = c.code_course
+            WHERE p.estado = 'ACTIVO' OR c.id IS NOT NULL
+            GROUP BY p.code_program, p.name_program, p.id_facultad_programa
+            ORDER BY p.name_program ASC
+            """, nativeQuery = true)
+    List<Object[]> contarAvancePorPrograma(@Param("periodoId") Long periodoId);
+
+    @Query(value = """
+            SELECT p.code_program,
+                   p.name_program,
+                   c.code_course,
+                   c.nombre_asignatura,
+                   c.semestre,
+                   c.jornada,
+                   c.grupo,
+                   c.numero_resolucion,
+                   CASE WHEN EXISTS (
+                       SELECT 1
+                       FROM docente_asignatura da
+                       WHERE da.code_course = c.code_course
+                         AND da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                         AND da.activo = TRUE
+                   ) THEN 'PENDIENTE_ASIGNACION' ELSE 'PENDIENTE_CONTRATACION' END AS tipo_pendiente
+            FROM cursos_programacion c
+            JOIN programas p ON p.code_program = c.code_program
+            JOIN asignaturas a ON a.code_course = c.code_course
+            WHERE c.periodo_id = :periodoId
+              AND c.estado <> 'EXCLUIDO'
+              AND c.id_docente IS NULL
+            ORDER BY p.name_program ASC, c.semestre ASC, c.nombre_asignatura ASC, c.grupo ASC
+            """, nativeQuery = true)
+    List<Object[]> findPendientesParaExcel(@Param("periodoId") Long periodoId);
 }

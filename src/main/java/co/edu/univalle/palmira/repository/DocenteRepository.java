@@ -30,6 +30,19 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
 
     boolean existsByCorreoInstitucional(String correoInstitucional);
 
+    @Query("""
+            SELECT d FROM Docente d
+            LEFT JOIN FETCH d.facultad
+            LEFT JOIN FETCH d.programa
+            WHERE d.estado = true
+              AND NOT EXISTS (
+                  SELECT 1 FROM DisponibilidadDocente dd
+                  WHERE dd.docente = d AND dd.periodo.id = :periodoId
+              )
+            ORDER BY d.apellidos ASC, d.nombres ASC
+            """)
+    List<Docente> findActivosSinDisponibilidad(@Param("periodoId") Long periodoId);
+
     @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa WHERE LOWER(d.correoInstitucional) = LOWER(:correo)")
     Optional<Docente> findByCorreoInstitucionalWithDetails(@Param("correo") String correo);
 
