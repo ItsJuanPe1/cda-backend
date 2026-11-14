@@ -33,10 +33,8 @@ public class ProgramacionService {
     public static final String MSG_NO_EXCLUIDO = "El curso no está excluido";
 
     // Carga docente
-    public static final String MSG_ASIGNATURA_SIN_HORAS =
-            "La asignatura no tiene horas semanales definidas; defínalas antes de asignar docente";
-    public static final String MSG_CURSO_NO_PROGRAMADO =
-            "La asignatura no está programada en este período para el programa";
+    public static final String MSG_ASIGNATURA_SIN_HORAS = "La asignatura no tiene horas semanales definidas; defínalas antes de asignar docente";
+    public static final String MSG_CURSO_NO_PROGRAMADO = "La asignatura no está programada en este período para el programa";
 
     // HU-047 criterio 4: motivos de «Requiere revisión»
     public static final String REVISION_FUERA_DE_MALLA = "La asignatura ya no está en la malla del programa";
@@ -80,11 +78,13 @@ public class ProgramacionService {
     @Transactional
     public ProgramacionDto.ResumenResponse generarProgramacion(Long periodoId, boolean sobrescribir) {
         PeriodoAcademico periodo = periodoRepository.findById(periodoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
 
         long conteoExistente = cursoRepository.countByPeriodoId(periodoId);
         if (conteoExistente > 0 && !sobrescribir) {
-            throw new ConflictException("Ya existe una programación generada para este período con " + conteoExistente + " cursos. Requiere confirmación para regenerar.");
+            throw new ConflictException("Ya existe una programación generada para este período con " + conteoExistente
+                    + " cursos. Requiere confirmación para regenerar.");
         }
 
         // 1. Validar que todos los programas activos tengan cohortes confirmadas
@@ -101,15 +101,19 @@ public class ProgramacionService {
                 .collect(Collectors.toList());
 
         if (!programasFaltantes.isEmpty()) {
-            throw new BadRequestException("No se puede generar la programación: faltan cohortes confirmadas para los programas: " +
-                    String.join(", ", programasFaltantes));
+            throw new BadRequestException(
+                    "No se puede generar la programación: faltan cohortes confirmadas para los programas: " +
+                            String.join(", ", programasFaltantes));
         }
 
-        // 2. Cursos que corresponden según cohortes y mallas (valida que cada cohorte tenga asignaturas)
+        // 2. Cursos que corresponden según cohortes y mallas (valida que cada cohorte
+        // tenga asignaturas)
         Map<String, CursoOfertado> oferta = calcularOferta(cohortesConfirmadas, true);
 
-        // 3. HU-047: al regenerar no se borra nada (RN-13). Se concilia por programa#asignatura#jornada:
-        // los cursos que siguen conservan id, docente, estado y exclusión; los nuevos se agregan.
+        // 3. HU-047: al regenerar no se borra nada (RN-13). Se concilia por
+        // programa#asignatura#jornada:
+        // los cursos que siguen conservan id, docente, estado y exclusión; los nuevos
+        // se agregan.
         List<CursoProgramacion> existentes = conteoExistente > 0
                 ? new ArrayList<>(cursoRepository.findByPeriodoIdWithDetails(periodoId))
                 : new ArrayList<>();
@@ -123,9 +127,10 @@ public class ProgramacionService {
         for (CursoOfertado o : oferta.values()) {
             CohortePeriodo cohorte = o.cohorte();
             Asignatura asig = o.pensum().getAsignatura();
-            String nombreSnapshot = o.pensum().getNameCourseSnapshot() != null && !o.pensum().getNameCourseSnapshot().isBlank()
-                    ? o.pensum().getNameCourseSnapshot()
-                    : asig.getNameCourse();
+            String nombreSnapshot = o.pensum().getNameCourseSnapshot() != null
+                    && !o.pensum().getNameCourseSnapshot().isBlank()
+                            ? o.pensum().getNameCourseSnapshot()
+                            : asig.getNameCourse();
 
             CursoProgramacion curso = existentesPorClave.get(o.clave());
             if (curso == null) {
@@ -148,10 +153,13 @@ public class ProgramacionService {
             curso.setNombreAsignatura(nombreSnapshot);
             ofertados.add(curso);
         }
-        // Los existentes que ya no están en la oferta no se borran: conservan su grupo y quedan
-        // con «Requiere revisión» para que el administrador los excluya con justificación (decisión 2026-11-06).
+        // Los existentes que ya no están en la oferta no se borran: conservan su grupo
+        // y quedan
+        // con «Requiere revisión» para que el administrador los excluya con
+        // justificación (decisión 2026-11-06).
 
-        // 4. Grupos (HU-046) estables: conservan el orden de los que ya tenían grupo; los nuevos van al final.
+        // 4. Grupos (HU-046) estables: conservan el orden de los que ya tenían grupo;
+        // los nuevos van al final.
         List<CursoProgramacion> todos = new ArrayList<>(existentes);
         todos.addAll(nuevos);
         todos.stream()
@@ -168,15 +176,18 @@ public class ProgramacionService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProgramacionDto.CursoResponse> obtenerProgramacion(Long periodoId, String codeProgram, String codeCourse, Jornada jornada) {
+    public List<ProgramacionDto.CursoResponse> obtenerProgramacion(Long periodoId, String codeProgram,
+            String codeCourse, Jornada jornada) {
         periodoRepository.findById(periodoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
 
         List<CursoProgramacion> lista = (codeProgram != null && !codeProgram.isBlank())
                 ? cursoRepository.findByPeriodoIdAndCodeProgramWithDetails(periodoId, codeProgram)
                 : cursoRepository.findByPeriodoIdWithDetails(periodoId);
 
-        // HU-047 criterio 4: «Requiere revisión» se calcula comparando con la oferta actual.
+        // HU-047 criterio 4: «Requiere revisión» se calcula comparando con la oferta
+        // actual.
         List<CohortePeriodo> cohortes = cohorteRepository.findByPeriodoIdAndConfirmadaTrue(periodoId);
         Map<String, CursoOfertado> oferta = calcularOferta(cohortes, false);
         Set<String> cohortesConfirmadas = cohortes.stream()
@@ -184,7 +195,8 @@ public class ProgramacionService {
                 .collect(Collectors.toSet());
 
         return lista.stream()
-                .filter(c -> codeCourse == null || codeCourse.isBlank() || c.getAsignatura().getCodeCourse().equalsIgnoreCase(codeCourse))
+                .filter(c -> codeCourse == null || codeCourse.isBlank()
+                        || c.getAsignatura().getCodeCourse().equalsIgnoreCase(codeCourse))
                 .filter(c -> jornada == null || c.getJornada() == jornada)
                 .map(c -> toResponse(c, motivoRevision(c, oferta, cohortesConfirmadas)))
                 .collect(Collectors.toList());
@@ -193,13 +205,17 @@ public class ProgramacionService {
     @Transactional(readOnly = true)
     public ProgramacionDto.ResumenResponse obtenerResumen(Long periodoId) {
         periodoRepository.findById(periodoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
         return construirResumen(periodoId, "Resumen consolidado de la programación");
     }
 
     // ------------------------------------------------------------------ HU-047
 
-    /** Criterio 2: cómo quedarían los grupos si se excluye el curso, sin guardar nada. */
+    /**
+     * Criterio 2: cómo quedarían los grupos si se excluye el curso, sin guardar
+     * nada.
+     */
     @Transactional(readOnly = true)
     public ProgramacionDto.AjusteGruposResponse vistaPreviaExclusion(Long cursoId) {
         CursoProgramacion curso = buscarCurso(cursoId);
@@ -218,9 +234,12 @@ public class ProgramacionService {
     }
 
     /**
-     * Criterio 2: excluye un curso con justificación y renumera los grupos activos de la asignatura
-     * desde 50 conservando su orden. Si tenía docente, se le quita (el frontend avisa antes).
-     * Criterio 5: cada exclusión y cada renumeración van a la bitácora en la misma transacción.
+     * Criterio 2: excluye un curso con justificación y renumera los grupos activos
+     * de la asignatura
+     * desde 50 conservando su orden. Si tenía docente, se le quita (el frontend
+     * avisa antes).
+     * Criterio 5: cada exclusión y cada renumeración van a la bitácora en la misma
+     * transacción.
      */
     @Transactional
     public ProgramacionDto.AjusteGruposResponse excluir(Long cursoId, ProgramacionDto.JustificacionRequest request) {
@@ -270,7 +289,8 @@ public class ProgramacionService {
     }
 
     /**
-     * Deshace una exclusión: el curso vuelve a PROGRAMADO, sin docente, con el siguiente número de la serie.
+     * Deshace una exclusión: el curso vuelve a PROGRAMADO, sin docente, con el
+     * siguiente número de la serie.
      * Los demás cursos no cambian de grupo (decisión 2026-11-06).
      */
     @Transactional
@@ -299,7 +319,8 @@ public class ProgramacionService {
         anterior.put("estado", objetivo.getEstado());
         anterior.put("justificacionExclusion", objetivo.getJustificacionExclusion());
         anterior.put("excluidoPor", objetivo.getExcluidoPor());
-        anterior.put("fechaExclusion", objetivo.getFechaExclusion() != null ? objetivo.getFechaExclusion().toString() : null);
+        anterior.put("fechaExclusion",
+                objetivo.getFechaExclusion() != null ? objetivo.getFechaExclusion().toString() : null);
 
         objetivo.setEstado(CursoProgramacion.ESTADO_PROGRAMADO);
         objetivo.setGrupo(siguiente);
@@ -323,11 +344,15 @@ public class ProgramacionService {
         return construirAjuste(objetivo, cursos, antes, despues, excluidos);
     }
 
-    /** HU-059: parámetros de edición para el frontend. El administrador siempre puede editar. */
+    /**
+     * HU-059: parámetros de edición para el frontend. El administrador siempre
+     * puede editar.
+     */
     @Transactional(readOnly = true)
     public ProgramacionDto.CuposConfigResponse obtenerConfiguracionCupos(Long periodoId) {
         PeriodoAcademico periodo = periodoRepository.findById(periodoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
         AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
         boolean plazoAbierto = plazoCoordinadorAbierto(periodo);
         return ProgramacionDto.CuposConfigResponse.builder()
@@ -339,8 +364,10 @@ public class ProgramacionService {
     }
 
     /**
-     * HU-059: registra los cupos de los cursos activos. El coordinador solo edita su programa y
-     * dentro del plazo; el administrador siempre puede. Cada cambio queda en la bitácora.
+     * HU-059: registra los cupos de los cursos activos. El coordinador solo edita
+     * su programa y
+     * dentro del plazo; el administrador siempre puede. Cada cambio queda en la
+     * bitácora.
      */
     @Transactional
     public ProgramacionDto.ActualizarCuposResponse actualizarCupos(ProgramacionDto.ActualizarCuposRequest request) {
@@ -353,7 +380,8 @@ public class ProgramacionService {
 
         Long periodoId = request.periodoId();
         PeriodoAcademico periodo = periodoRepository.findById(periodoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
         AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
 
         if (!alcance.admin() && !plazoCoordinadorAbierto(periodo)) {
@@ -369,7 +397,8 @@ public class ProgramacionService {
             cuposSolicitados.put(item.cursoId(), item.cupos());
         }
 
-        // Una sola consulta para todos los cursos enviados; evita el N+1 al guardar fila por fila.
+        // Una sola consulta para todos los cursos enviados; evita el N+1 al guardar
+        // fila por fila.
         List<CursoProgramacion> encontrados = cursoRepository
                 .findAllByIdWithDetails(new ArrayList<>(cuposSolicitados.keySet()));
         Map<Long, CursoProgramacion> cursos = new LinkedHashMap<>();
@@ -438,7 +467,9 @@ public class ProgramacionService {
                 && !ahora.isAfter(periodo.getPlazoCoordinadorFin());
     }
 
-    /** El administrador siempre puede; el coordinador respeta el plazo del período. */
+    /**
+     * El administrador siempre puede; el coordinador respeta el plazo del período.
+     */
     private void exigirPlazoCoordinadorAbierto(PeriodoAcademico periodo) {
         AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
         if (!alcance.admin() && !plazoCoordinadorAbierto(periodo)) {
@@ -457,8 +488,10 @@ public class ProgramacionService {
     }
 
     /**
-     * Cursos que corresponden según las cohortes y sus mallas (sin electivas profesionales, HU-048).
-     * Con {@code estricta} se exige que cada cohorte tenga asignaturas obligatorias (HU-045 criterio 4).
+     * Cursos que corresponden según las cohortes y sus mallas (sin electivas
+     * profesionales, HU-048).
+     * Con {@code estricta} se exige que cada cohorte tenga asignaturas obligatorias
+     * (HU-045 criterio 4).
      */
     private Map<String, CursoOfertado> calcularOferta(List<CohortePeriodo> cohortes, boolean estricta) {
         Map<String, CursoOfertado> oferta = new LinkedHashMap<>();
@@ -482,7 +515,8 @@ public class ProgramacionService {
 
             if (obligatorias.isEmpty() && estricta) {
                 throw new BadRequestException("La cohorte de semestre " + cohorte.getSemestre() + " del programa " +
-                        prog.getNameProgram() + " con resolución '" + cohorte.getNumeroResolucion() + "' no tiene asignaturas obligatorias en la malla.");
+                        prog.getNameProgram() + " con resolución '" + cohorte.getNumeroResolucion()
+                        + "' no tiene asignaturas obligatorias en la malla.");
             }
 
             for (PensumAcademico pensum : obligatorias) {
@@ -494,15 +528,20 @@ public class ProgramacionService {
         return oferta;
     }
 
-    /** HU-047 criterio 4: motivo por el que un curso activo requiere revisión, o null. */
-    private String motivoRevision(CursoProgramacion c, Map<String, CursoOfertado> oferta, Set<String> cohortesConfirmadas) {
+    /**
+     * HU-047 criterio 4: motivo por el que un curso activo requiere revisión, o
+     * null.
+     */
+    private String motivoRevision(CursoProgramacion c, Map<String, CursoOfertado> oferta,
+            Set<String> cohortesConfirmadas) {
         if (c.isExcluido()) {
             return null;
         }
         if (Boolean.FALSE.equals(c.getAsignatura().getActivo())) {
             return REVISION_ASIGNATURA_INACTIVA;
         }
-        if (!cohortesConfirmadas.contains(c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())) {
+        if (!cohortesConfirmadas
+                .contains(c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())) {
             return REVISION_SIN_COHORTE;
         }
         if (!oferta.containsKey(clave(c))) {
@@ -511,13 +550,19 @@ public class ProgramacionService {
         return null;
     }
 
-    /** Orden de la serie: primero por grupo actual; los que no tienen grupo, por programa y jornada. */
-    private static final Comparator<CursoProgramacion> ORDEN_SERIE =
-            Comparator.comparing(CursoProgramacion::getGrupo, Comparator.nullsLast(Comparator.naturalOrder()))
-                    .thenComparing(c -> c.getPrograma().getCodeProgram())
-                    .thenComparing(CursoProgramacion::getJornada);
+    /**
+     * Orden de la serie: primero por grupo actual; los que no tienen grupo, por
+     * programa y jornada.
+     */
+    private static final Comparator<CursoProgramacion> ORDEN_SERIE = Comparator
+            .comparing(CursoProgramacion::getGrupo, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(c -> c.getPrograma().getCodeProgram())
+            .thenComparing(CursoProgramacion::getJornada);
 
-    /** Numera consecutivo desde 50 los cursos activos de una asignatura; los excluidos quedan sin grupo. */
+    /**
+     * Numera consecutivo desde 50 los cursos activos de una asignatura; los
+     * excluidos quedan sin grupo.
+     */
     private void numerarGrupos(List<CursoProgramacion> cursosDeMateria) {
         int grupo = CursoProgramacion.GRUPO_INICIAL;
         for (CursoProgramacion curso : cursosDeMateria.stream().sorted(ORDEN_SERIE).toList()) {
@@ -529,7 +574,10 @@ public class ProgramacionService {
         }
     }
 
-    /** Grupo que tendría cada curso activo si se excluye {@code cursoExcluir}; los excluidos quedan en null. */
+    /**
+     * Grupo que tendría cada curso activo si se excluye {@code cursoExcluir}; los
+     * excluidos quedan en null.
+     */
     static Map<Long, Integer> planExclusion(List<CursoProgramacion> cursos, Long cursoExcluir) {
         Map<Long, Integer> plan = new HashMap<>();
         int grupo = CursoProgramacion.GRUPO_INICIAL;
@@ -552,7 +600,7 @@ public class ProgramacionService {
     }
 
     private void aplicarRenumeracion(List<CursoProgramacion> cursos, Map<Long, Integer> antes,
-                                     Map<Long, Integer> plan, Long periodoId) {
+            Map<Long, Integer> plan, Long periodoId) {
         for (CursoProgramacion c : cursos) {
             if (c.isExcluido()) {
                 continue;
@@ -574,9 +622,10 @@ public class ProgramacionService {
         }
     }
 
-    private ProgramacionDto.AjusteGruposResponse construirAjuste(CursoProgramacion curso, List<CursoProgramacion> cursos,
-                                                                 Map<Long, Integer> antes, Map<Long, Integer> despues,
-                                                                 Set<Long> excluidos) {
+    private ProgramacionDto.AjusteGruposResponse construirAjuste(CursoProgramacion curso,
+            List<CursoProgramacion> cursos,
+            Map<Long, Integer> antes, Map<Long, Integer> despues,
+            Set<Long> excluidos) {
         List<ProgramacionDto.GrupoCambio> cambios = cursos.stream()
                 .map(c -> ProgramacionDto.GrupoCambio.builder()
                         .id(c.getId())
@@ -588,7 +637,7 @@ public class ProgramacionService {
                         .excluido(excluidos.contains(c.getId()))
                         .build())
                 .sorted(Comparator.comparing(ProgramacionDto.GrupoCambio::getGrupoDespues,
-                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(ProgramacionDto.GrupoCambio::getGrupoAntes,
                                 Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(ProgramacionDto.GrupoCambio::getCodeProgram))
@@ -664,7 +713,7 @@ public class ProgramacionService {
 
     @Transactional
     public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
-                                                        boolean reemplazarDocente) {
+            boolean reemplazarDocente) {
         CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado con id " + cursoId));
 
@@ -683,7 +732,8 @@ public class ProgramacionService {
                 throw new ConflictException(
                         "El curso ya tiene un docente asignado. Confirme si desea reemplazarlo.");
             }
-            // Bloquea la fila del docente: dos asignaciones simultáneas no pueden pasar de 20 h
+            // Bloquea la fila del docente: dos asignaciones simultáneas no pueden pasar de
+            // 20 h
             Docente docente = docenteRepository.findByIdForUpdate(idDocente)
                     .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + idDocente));
             if (Boolean.FALSE.equals(docente.getEstado())) {
@@ -694,9 +744,6 @@ public class ProgramacionService {
                 throw new BadRequestException(MSG_ASIGNATURA_SIN_HORAS);
             }
 
-            // HU-013: la disponibilidad semanal se consume por las asignaciones vigentes
-            // de TODO el período, sin comparar días ni construir horarios de clase.
-            // Se excluye el curso actual para permitir guardar sin descontarlo dos veces.
             List<DisponibilidadDocente> franjas = disponibilidadDocenteRepository
                     .findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(
                             idDocente, curso.getPeriodo().getId());
@@ -718,7 +765,8 @@ public class ProgramacionService {
                         minutosDisponibles / 60.0, horasYaAsignadas, horas));
             }
 
-            // La carga se valida para cualquier fila de docentes.id, sin importar el rol en usuarios.
+            // La carga se valida para cualquier fila de docentes.id, sin importar el rol en
+            // usuarios.
             cargaDocenteService.validar(idDocente, curso.getPeriodo().getId(), curso.getId(), horas);
 
             curso.setDocente(docente);
@@ -727,8 +775,8 @@ public class ProgramacionService {
             docenteAsignaturaService.registrarDesdeCursos(List.of(curso));
             if (docenteAnterior != null && !docenteAnterior.getId().equals(idDocente)
                     && cursoRepository.countActivosByPeriodoAsignaturaDocenteExcludingCurso(
-                    curso.getPeriodo().getId(), curso.getAsignatura().getCodeCourse(),
-                    docenteAnterior.getId(), curso.getId()) == 0) {
+                            curso.getPeriodo().getId(), curso.getAsignatura().getCodeCourse(),
+                            docenteAnterior.getId(), curso.getId()) == 0) {
                 docenteAsignaturaService.desactivarAsociacion(docenteAnterior, curso);
             }
         } else {
@@ -757,7 +805,8 @@ public class ProgramacionService {
             throw new ResourceNotFoundException("Asignatura no encontrada con código " + codeCourse);
         }
 
-        // Solo se asigna docente a cursos ya generados desde la malla; este método no crea cursos.
+        // Solo se asigna docente a cursos ya generados desde la malla; este método no
+        // crea cursos.
         // (semestre se conserva en la firma por compatibilidad con el endpoint.)
         CursoProgramacion curso = cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
                 .filter(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram) && !c.isExcluido())
