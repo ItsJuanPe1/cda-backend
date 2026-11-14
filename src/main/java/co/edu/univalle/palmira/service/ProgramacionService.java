@@ -82,8 +82,10 @@ public class ProgramacionService {
                         () -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
 
         long conteoExistente = cursoRepository.countByPeriodoId(periodoId);
-        if (conteoExistente > 0 && !sobrescribir) {
-            throw new ConflictException("Ya existe una programación generada para este período con " + conteoExistente
+        // Las electivas programadas a mano por el coordinador no cuentan como «programación generada».
+        long conteoGenerado = conteoExistente - cursoRepository.countByPeriodoIdAndCodeCourseEspacioIsNotNull(periodoId);
+        if (conteoGenerado > 0 && !sobrescribir) {
+            throw new ConflictException("Ya existe una programación generada para este período con " + conteoGenerado
                     + " cursos. Requiere confirmación para regenerar.");
         }
 
@@ -119,7 +121,9 @@ public class ProgramacionService {
                 : new ArrayList<>();
         Map<String, CursoProgramacion> existentesPorClave = new HashMap<>();
         for (CursoProgramacion c : existentes) {
-            existentesPorClave.putIfAbsent(clave(c), c);
+            if (c.getCodeCourseEspacio() == null) {
+                existentesPorClave.putIfAbsent(clave(c), c);
+            }
         }
 
         List<CursoProgramacion> ofertados = new ArrayList<>();
@@ -189,6 +193,11 @@ public class ProgramacionService {
         // HU-047 criterio 4: «Requiere revisión» se calcula comparando con la oferta
         // actual.
         List<CohortePeriodo> cohortes = cohorteRepository.findByPeriodoIdAndConfirmadaTrue(periodoId);
+        if (codeProgram != null && !codeProgram.isBlank()) {
+            cohortes = cohortes.stream()
+                    .filter(c -> c.getPrograma() != null && codeProgram.equalsIgnoreCase(c.getPrograma().getCodeProgram()))
+                    .collect(Collectors.toList());
+        }
         Map<String, CursoOfertado> oferta = calcularOferta(cohortes, false);
         Set<String> cohortesConfirmadas = cohortes.stream()
                 .map(c -> c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())
@@ -457,7 +466,7 @@ public class ProgramacionService {
         }
     }
 
-    private static boolean plazoCoordinadorAbierto(PeriodoAcademico periodo) {
+    static boolean plazoCoordinadorAbierto(PeriodoAcademico periodo) {
         if (periodo == null || periodo.getPlazoCoordinadorInicio() == null
                 || periodo.getPlazoCoordinadorFin() == null) {
             return false;
@@ -475,6 +484,19 @@ public class ProgramacionService {
         if (!alcance.admin() && !plazoCoordinadorAbierto(periodo)) {
             throw new ConflictException(MSG_PLAZO_CERRADO);
         }
+    }
+
+    /**
+     * Electivas programadas a mano: vuelve a numerar desde 50 los grupos activos de la asignatura
+     * después de quitar un curso o cambiar su asignatura. Cada cambio va a la bitácora.
+     */
+    @Transactional
+    public void renumerarGrupos(Long periodoId, String codeCourse) {
+        List<CursoProgramacion> cursos = cursoRepository.findByPeriodoAndAsignaturaForUpdate(periodoId, codeCourse);
+        Map<Long, Integer> antes = gruposActuales(cursos);
+        Map<Long, Integer> plan = planExclusion(cursos, null);
+        aplicarRenumeracion(cursos, antes, plan, periodoId);
+        cursoRepository.saveAll(cursos);
     }
 
     // ------------------------------------------------------------------ apoyo
@@ -520,6 +542,12 @@ public class ProgramacionService {
             }
 
             for (PensumAcademico pensum : obligatorias) {
+                // Los espacios «Electiva Profesional N» (y la complementaria) son el esqueleto de la malla, no
+                // cursos: la electiva real la programa el coordinador (ElectivaProgramadaService).
+                if (pensum.getId() != null && pensum.getId().getCodeCourse() != null
+                        && pensum.getId().getCodeCourse().toUpperCase().startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
+                    continue;
+                }
                 CursoOfertado ofertado = new CursoOfertado(cohorte, pensum);
                 // Evitar duplicar materia en la misma jornada para el mismo programa
                 oferta.putIfAbsent(ofertado.clave(), ofertado);
@@ -543,6 +571,10 @@ public class ProgramacionService {
         if (!cohortesConfirmadas
                 .contains(c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())) {
             return REVISION_SIN_COHORTE;
+        }
+        if (c.getCodeCourseEspacio() != null) {
+            // Electiva programada a mano: no sale de la malla obligatoria, no es «fuera de malla».
+            return null;
         }
         if (!oferta.containsKey(clave(c))) {
             return REVISION_FUERA_DE_MALLA;
@@ -816,6 +848,14 @@ public class ProgramacionService {
         return asignarDocente(curso.getId(), idDocente, reemplazarDocente);
     }
 
+    /** ELE-PROF-I → «Electiva Profesional I»; null si el curso no ocupa un espacio de electiva. */
+    private static String nombreEspacio(String codigoEspacio) {
+        if (codigoEspacio == null || !codigoEspacio.toUpperCase().startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
+            return null;
+        }
+        return "Electiva Profesional " + codigoEspacio.substring(ElectivaProgramadaService.PREFIJO_ESPACIO.length());
+    }
+
     private ProgramacionDto.CursoResponse toResponse(CursoProgramacion c, String motivoRevision) {
         String nombreDocente = null;
         Long idDocente = null;
@@ -838,6 +878,8 @@ public class ProgramacionService {
                 .numeroResolucion(c.getNumeroResolucion())
                 .grupo(c.getGrupo())
                 .cupos(c.getCupos())
+                .codigoEspacio(c.getCodeCourseEspacio())
+                .nombreEspacio(nombreEspacio(c.getCodeCourseEspacio()))
                 .idDocente(idDocente)
                 .nombreDocente(nombreDocente)
                 .estado(c.getEstado())

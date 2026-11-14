@@ -9,7 +9,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-//import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -35,190 +34,165 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-        private static final String[] ADMIN = { "ROLE_ADMIN", "ADMIN" };
-        private static final String[] ADMIN_Y_COORDINADOR = { "ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR",
-                        "COORDINADOR" };
-        private static final String[] ADMIN_Y_DOCENTE = { "ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE" };
+    private static final String[] ADMIN = { "ROLE_ADMIN", "ADMIN" };
+    private static final String[] ADMIN_Y_COORDINADOR = { "ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR" };
+    private static final String[] ADMIN_Y_DOCENTE = { "ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE" };
+    private static final String[] DOCENTE = { "ROLE_DOCENTE", "DOCENTE" };
 
-        private static final String[] DOCENTE = { "ROLE_DOCENTE", "DOCENTE" };
+    @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
+    private String allowedOrigins;
 
-        @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
-        private String allowedOrigins;
+    @Value("${auth.jwt.secret:}")
+    private String jwtSecret;
 
-        @Value("${auth.jwt.secret:}")
-        private String jwtSecret;
+    private static void escribirError(HttpServletResponse res, int status, String message)
+            throws IOException {
+        res.setStatus(status);
+        res.setContentType("application/json;charset=UTF-8");
+        res.getWriter().write("{\"message\":\"" + message + "\"}");
+    }
 
-        private static void escribirError(HttpServletResponse res, int status, String message)
-                        throws IOException {
-                res.setStatus(status);
-                res.setContentType("application/json;charset=UTF-8");
-                res.getWriter().write("{\"message\":\"" + message + "\"}");
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("authorities");
+        authoritiesConverter.setAuthorityPrefix("");
+
+        JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
+        authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+
+        http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth
+                        // Rutas públicas: autenticación, Swagger y health
+                        .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
+                                "/v3/api-docs/**", "/actuator/health", "/error").permitAll()
+
+                        // Perfiles propios: el coordinador consulta solo su perfil de coordinador.
+                        // Aunque también tenga fila en docentes, no obtiene el endpoint /docentes/me.
+                        // Estas reglas deben ir antes del GET general de /api/docentes/**.
+                        .requestMatchers("/api/docentes/me", "/api/docentes/me/**").hasAnyAuthority(ADMIN_Y_DOCENTE)
+                        .requestMatchers(HttpMethod.GET, "/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
+                        // Otros métodos sobre el perfil propio (p. ej. PUT): según el rol
+                        .requestMatchers("/api/coordinadores/me").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo Administrador
+                        .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
+                        // El coordinador solo necesita el catálogo de candidatos y sus evaluaciones
+                        // anteriores para la asignación. Las rutas de perfil/evaluación individual
+                        // quedan reservadas a administración o al propio rol docente.
+                        .requestMatchers(HttpMethod.GET, "/api/docentes", "/api/docentes/evaluaciones")
+                        .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.GET, "/api/docentes/*/evaluaciones").hasAnyAuthority(ADMIN)
+                        .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
+
+                        // 2. Períodos: los tres roles consultan; solo el administrador modifica
+                        .requestMatchers(HttpMethod.GET, "/api/periodos", "/api/periodos/**")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
+
+                        // Rutas administrativas de disponibilidad:
+                        .requestMatchers(HttpMethod.GET, "/api/admin/docentes/*/disponibilidades").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.GET, "/api/disponibilidades/periodo/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers("/api/admin/**").hasAnyAuthority(ADMIN)
+
+                        // 3. Disponibilidad docente: docentes (autoservicio /me)
+                        .requestMatchers(HttpMethod.GET, "/api/disponibilidades/**")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.POST, "/api/disponibilidades/**")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.PUT, "/api/disponibilidades/**")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+                        .requestMatchers(HttpMethod.DELETE, "/api/disponibilidades/**")
+                        .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
+
+                        .requestMatchers("/api/programacion/avance", "/api/programacion/avance/**")
+                        .hasAnyAuthority(ADMIN)
+
+                        // 4. Asignaturas, mallas, programas, catálogos, cohortes y programación:
+                        // Coordinadores solo pueden consultar (GET)
+                        .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
+                                "/api/programas/**", "/api/catalogos/**",
+                                "/api/cohortes/**", "/api/programacion/**")
+                        .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
+                        // Facultades: Administradores, Coordinadores y Docentes pueden consultar
+                        .requestMatchers(HttpMethod.GET, "/api/facultades", "/api/facultades/**")
+                        .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
+
+                        // Coordinadores conservan acceso operativo a las mallas curriculares.
+                        .requestMatchers("/api/pensum/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
+                        // HU-058: bitácora, solo el administrador. El controlador solo expone GET;
+                        // cualquier otro método responde 405 (criterio 4).
+                        .requestMatchers("/api/bitacora", "/api/bitacora/**").hasAnyAuthority(ADMIN)
+
+                        // Mis cursos: solo el docente consulta los suyos (antes de /api/carga/**)
+                        .requestMatchers(HttpMethod.GET, "/api/carga/mis-cursos").hasAnyAuthority(DOCENTE)
+
+                        // Carga académica docente: consulta para admin y coordinador
+                        .requestMatchers(HttpMethod.GET, "/api/carga/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
+                        // Coordinadores y administradores pueden asignar docentes a cursos programados:
+                        .requestMatchers(HttpMethod.PATCH, "/api/programacion/cursos/*/docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.POST, "/api/programacion/asignar-docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        // HU-059: cupos de estudiantes
+                        .requestMatchers(HttpMethod.PATCH, "/api/programacion/cupos").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.POST, "/api/programacion/electivas").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.PATCH, "/api/programacion/electivas/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.DELETE, "/api/programacion/electivas/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+
+                        // 5. Creaciones y modificaciones: exclusivo Administrador
+                        .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority(ADMIN)
+                        .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority(ADMIN)
+
+                        // 6. Cualquier otra petición a la API: exclusivo Administrador
+                        .requestMatchers("/api/**").hasAnyAuthority(ADMIN)
+                        .anyRequest().authenticated())
+                .oauth2ResourceServer(oauth -> oauth
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
+                        .authenticationEntryPoint((req, res, ex) -> escribirError(res, 401,
+                                "Sesión no válida o expirada"))
+                        .accessDeniedHandler((req, res, ex) -> escribirError(res, 403,
+                                "No tiene permisos para esta acción")));
+
+        return http.build();
+    }
+
+    @Bean
+    public SecretKey jwtSecretKey() {
+        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("JWT_SECRET debe tener al menos 32 bytes (256 bits)");
         }
+        return new SecretKeySpec(keyBytes, "HmacSHA256");
+    }
 
-        @Bean
-        public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-                JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
-                authoritiesConverter.setAuthoritiesClaimName("authorities");
-                authoritiesConverter.setAuthorityPrefix("");
+    @Bean
+    public JwtEncoder jwtEncoder(SecretKey jwtSecretKey) {
+        return new NimbusJwtEncoder(new ImmutableSecret<>(jwtSecretKey));
+    }
 
-                JwtAuthenticationConverter authenticationConverter = new JwtAuthenticationConverter();
-                authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
+    @Bean
+    public JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
+        return NimbusJwtDecoder.withSecretKey(jwtSecretKey).macAlgorithm(MacAlgorithm.HS256).build();
+    }
 
-                http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                                .csrf(csrf -> csrf.disable())
-                                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                                .authorizeHttpRequests(auth -> auth
-                                                // Rutas públicas: autenticación, Swagger y health
-                                                .requestMatchers("/api/auth/**", "/swagger-ui/**", "/swagger-ui.html",
-                                                                "/v3/api-docs/**", "/actuator/health", "/error")
-                                                .permitAll()
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration configuration = new CorsConfiguration();
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim).toList();
+        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowCredentials(true);
 
-                                                // Perfiles propios: el coordinador consulta solo su perfil de
-                                                // coordinador.
-                                                // Aunque también tenga fila en docentes, no obtiene el endpoint
-                                                // /docentes/me.
-                                                // Estas reglas deben ir antes del GET general de /api/docentes/**.
-                                                .requestMatchers("/api/docentes/me", "/api/docentes/me/**")
-                                                .hasAnyAuthority(ADMIN_Y_DOCENTE)
-                                                .requestMatchers(HttpMethod.GET, "/api/coordinadores/me")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-
-                                                // Otros métodos sobre el perfil propio (p. ej. PUT): según el rol
-                                                .requestMatchers("/api/coordinadores/me")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                                                // 1. Módulo Plantilla (Docentes y Coordinadores): exclusivo
-                                                // Administrador
-                                                .requestMatchers("/api/coordinadores/**").hasAnyAuthority(ADMIN)
-                                                // El coordinador solo necesita el catálogo de candidatos y sus
-                                                // evaluaciones
-                                                // anteriores para la asignación. Las rutas de perfil/evaluación
-                                                // individual
-                                                // quedan reservadas a administración o al propio rol docente.
-                                                .requestMatchers(HttpMethod.GET, "/api/docentes",
-                                                                "/api/docentes/evaluaciones")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                                                .requestMatchers(HttpMethod.GET, "/api/docentes/*/evaluaciones")
-                                                .hasAnyAuthority(ADMIN)
-                                                .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
-
-                                                // 2. Períodos: los tres roles consultan; solo el administrador modifica
-                                                .requestMatchers(HttpMethod.GET, "/api/periodos", "/api/periodos/**")
-                                                .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR",
-                                                                "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
-                                                .requestMatchers("/api/periodos/**").hasAnyAuthority(ADMIN)
-
-                                                // Rutas administrativas de disponibilidad:
-                                                .requestMatchers(HttpMethod.GET,
-                                                                "/api/admin/docentes/*/disponibilidades")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                                                .requestMatchers(HttpMethod.GET, "/api/disponibilidades/periodo/*")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                                                .requestMatchers("/api/admin/**").hasAnyAuthority(ADMIN)
-
-                                                // 3. Disponibilidad docente: docentes (autoservicio /me)
-                                                .requestMatchers(HttpMethod.GET, "/api/disponibilidades/**")
-                                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
-                                                .requestMatchers(HttpMethod.POST, "/api/disponibilidades/**")
-                                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
-                                                .requestMatchers(HttpMethod.PUT, "/api/disponibilidades/**")
-                                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
-                                                .requestMatchers(HttpMethod.DELETE, "/api/disponibilidades/**")
-                                                .hasAnyAuthority("ROLE_DOCENTE", "DOCENTE")
-
-                                                // 4. Asignaturas, mallas, programas, catálogos, cohortes y
-                                                // programación:
-                                                // Coordinadores solo pueden consultar (GET)
-                                                .requestMatchers(HttpMethod.GET, "/api/asignaturas/**",
-                                                                "/api/pensum/**",
-                                                                "/api/programas/**", "/api/catalogos/**",
-                                                                "/api/cohortes/**", "/api/programacion/**")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-
-                                                // Facultades: Administradores, Coordinadores y Docentes pueden
-                                                // consultar
-                                                .requestMatchers(HttpMethod.GET, "/api/facultades",
-                                                                "/api/facultades/**")
-                                                .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR",
-                                                                "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
-
-                                                // Coordinadores conservan acceso operativo a las mallas curriculares.
-                                                .requestMatchers("/api/pensum/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
-
-                                                // HU-058: bitácora, solo el administrador. El controlador solo expone
-                                                // GET;
-                                                // cualquier otro método responde 405 (criterio 4).
-                                                .requestMatchers("/api/bitacora", "/api/bitacora/**")
-                                                .hasAnyAuthority(ADMIN)
-
-                                                // Mis cursos: solo el docente consulta los suyos (antes de
-                                                // /api/carga/**)
-                                                .requestMatchers(HttpMethod.GET, "/api/carga/mis-cursos")
-                                                .hasAnyAuthority(DOCENTE)
-
-                                                // Carga académica docente: consulta para admin y coordinador
-                                                .requestMatchers(HttpMethod.GET, "/api/carga/**")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-
-                                                // Coordinadores y administradores pueden asignar docentes a cursos
-                                                // programados:
-                                                .requestMatchers(HttpMethod.PATCH, "/api/programacion/cursos/*/docente")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                                                .requestMatchers(HttpMethod.POST, "/api/programacion/asignar-docente")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-                                                // HU-059: cupos de estudiantes
-                                                .requestMatchers(HttpMethod.PATCH, "/api/programacion/cupos")
-                                                .hasAnyAuthority(ADMIN_Y_COORDINADOR)
-
-                                                // 5. Creaciones y modificaciones: exclusivo Administrador
-                                                .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
-                                                .requestMatchers(HttpMethod.PUT, "/api/**").hasAnyAuthority(ADMIN)
-                                                .requestMatchers(HttpMethod.PATCH, "/api/**").hasAnyAuthority(ADMIN)
-                                                .requestMatchers(HttpMethod.DELETE, "/api/**").hasAnyAuthority(ADMIN)
-
-                                                // 6. Cualquier otra petición a la API: exclusivo Administrador
-                                                .requestMatchers("/api/**").hasAnyAuthority(ADMIN)
-                                                .anyRequest().authenticated())
-                                .oauth2ResourceServer(oauth -> oauth
-                                                .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
-                                                .authenticationEntryPoint((req, res, ex) -> escribirError(res, 401,
-                                                                "Sesión no válida o expirada"))
-                                                .accessDeniedHandler((req, res, ex) -> escribirError(res, 403,
-                                                                "No tiene permisos para esta acción")));
-
-                return http.build();
-        }
-
-        @Bean
-        public SecretKey jwtSecretKey() {
-                byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-                if (keyBytes.length < 32) {
-                        throw new IllegalStateException("JWT_SECRET debe tener al menos 32 bytes (256 bits)");
-                }
-                return new SecretKeySpec(keyBytes, "HmacSHA256");
-        }
-
-        @Bean
-        public JwtEncoder jwtEncoder(SecretKey jwtSecretKey) {
-                return new NimbusJwtEncoder(new ImmutableSecret<>(jwtSecretKey));
-        }
-
-        @Bean
-        public JwtDecoder jwtDecoder(SecretKey jwtSecretKey) {
-                return NimbusJwtDecoder.withSecretKey(jwtSecretKey).macAlgorithm(MacAlgorithm.HS256).build();
-        }
-
-        @Bean
-        public CorsConfigurationSource corsConfigurationSource() {
-                CorsConfiguration configuration = new CorsConfiguration();
-                List<String> origins = Arrays.stream(allowedOrigins.split(","))
-                                .map(String::trim).toList();
-                configuration.setAllowedOrigins(origins);
-                configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-                configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-                configuration.setAllowCredentials(true);
-
-                UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-                source.registerCorsConfiguration("/**", configuration);
-                return source;
-        }
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
 }
