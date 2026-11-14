@@ -15,6 +15,15 @@ public interface DocenteAsignaturaRepository extends JpaRepository<DocenteAsigna
     Optional<DocenteAsignatura> findByDocenteIdAndAsignaturaCodeCourseAndFacultadId(
             Long docenteId, String codeCourse, Integer idFacultad);
 
+    boolean existsByDocenteIdAndAsignaturaCodeCourseAndFacultadId(
+            Long docenteId, String codeCourse, Integer idFacultad);
+
+    @Query("SELECT da FROM DocenteAsignatura da " +
+            "JOIN FETCH da.docente " +
+            "JOIN FETCH da.asignatura " +
+            "JOIN FETCH da.facultad")
+    List<DocenteAsignatura> findAllWithDetails();
+
     @Query("SELECT da FROM DocenteAsignatura da " +
             "JOIN FETCH da.docente d " +
             "JOIN FETCH da.asignatura a " +

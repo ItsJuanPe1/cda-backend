@@ -1,6 +1,7 @@
 package co.edu.univalle.palmira.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -17,8 +18,17 @@ public class AsignaturaDto {
             @JsonProperty("es_basica") Boolean esBasica,
             String facultad,
             @JsonProperty("id_facultad") Integer idFacultad,
-            Boolean activo
-    ) {}
+            Boolean activo,
+            @JsonProperty("horas_semanales") Integer horasSemanales
+    ) {
+        // Compatibilidad con quien construye la respuesta sin horas
+        public Response(String codeCourse, String nameCourse, Integer credits, Boolean isElective,
+                        Boolean esComplementaria, Boolean esBasica, String facultad,
+                        Integer idFacultad, Boolean activo) {
+            this(codeCourse, nameCourse, credits, isElective, esComplementaria, esBasica,
+                    facultad, idFacultad, activo, null);
+        }
+    }
 
     public record CreateRequest(
             @JsonProperty("code_course")
@@ -47,8 +57,19 @@ public class AsignaturaDto {
             String facultad,
 
             @JsonProperty("id_facultad")
-            Integer idFacultad
-    ) {}
+            Integer idFacultad,
+
+            @JsonProperty("horas_semanales")
+            @Min(value = 1, message = "Las horas semanales deben estar entre 1 y 20")
+            @Max(value = 20, message = "Las horas semanales deben estar entre 1 y 20")
+            Integer horasSemanales
+    ) {
+        public CreateRequest(String codeCourse, String nameCourse, Integer credits, Boolean isElective,
+                             Boolean esComplementaria, Boolean esBasica, String facultad, Integer idFacultad) {
+            this(codeCourse, nameCourse, credits, isElective, esComplementaria, esBasica,
+                    facultad, idFacultad, null);
+        }
+    }
 
     public record UpdateRequest(
             @JsonProperty("name_course")
@@ -72,6 +93,16 @@ public class AsignaturaDto {
             @JsonProperty("id_facultad")
             Integer idFacultad,
 
-            Boolean activo
-    ) {}
+            Boolean activo,
+
+            @JsonProperty("horas_semanales")
+            @Min(value = 1, message = "Las horas semanales deben estar entre 1 y 20")
+            @Max(value = 20, message = "Las horas semanales deben estar entre 1 y 20")
+            Integer horasSemanales
+    ) {
+        public UpdateRequest(String nameCourse, Integer credits, Boolean isElective, Boolean esComplementaria,
+                             Boolean esBasica, String facultad, Integer idFacultad, Boolean activo) {
+            this(nameCourse, credits, isElective, esComplementaria, esBasica, facultad, idFacultad, activo, null);
+        }
+    }
 }

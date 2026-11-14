@@ -3,6 +3,7 @@ package co.edu.univalle.palmira.service;
 import co.edu.univalle.palmira.dto.DisponibilidadDocenteDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
+import co.edu.univalle.palmira.model.entity.AccesoExtraordinarioDocente;
 import co.edu.univalle.palmira.model.entity.DisponibilidadDocente;
 import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
@@ -13,10 +14,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -24,9 +27,19 @@ public class DisponibilidadDocenteService {
     private final DisponibilidadDocenteRepository disponibilidadRepository;
     private final PeriodoAcademicoRepository periodoRepository;
     private final DocenteRepository docenteRepository;
+    private final AccesoExtraordinarioService accesoExtraordinarioService;
 
     private static final LocalTime HORA_MINIMA = LocalTime.of(7, 0);
     private static final LocalTime HORA_MAXIMA = LocalTime.of(21, 0);
+
+    // Prueba de usabilidad (2026-11-10): cada intervalo dura mínimo 1 hora y el
+    // sábado no se registra disponibilidad de 19:00 a 21:00 (HU-007 y HU-051).
+    static final int DURACION_MINIMA_MINUTOS = 60;
+    static final int SABADO = 6;
+    static final LocalTime SABADO_HORA_MAXIMA = LocalTime.of(19, 0);
+    static final String MENSAJE_FUERA_DE_RANGO = "Hora fuera del rango permitido";
+    static final String MENSAJE_MINIMO_UNA_HORA =
+            "No se puede seleccionar 30 minutos, el registro mínimo es 1 hora";
 
     /**
      * Consulta la disponibilidad del docente asociado al correo autenticado.
@@ -99,13 +112,24 @@ public class DisponibilidadDocenteService {
         }
 
         List<DisponibilidadDocenteDto.Item> horarios = listar(docente.getId(), periodo.getId());
-        boolean abierto = estaEnPlazo(periodo, Instant.now());
+        Instant ahora = Instant.now();
+        if (estaEnPlazo(periodo, ahora)) {
+            return new DisponibilidadDocenteDto.Response(
+                    "HABILITADO", "Registrar disponibilidad", horarios,
+                    periodo.getPlazoDocenteInicio(), periodo.getPlazoDocenteFin());
+        }
+        // Ventana general cerrada: puede estar habilitado por un acceso extraordinario del administrador.
+        Optional<AccesoExtraordinarioDocente> extraordinario =
+                accesoExtraordinarioService.vigente(docente.getId(), ahora);
+        if (extraordinario.isPresent()) {
+            return new DisponibilidadDocenteDto.Response(
+                    "HABILITADO", "Acceso extraordinario habilitado", horarios,
+                    periodo.getPlazoDocenteInicio(), periodo.getPlazoDocenteFin(),
+                    extraordinario.get().getFechaFin());
+        }
         return new DisponibilidadDocenteDto.Response(
-                abierto ? "HABILITADO" : "FUERA_DE_PLAZO",
-                abierto ? "Registrar disponibilidad" : "Fuera del período habilitado",
-                horarios,
-                periodo.getPlazoDocenteInicio(),
-                periodo.getPlazoDocenteFin());
+                "FUERA_DE_PLAZO", "Fuera del período habilitado", horarios,
+                periodo.getPlazoDocenteInicio(), periodo.getPlazoDocenteFin());
     }
 
     private DisponibilidadDocenteDto.Item registrarParaDocente(
@@ -114,7 +138,7 @@ public class DisponibilidadDocenteService {
                 .filter(this::esPeriodoActivo)
                 .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
 
-        if (!estaEnPlazo(periodo, Instant.now())) {
+        if (!estaHabilitado(periodo, docente, Instant.now())) {
             throw new BadRequestException("Fuera del período habilitado");
         }
 
@@ -145,7 +169,7 @@ public class DisponibilidadDocenteService {
                 .filter(this::esPeriodoActivo)
                 .orElseThrow(() -> new BadRequestException("No hay un período académico vigente"));
 
-        if (!estaEnPlazo(periodo, Instant.now())) {
+        if (!estaHabilitado(periodo, docente, Instant.now())) {
             throw new BadRequestException("Fuera del período habilitado");
         }
 
@@ -222,6 +246,12 @@ public class DisponibilidadDocenteService {
         return true;
     }
 
+    /** Ventana general del período, o un acceso extraordinario vigente de este docente. */
+    private boolean estaHabilitado(PeriodoAcademico periodo, Docente docente, Instant ahora) {
+        return estaEnPlazo(periodo, ahora)
+                || accesoExtraordinarioService.vigente(docente.getId(), ahora).isPresent();
+    }
+
     private boolean estaEnPlazo(PeriodoAcademico periodo, Instant ahora) {
         if (periodo.getPlazoDocenteInicio() == null || periodo.getPlazoDocenteFin() == null) {
             return false;
@@ -243,6 +273,14 @@ public class DisponibilidadDocenteService {
         }
         if (request.horaInicio().isBefore(HORA_MINIMA) || request.horaFin().isAfter(HORA_MAXIMA)) {
             throw new BadRequestException("El horario debe estar entre las 07:00 y las 21:00");
+        }
+        // Prueba de usabilidad (2026-11-10): van después del rango general para
+        // conservar su mensaje cuando el horario se sale de 07:00 a 21:00.
+        if (request.dia() == SABADO && request.horaFin().isAfter(SABADO_HORA_MAXIMA)) {
+            throw new BadRequestException(MENSAJE_FUERA_DE_RANGO);
+        }
+        if (Duration.between(request.horaInicio(), request.horaFin()).toMinutes() < DURACION_MINIMA_MINUTOS) {
+            throw new BadRequestException(MENSAJE_MINIMO_UNA_HORA);
         }
     }
 

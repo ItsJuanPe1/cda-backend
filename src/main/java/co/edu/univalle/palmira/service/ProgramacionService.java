@@ -1,5 +1,6 @@
 package co.edu.univalle.palmira.service;
 
+import co.edu.univalle.palmira.config.CuposProperties;
 import co.edu.univalle.palmira.dto.ProgramacionDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ConflictException;
@@ -31,10 +32,25 @@ public class ProgramacionService {
     public static final String MSG_YA_EXCLUIDO = "El curso ya está excluido";
     public static final String MSG_NO_EXCLUIDO = "El curso no está excluido";
 
+    // Carga docente
+    public static final String MSG_ASIGNATURA_SIN_HORAS =
+            "La asignatura no tiene horas semanales definidas; defínalas antes de asignar docente";
+    public static final String MSG_CURSO_NO_PROGRAMADO =
+            "La asignatura no está programada en este período para el programa";
+
     // HU-047 criterio 4: motivos de «Requiere revisión»
     public static final String REVISION_FUERA_DE_MALLA = "La asignatura ya no está en la malla del programa";
     public static final String REVISION_ASIGNATURA_INACTIVA = "La asignatura está inactiva en el catálogo";
     public static final String REVISION_SIN_COHORTE = "La cohorte ya no está confirmada en el periodo";
+
+    // HU-059: mensajes
+    public static final String MSG_CUPO_INVALIDO = "Debe ingresar un número de cupos válido";
+    public static final String MSG_CUPO_EXCEDE_MAX = "El número de cupos no puede superar el máximo permitido (%d)";
+    public static final String MSG_CUPO_EXCLUIDO = "No se pueden asignar cupos a un curso excluido";
+    public static final String MSG_PLAZO_CERRADO = "El plazo de edición ya cerró";
+    public static final String MSG_CUPOS_GUARDADOS = "Cupos de estudiantes registrados correctamente";
+    public static final String MSG_CUPOS_SIN_DATOS = "No se recibieron cupos para actualizar";
+    public static final String MSG_CURSO_OTRO_PERIODO = "El curso no pertenece al período indicado";
 
     static final int MAX_JUSTIFICACION = 500;
     static final String ENTIDAD_CURSO = "CURSO";
@@ -47,7 +63,11 @@ public class ProgramacionService {
     private final DocenteAsignaturaService docenteAsignaturaService;
     private final BitacoraService bitacoraService;
     private final DocenteRepository docenteRepository;
+    private final DisponibilidadDocenteRepository disponibilidadDocenteRepository;
     private final AsignaturaRepository asignaturaRepository;
+    private final AccesoProgramaService accesoProgramaService;
+    private final CargaDocenteService cargaDocenteService;
+    private final CuposProperties cuposProperties;
 
     /** Curso que corresponde según las cohortes confirmadas y la malla. */
     private record CursoOfertado(CohortePeriodo cohorte, PensumAcademico pensum) {
@@ -303,6 +323,129 @@ public class ProgramacionService {
         return construirAjuste(objetivo, cursos, antes, despues, excluidos);
     }
 
+    /** HU-059: parámetros de edición para el frontend. El administrador siempre puede editar. */
+    @Transactional(readOnly = true)
+    public ProgramacionDto.CuposConfigResponse obtenerConfiguracionCupos(Long periodoId) {
+        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+        AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+        boolean plazoAbierto = plazoCoordinadorAbierto(periodo);
+        return ProgramacionDto.CuposConfigResponse.builder()
+                .maxPorGrupo(cuposProperties.getMaxPorGrupo())
+                .plazoAbierto(plazoAbierto)
+                .puedeEditar(alcance.admin() || plazoAbierto)
+                .admin(alcance.admin())
+                .build();
+    }
+
+    /**
+     * HU-059: registra los cupos de los cursos activos. El coordinador solo edita su programa y
+     * dentro del plazo; el administrador siempre puede. Cada cambio queda en la bitácora.
+     */
+    @Transactional
+    public ProgramacionDto.ActualizarCuposResponse actualizarCupos(ProgramacionDto.ActualizarCuposRequest request) {
+        if (request == null || request.periodoId() == null) {
+            throw new BadRequestException(MSG_CUPOS_SIN_DATOS);
+        }
+        if (request.cursos() == null || request.cursos().isEmpty()) {
+            throw new BadRequestException(MSG_CUPOS_SIN_DATOS);
+        }
+
+        Long periodoId = request.periodoId();
+        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+        AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+
+        if (!alcance.admin() && !plazoCoordinadorAbierto(periodo)) {
+            throw new ConflictException(MSG_PLAZO_CERRADO);
+        }
+
+        Map<Long, Integer> cuposSolicitados = new LinkedHashMap<>();
+        for (ProgramacionDto.CupoItemRequest item : request.cursos()) {
+            if (item == null || item.cursoId() == null) {
+                throw new BadRequestException(MSG_CUPO_INVALIDO);
+            }
+            validarCupo(item.cupos());
+            cuposSolicitados.put(item.cursoId(), item.cupos());
+        }
+
+        // Una sola consulta para todos los cursos enviados; evita el N+1 al guardar fila por fila.
+        List<CursoProgramacion> encontrados = cursoRepository
+                .findAllByIdWithDetails(new ArrayList<>(cuposSolicitados.keySet()));
+        Map<Long, CursoProgramacion> cursos = new LinkedHashMap<>();
+        for (CursoProgramacion curso : encontrados) {
+            cursos.put(curso.getId(), curso);
+        }
+
+        for (Long cursoId : cuposSolicitados.keySet()) {
+            CursoProgramacion curso = cursos.get(cursoId);
+            if (curso == null) {
+                throw new ResourceNotFoundException(MSG_CURSO_NO_ENCONTRADO);
+            }
+            if (!curso.getPeriodo().getId().equals(periodoId)) {
+                throw new BadRequestException(MSG_CURSO_OTRO_PERIODO);
+            }
+            if (!alcance.admin()) {
+                accesoProgramaService.exigirProgramaPropio(curso.getPrograma().getCodeProgram());
+            }
+            if (curso.isExcluido()) {
+                throw new BadRequestException(MSG_CUPO_EXCLUIDO);
+            }
+        }
+
+        for (Map.Entry<Long, Integer> entrada : cuposSolicitados.entrySet()) {
+            CursoProgramacion curso = cursos.get(entrada.getKey());
+            Integer anteriorCupos = curso.getCupos();
+            Integer nuevoCupos = entrada.getValue();
+            if (Objects.equals(anteriorCupos, nuevoCupos)) {
+                continue;
+            }
+            Map<String, Object> anterior = new LinkedHashMap<>();
+            anterior.put("codigoCurso", codigoCurso(curso));
+            anterior.put("cupos", anteriorCupos);
+            Map<String, Object> nuevo = new LinkedHashMap<>();
+            nuevo.put("codigoCurso", codigoCurso(curso));
+            nuevo.put("cupos", nuevoCupos);
+            curso.setCupos(nuevoCupos);
+            bitacoraService.registrar(AccionBitacora.EDITAR, ENTIDAD_CURSO, String.valueOf(curso.getId()),
+                    periodoId, anterior, nuevo);
+        }
+
+        cursoRepository.saveAll(cursos.values());
+
+        List<ProgramacionDto.CursoResponse> respuesta = cursos.values().stream()
+                .map(c -> toResponse(c, null))
+                .toList();
+        return new ProgramacionDto.ActualizarCuposResponse(respuesta, MSG_CUPOS_GUARDADOS);
+    }
+
+    private void validarCupo(Integer cupos) {
+        if (cupos == null || cupos <= 0) {
+            throw new BadRequestException(MSG_CUPO_INVALIDO);
+        }
+        if (cupos > cuposProperties.getMaxPorGrupo()) {
+            throw new BadRequestException(String.format(MSG_CUPO_EXCEDE_MAX, cuposProperties.getMaxPorGrupo()));
+        }
+    }
+
+    private static boolean plazoCoordinadorAbierto(PeriodoAcademico periodo) {
+        if (periodo == null || periodo.getPlazoCoordinadorInicio() == null
+                || periodo.getPlazoCoordinadorFin() == null) {
+            return false;
+        }
+        Instant ahora = Instant.now();
+        return !ahora.isBefore(periodo.getPlazoCoordinadorInicio())
+                && !ahora.isAfter(periodo.getPlazoCoordinadorFin());
+    }
+
+    /** El administrador siempre puede; el coordinador respeta el plazo del período. */
+    private void exigirPlazoCoordinadorAbierto(PeriodoAcademico periodo) {
+        AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+        if (!alcance.admin() && !plazoCoordinadorAbierto(periodo)) {
+            throw new ConflictException(MSG_PLAZO_CERRADO);
+        }
+    }
+
     // ------------------------------------------------------------------ apoyo
 
     private static String clave(String codeProgram, String codeCourse, Jornada jornada) {
@@ -432,8 +575,8 @@ public class ProgramacionService {
     }
 
     private ProgramacionDto.AjusteGruposResponse construirAjuste(CursoProgramacion curso, List<CursoProgramacion> cursos,
-                                                                Map<Long, Integer> antes, Map<Long, Integer> despues,
-                                                                Set<Long> excluidos) {
+                                                                 Map<Long, Integer> antes, Map<Long, Integer> despues,
+                                                                 Set<Long> excluidos) {
         List<ProgramacionDto.GrupoCambio> cambios = cursos.stream()
                 .map(c -> ProgramacionDto.GrupoCambio.builder()
                         .id(c.getId())
@@ -520,26 +663,74 @@ public class ProgramacionService {
     }
 
     @Transactional
-    public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente) {
+    public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
+                                                        boolean reemplazarDocente) {
         CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado con id " + cursoId));
+
+        // El coordinador solo asigna en su programa y dentro del plazo configurado.
+        accesoProgramaService.exigirProgramaPropio(curso.getPrograma().getCodeProgram());
+        exigirPlazoCoordinadorAbierto(curso.getPeriodo());
 
         if (curso.isExcluido()) {
             throw new BadRequestException("No se puede asignar un docente a un curso excluido");
         }
 
+        Docente docenteAnterior = curso.getDocente();
         if (idDocente != null) {
-            Docente docente = docenteRepository.findById(idDocente)
+            if (docenteAnterior != null && !docenteAnterior.getId().equals(idDocente)
+                    && !reemplazarDocente) {
+                throw new ConflictException(
+                        "El curso ya tiene un docente asignado. Confirme si desea reemplazarlo.");
+            }
+            // Bloquea la fila del docente: dos asignaciones simultáneas no pueden pasar de 20 h
+            Docente docente = docenteRepository.findByIdForUpdate(idDocente)
                     .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + idDocente));
             if (Boolean.FALSE.equals(docente.getEstado())) {
                 throw new BadRequestException("El docente seleccionado está inactivo");
             }
+            Integer horas = curso.getAsignatura().getHorasSemanales();
+            if (horas == null) {
+                throw new BadRequestException(MSG_ASIGNATURA_SIN_HORAS);
+            }
+
+            // HU-013: la disponibilidad semanal se consume por las asignaciones vigentes
+            // de TODO el período, sin comparar días ni construir horarios de clase.
+            // Se excluye el curso actual para permitir guardar sin descontarlo dos veces.
+            List<DisponibilidadDocente> franjas = disponibilidadDocenteRepository
+                    .findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(
+                            idDocente, curso.getPeriodo().getId());
+            if (franjas.isEmpty()) {
+                throw new BadRequestException(
+                        "El docente seleccionado no tiene disponibilidad horaria registrada para este período");
+            }
+            long minutosDisponibles = franjas.stream()
+                    .filter(f -> f.getHoraInicio() != null && f.getHoraFin() != null)
+                    .mapToLong(f -> java.time.Duration.between(f.getHoraInicio(), f.getHoraFin()).toMinutes())
+                    .filter(m -> m > 0)
+                    .sum();
+            long horasYaAsignadas = cursoRepository.sumarHorasExcluyendo(
+                    idDocente, curso.getPeriodo().getId(), curso.getId());
+            long minutosRestantes = minutosDisponibles - horasYaAsignadas * 60L;
+            if (minutosRestantes < horas * 60L) {
+                throw new ConflictException(String.format(
+                        "El docente tiene %.2f h disponibles, %d h ya asignadas y necesita %d h para esta materia",
+                        minutosDisponibles / 60.0, horasYaAsignadas, horas));
+            }
+
+            // La carga se valida para cualquier fila de docentes.id, sin importar el rol en usuarios.
+            cargaDocenteService.validar(idDocente, curso.getPeriodo().getId(), curso.getId(), horas);
+
             curso.setDocente(docente);
             curso.setEstado(CursoProgramacion.ESTADO_ASIGNADO);
 
-            try {
-                docenteAsignaturaService.registrarDesdeCursos(List.of(curso));
-            } catch (Exception ignored) {}
+            docenteAsignaturaService.registrarDesdeCursos(List.of(curso));
+            if (docenteAnterior != null && !docenteAnterior.getId().equals(idDocente)
+                    && cursoRepository.countActivosByPeriodoAsignaturaDocenteExcludingCurso(
+                    curso.getPeriodo().getId(), curso.getAsignatura().getCodeCourse(),
+                    docenteAnterior.getId(), curso.getId()) == 0) {
+                docenteAsignaturaService.desactivarAsociacion(docenteAnterior, curso);
+            }
         } else {
             curso.setDocente(null);
             curso.setEstado(CursoProgramacion.ESTADO_PROGRAMADO);
@@ -551,47 +742,29 @@ public class ProgramacionService {
 
     @Transactional
     public ProgramacionDto.CursoResponse asignarDocentePorMateria(
-            Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente) {
-        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
-                .orElseThrow(() -> new ResourceNotFoundException("Período no encontrado"));
-        Programa programa = programaRepository.findById(codeProgram)
-                .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código " + codeProgram));
-        Asignatura asignatura = asignaturaRepository.findById(codeCourse)
-                .orElseThrow(() -> new ResourceNotFoundException("Asignatura no encontrada con código " + codeCourse));
+            Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente,
+            boolean reemplazarDocente) {
+        // El coordinador solo asigna en su programa (antes de tocar nada)
+        accesoProgramaService.exigirProgramaPropio(codeProgram);
 
-        List<CursoProgramacion> existentes = cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse);
-        CursoProgramacion curso = existentes.stream()
-                .filter(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram) && !c.isExcluido())
-                .findFirst()
-                .orElse(null);
-
-        if (curso == null) {
-            int grupo = existentes.isEmpty()
-                    ? CursoProgramacion.GRUPO_INICIAL
-                    : (existentes.size() + CursoProgramacion.GRUPO_INICIAL);
-
-            String resolucion = pensumRepository.findByCodeProgramWithDetails(codeProgram).stream()
-                    .filter(p -> p.getPrograma() != null)
-                    .findFirst()
-                    .map(p -> programa.getCodeProgram())
-                    .orElse("VIGENTE");
-
-            curso = CursoProgramacion.builder()
-                    .periodo(periodo)
-                    .programa(programa)
-                    .asignatura(asignatura)
-                    .semestre(semestre != null ? semestre : 1)
-                    .jornada(programa.getJornada() != null ? programa.getJornada() : Jornada.DIURNA)
-                    .numeroResolucion(resolucion)
-                    .grupo(grupo)
-                    .credits(asignatura.getCredits() != null ? asignatura.getCredits() : 0)
-                    .nombreAsignatura(asignatura.getNameCourse())
-                    .estado(CursoProgramacion.ESTADO_PROGRAMADO)
-                    .build();
-            curso = cursoRepository.save(curso);
+        if (!periodoRepository.existsById(periodoId)) {
+            throw new ResourceNotFoundException("Período no encontrado");
+        }
+        if (!programaRepository.existsById(codeProgram)) {
+            throw new ResourceNotFoundException("Programa no encontrado con código " + codeProgram);
+        }
+        if (!asignaturaRepository.existsById(codeCourse)) {
+            throw new ResourceNotFoundException("Asignatura no encontrada con código " + codeCourse);
         }
 
-        return asignarDocente(curso.getId(), idDocente);
+        // Solo se asigna docente a cursos ya generados desde la malla; este método no crea cursos.
+        // (semestre se conserva en la firma por compatibilidad con el endpoint.)
+        CursoProgramacion curso = cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
+                .filter(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram) && !c.isExcluido())
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_CURSO_NO_PROGRAMADO));
+
+        return asignarDocente(curso.getId(), idDocente, reemplazarDocente);
     }
 
     private ProgramacionDto.CursoResponse toResponse(CursoProgramacion c, String motivoRevision) {
@@ -610,10 +783,12 @@ public class ProgramacionService {
                 .codeCourse(c.getAsignatura().getCodeCourse())
                 .nombreAsignatura(c.getNombreAsignatura())
                 .credits(c.getCredits())
+                .horasSemanales(c.getAsignatura().getHorasSemanales())
                 .semestre(c.getSemestre())
                 .jornada(c.getJornada())
                 .numeroResolucion(c.getNumeroResolucion())
                 .grupo(c.getGrupo())
+                .cupos(c.getCupos())
                 .idDocente(idDocente)
                 .nombreDocente(nombreDocente)
                 .estado(c.getEstado())

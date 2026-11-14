@@ -10,6 +10,9 @@ import java.util.List;
 public interface DisponibilidadDocenteRepository extends JpaRepository<DisponibilidadDocente, Long> {
     List<DisponibilidadDocente> findAllByPeriodoIdOrderByDiaAscHoraInicioAsc(Long periodoId);
 
+    /** HU-013: un docente solo es elegible si registró al menos una franja en el período. */
+    boolean existsByDocenteIdAndPeriodoId(Long docenteId, Long periodoId);
+
     List<DisponibilidadDocente> findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(
             Long docenteId, Long periodoId);
 

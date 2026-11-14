@@ -21,9 +21,16 @@ public final class DisponibilidadDocenteDto {
             String mensaje,
             List<Item> horarios,
             Instant plazoDocenteInicio,
-            Instant plazoDocenteFin) {
+            Instant plazoDocenteFin,
+            Instant accesoExtraordinarioFin) {
+
         public Response(String estado, String mensaje, List<Item> horarios) {
-            this(estado, mensaje, horarios, null, null);
+            this(estado, mensaje, horarios, null, null, null);
+        }
+
+        public Response(String estado, String mensaje, List<Item> horarios,
+                        Instant plazoDocenteInicio, Instant plazoDocenteFin) {
+            this(estado, mensaje, horarios, plazoDocenteInicio, plazoDocenteFin, null);
         }
     }
 }

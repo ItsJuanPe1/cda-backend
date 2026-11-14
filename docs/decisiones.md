@@ -11,12 +11,12 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   1. Se aprueba la especificación del contrato en `docs/contratos/HU-010.md`.
   2. El endpoint de autenticación `POST /api/auth/google` soporta el parámetro opcional `rolEsperado` (`1`: Admin, `2`: Coordinador, `3`: Docente) y auto-detección si no se especifica.
   3. Para el rol de coordinador (`rol = 2`):
-     - Valida pertenencia al dominio `@correounivalle.edu.co`.
-     - Si el coordinador no existe en `coordinadores`, pero el correo pertenece a otro rol (admin o docente), responde con error 403 y mensaje `"No tiene perfil de coordinador"` (Criterio 3.3).
-     - Si no existe en ninguna tabla, responde con error 403 y mensaje `"Su cuenta no está registrada. Contacte al administrador"` (Criterio 2.2).
-     - Si existe pero está inactivo (`activo = false`), responde con error 403 y mensaje `"Su perfil está desactivado. Contacte al administrador"` (Criterio 2.3).
-     - Si está activo y no tiene programa asignado (`programa == null`), permite el inicio de sesión emitiendo el JWT con rol 2 y mensaje `"Aún no tiene un programa asignado. Contacte al administrador"` (Criterio 3.4).
-     - Si está activo y tiene programa asignado, responde con rol 2, `codeProgram`, `nombrePrograma` y mensaje `"Inicio de sesión exitoso"` (Criterio 1.3).
+    - Valida pertenencia al dominio `@correounivalle.edu.co`.
+    - Si el coordinador no existe en `coordinadores`, pero el correo pertenece a otro rol (admin o docente), responde con error 403 y mensaje `"No tiene perfil de coordinador"` (Criterio 3.3).
+    - Si no existe en ninguna tabla, responde con error 403 y mensaje `"Su cuenta no está registrada. Contacte al administrador"` (Criterio 2.2).
+    - Si existe pero está inactivo (`activo = false`), responde con error 403 y mensaje `"Su perfil está desactivado. Contacte al administrador"` (Criterio 2.3).
+    - Si está activo y no tiene programa asignado (`programa == null`), permite el inicio de sesión emitiendo el JWT con rol 2 y mensaje `"Aún no tiene un programa asignado. Contacte al administrador"` (Criterio 3.4).
+    - Si está activo y tiene programa asignado, responde con rol 2, `codeProgram`, `nombrePrograma` y mensaje `"Inicio de sesión exitoso"` (Criterio 1.3).
   4. Se crea el endpoint `GET /api/coordinadores/me` protegido por Spring Security (`ROLE_COORDINADOR`, `ROLE_ADMIN`) para obtener el perfil del coordinador a partir de su JWT autenticado, eliminando la vulnerabilidad de pasar correos por query param.
 
 
@@ -171,3 +171,173 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   4. Es solo presentación: el curso se sigue identificando como `CÓDIGO-GRUPO` (asignatura + grupo); el backend, los DTO y el contrato `docs/contratos/HU-047.md` no cambian. Las llaves de React, las acciones y las llamadas al API usan el id del curso.
   5. El buscador sigue encontrando por código de asignatura y los filtros por programa, asignatura y jornada no cambian.
   6. Otras pantallas (exportación HU-014, vista del coordinador) no se modifican sin consultar. A la fecha, ninguna otra pantalla del frontend muestra el identificador compuesto.
+
+
+## [2026-11-10] Ajustes de usabilidad en el registro de disponibilidad (HU-007 y HU-051)
+
+* **HU afectadas:** HU-007 (registrar disponibilidad), HU-008 (editar disponibilidad), HU-051 (el administrador registra en nombre del docente).
+* **Origen:** prueba de usabilidad con un docente. Requisitos confirmados por el equipo el 2026-11-10.
+* **Decisión:**
+  1. **R1. Registro mínimo de 1 hora.** La tabla conserva casillas de 30 minutos, pero cada intervalo continuo del mismo día dura mínimo 1 hora (se permiten 1 h, 1 h 30 min, 2 h…). Si el usuario deja un bloque de 30 minutos, se revierte el gesto y se muestra «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora». El backend rechaza con el mismo mensaje (400) cualquier franja de menos de 60 minutos.
+  2. **R2. Sábado sin disponibilidad de 19:00 a 21:00.** Las casillas se muestran bloqueadas («No habilitado»). El backend rechaza con «Hora fuera del rango permitido» (criterio 3.2 de HU-007) toda franja del sábado que termine después de las 19:00. La validación general de 07:00 a 21:00 se evalúa primero y conserva su mensaje.
+  3. **R3. Botón «Seleccionar todo».** Marca todas las horas habilitadas (lunes a sábado de 07:00 a 21:00, excepto el sábado de 19:00 a 21:00) para luego guardar.
+  4. **R4. Confirmación al guardar.** Se muestra «¿Desea guardar esta disponibilidad de horario?». Si se acepta, se guarda y aparece «Disponibilidad horaria registrada exitosamente». Si se cancela, se vuelve a la tabla sin perder lo marcado.
+  5. Las cuatro reglas aplican igual al registro (POST), a la edición completa (PUT, HU-008) y a los flujos del administrador por `docenteId` (HU-051), porque todos usan `validarHorario`. Cuando la edición completa trae una franja inválida, se rechaza antes de borrar lo registrado.
+  6. **Sin cambios en la base de datos.** El contrato de la API no cambia; solo se agregan dos respuestas 400 nuevas.
+  7. Las franjas antiguas que violen las reglas (de 30 minutos, o del sábado después de las 19:00) **no se borran** (RN-13), pero se rechazan si se vuelven a enviar. En la interfaz, un dato antiguo de 30 minutos no bloquea otros cambios; se pide corregirlo al guardar. Al editar, las casillas bloqueadas del sábado se quitan de la selección.
+* **Contradicción con el Excel (no se modifica el Excel ni el CSV):** HU-007 2.5 dice «¿Desea registrar este horario?» y 4.1 dice «Horario registrado». Se usan los textos nuevos de la prueba de usabilidad. Texto propuesto para el Excel:
+  - **2.5.** Dado que el docente completa la información requerida, cuando presione «Guardar disponibilidad», entonces el sistema debe solicitar la confirmación con «¿Desea guardar esta disponibilidad de horario?». Si cancela, vuelve a la tabla de selección sin perder lo marcado.
+  - **2.6. (nuevo)** El sistema debe ofrecer el botón «Seleccionar todo», que marca todas las horas habilitadas (lunes a sábado de 7:00 a. m. a 9:00 p. m., excepto el sábado de 7:00 p. m. a 9:00 p. m.).
+  - **3.5. (nuevo)** Dado que el docente selecciona un intervalo continuo de menos de 1 hora, entonces el sistema debe revertir la selección y mostrar «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora».
+  - **3.6. (nuevo)** Dado que el docente intenta registrar disponibilidad el sábado de 7:00 p. m. a 9:00 p. m., entonces el sistema no debe permitirlo: las casillas aparecen como no habilitadas y, si se envía, se muestra «Hora fuera del rango permitido».
+  - **4.1.** Dado que la disponibilidad fue registrada correctamente, cuando finalice la operación, entonces el sistema debe mostrar «Disponibilidad horaria registrada exitosamente» y el horario debe aparecer en el listado del docente.
+* **Pendiente (no se implementa aquí):** el criterio 2 de HU-051 dice que el administrador registra aunque la ventana esté cerrada, indicando el motivo. Hoy el backend lo impide con `estaEnPlazo` en los flujos por `docenteId`.
+
+
+## [2026-11-10] Celular del docente en «Mi perfil» (HU-015)
+
+* **HU afectadas:** HU-015 (editar mi perfil), HU-022 (ver mi perfil).
+* **Decisión (confirmada por el usuario):**
+  1. Se agrega el **celular** del docente, distinto del teléfono. Lo edita el propio docente desde «Mi perfil», como dato de contacto (RN-08).
+  2. Es **opcional**: si el docente no lo llena, se guarda sin valor (`NULL`).
+  3. Si lo llena: **solo dígitos, de 7 a 10**, igual que el teléfono. Si tiene menos de 7 dígitos, o caracteres que no son dígitos, se muestra «Por favor complete este campo correctamente». El campo del formulario no admite más de 10 dígitos.
+  4. El administrador no lo ve ni lo edita en Plantilla (HU-026/029); no se pidió.
+  5. **Migración V31** (`V31__hu015_celular_docente.sql`), aprobada: agrega `docentes.celular VARCHAR(10)` y la restricción `chk_docentes_celular_digitos` (`celular IS NULL OR celular ~ '^[0-9]{7,10}$'`). No transforma ni borra datos. Probada el 2026-11-10 en un clúster PostgreSQL 17.11 local temporal: V1–V31 aplican (con tablas sustitutas de V9 y V13) y la restricción acepta NULL, 7 y 10 dígitos y rechaza 6 dígitos, letras y 11 dígitos. Aún no se aplica en la base compartida.
+  6. El `PUT /api/docentes/me/contacto` reemplaza todos los datos de contacto: si el cliente omite `celular`, se borra. El frontend lo envía siempre.
+  7. El mensaje se escribe con la primera letra en mayúscula, como los demás mensajes de la aplicación.
+
+
+## [2026-11-10] Segunda ronda de ajustes de usabilidad en disponibilidad (HU-007 y HU-051)
+
+* **HU afectadas:** HU-007 (registrar disponibilidad), HU-008 (editar disponibilidad), HU-051 (el administrador registra en nombre del docente). Se suma a la primera ronda del mismo día.
+* **Origen:** prueba de usabilidad con un docente. Requisitos confirmados por el equipo el 2026-11-10.
+* **Decisión:**
+  1. **R1. «Seleccionar todo» por día.** Cada día (lunes a sábado) tiene su propio botón, que agrega a la selección todas las horas habilitadas de ese día. El sábado va de 7:00 a 19:00, porque de 19:00 a 21:00 sigue bloqueado. No toca los demás días. El botón «Seleccionar todo» general sigue marcando todo el esquema.
+  2. **R2. Sin resaltado al pasar el mouse.** Una casilla sin seleccionar se ve siempre blanca, también con el mouse encima o al tocarla en el celular. Solo la casilla seleccionada se pinta del azul de selección con el check. El contorno de foco con teclado se conserva por accesibilidad.
+  3. **R3. El mínimo de 1 hora se valida al guardar.** El mensaje «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora» deja de aparecer mientras se selecciona: el usuario marca y desmarca libremente. Aparece solo al pulsar «Guardar disponibilidad» o «Guardar cambios» si queda un intervalo de menos de 1 hora; en ese caso no se guarda y la selección queda intacta. **El backend lo sigue exigiendo** (400 con el mismo mensaje en `validarHorario`, sin cambios).
+  4. **R4. Confirmación al limpiar con disponibilidad registrada.** «Limpiar selección» muestra «¿Está seguro de eliminar el registro actual de disponibilidad horaria?». Si se acepta, se eliminan los registros guardados del docente en el periodo y el cambio queda guardado sin pulsar «Guardar». Si se cancela, la pantalla queda como estaba. Sin disponibilidad registrada, limpia las casillas marcadas sin preguntar, como antes.
+  5. **Sin endpoint nuevo.** R4 usa el PUT existente con lista vacía: `PUT /api/disponibilidades/me` (docente) y `PUT /api/admin/docentes/{docenteId}/disponibilidades` (administrador), que llaman a `actualizarTodo` y `actualizarTodoPorDocenteId`. Con `[]` se revisa el plazo docente y, si está abierto, se borran las franjas del periodo vigente sin crear ninguna. Fuera del plazo responde 400 «Fuera del período habilitado» y no borra nada. No hay cambios en controladores, DTO, servicio ni base de datos.
+* **Contradicción pendiente (no se cambia ahora):** ese PUT **borra físicamente** las filas (`deleteAllByDocenteIdAndPeriodoId`), y la RN-13 dice que nada se borra físicamente: se desactiva y se conserva el historial. Ya pasaba en la edición (HU-008); R4 lo hace más visible. Queda por decidir si se cambia a desactivación lógica (lo que probablemente requiere una migración con columna de estado en `disponibilidades_docentes`).
+* **Texto propuesto para el Excel de HU-007 (no se modifica el Excel ni el CSV):**
+  - **2.7. (nuevo)** El sistema debe ofrecer, en cada día del esquema (lunes a sábado), un botón «Seleccionar todo» que marca todas las horas habilitadas de ese día (el sábado, de 7:00 a. m. a 7:00 p. m.), sin modificar la selección de los demás días.
+  - **3.5. (reemplaza el propuesto en la primera ronda)** Dado que el docente deja un intervalo continuo de menos de 1 hora, cuando presione «Guardar disponibilidad» o «Guardar cambios», entonces el sistema no debe guardar y debe mostrar «No se puede seleccionar 30 minutos, el registro mínimo es 1 hora», conservando la selección.
+  - **4.4. (nuevo)** Dado que el docente tiene disponibilidad registrada, cuando presione «Limpiar selección», entonces el sistema debe pedir confirmación con «¿Está seguro de eliminar el registro actual de disponibilidad horaria?». Si acepta, se eliminan los registros y el cambio se guarda sin pulsar «Guardar»; si cancela, la pantalla queda como estaba.
+
+
+## [2026-11-11] Evaluación docente por asignatura y periodo, y reemplazo de docente (HU-060, migración V32)
+
+* **HU afectadas:** HU-060 (consultar docentes asociados, disponibilidad y evaluación), HU-026 y HU-029 (perfil docente), HU-049 (histórico docente-asignatura), HU-012 (editar docentes asignados).
+* **Origen:** implementado por el equipo en `develop` (commit `3111242`, PR #49). Se registra a partir del código; no hay contrato `docs/contratos/HU-060.md` ni ficha `docs/hu/HU-060.md`, y el commit no trae pruebas.
+* **Qué quedó en el código:**
+  1. **Migración V32** (`V32__create_evaluaciones_docentes.sql`): crea `evaluaciones_docentes` (`docente_id`, `code_course`, `periodo_id`, `calificacion NUMERIC(4,2)` entre 0 y 5), con llaves foráneas `ON DELETE RESTRICT` y llave única `(docente_id, code_course, periodo_id)`. Copia `docentes.evaluacion_valor` a cada asignatura y periodo del histórico (`docente_asignatura` con `periodo_id` no nulo). Las evaluaciones de docentes sin periodo en el histórico no se migran. No borra las columnas `docentes.evaluacion_periodo` ni `docentes.evaluacion_valor`.
+  2. La evaluación deja de registrarse en el perfil del docente: crear y editar docente (HU-026 y HU-029) ya no la reciben, y la respuesta del docente devuelve `evaluacionPeriodo` y `evaluacionValor` en `null`.
+  3. **Endpoints nuevos** bajo `/api/docentes`:
+    - `GET /evaluaciones?periodoId&codeCourse` (administrador y coordinador): calificaciones de la asignatura en el **periodo inmediatamente anterior** al indicado (por `fecha_inicio_semestre`).
+    - `GET /{id}/evaluaciones?periodoId` (administrador y coordinador): asignaturas que el docente dictó en el periodo anterior, con su calificación si existe.
+    - `PUT /{id}/evaluacion` (solo administrador): registra o actualiza la calificación de una asignatura que el docente dictó en el periodo anterior. Mensajes: «La asignatura es obligatoria», «La calificación debe estar entre 0 y 5», «No existe un período anterior para registrar la calificación», «El docente no dictó esa asignatura en el período anterior».
+  4. **Reemplazo de docente en un curso:** `PATCH /api/programacion/cursos/{id}/docente` y `POST /api/programacion/asignar-docente` reciben `reemplazarDocente` (booleano). Si el curso ya tiene otro docente y no se confirma, responden 409 «El curso ya tiene un docente asignado. Confirme si desea reemplazarlo.».
+  5. Al reemplazar, si el docente anterior no queda con otro curso de esa asignatura en el periodo, **se desactiva su asociación** en `docente_asignatura`.
+  6. El registro en el histórico al asignar ya no ignora errores: si falla, falla la asignación.
+* **Pendiente de confirmar con el equipo (no se cambia nada todavía):**
+  - **Criterio 1.2:** pide «la última evaluación docente registrada»; el código muestra solo la del periodo inmediatamente anterior. Si el docente no dictó la asignatura en ese periodo, aparece sin evaluación aunque tenga una más antigua.
+  - **Punto 5 contra HU-049 y RN-05:** el histórico registra lo que el docente **ya dictó** y solo el administrador lo desactiva. Desactivar la asociación al reemplazar un docente hace que deje de ser recomendado para esa asignatura. Confirmar si es lo deseado.
+  - **Criterio 2.2 (RN-04, máximo 20 horas):** no se valida la carga al asignar.
+  - **Criterios 3.1 y 3.2:** «Sin docente asignado» deja el curso en estado `PROGRAMADO`; no existe el estado «Pendiente de asignación».
+  - **Bitácora (HU-058):** la asignación, el reemplazo y el registro de evaluaciones no quedan en la bitácora.
+  - **Filtro por programa:** confirmar que un coordinador solo pueda asignar en los cursos de su programa.
+  - Si se retiran las columnas `docentes.evaluacion_periodo` y `docentes.evaluacion_valor` (requiere una migración nueva, V33 o superior).
+  - Si la V32 ya se aplicó en la base compartida de Supabase.
+  - Faltan el contrato `docs/contratos/HU-060.md` y las pruebas de cada criterio.
+
+
+## [2026-11-11] Materias pendientes de asignación docente (HU-016)
+
+* **HU afectadas:** HU-016 (materias pendientes), HU-060 (designar docente), HU-046 (grupos), HU-002 (plazo del coordinador).
+* **Alcance:** solo frontend (`AsignacionDocenteView.jsx` y `.css`). No hay cambios en la API ni en la base de datos.
+* **Decisión (confirmada por el usuario):**
+  1. **Materia pendiente:** curso del programa en el periodo sin `idDocente` y con estado distinto de `EXCLUIDO`.
+  2. **Corrección del CSV:** el criterio 3 de HU-016 decía «(HU-041)»; la acción «Asignar docente» es el modal de designación de HU-060. Se corrige en `docs/Roses_corp_HU.csv`. **El equipo debe corregir también el `.xlsx`** (no se modifica desde aquí).
+  3. **Filtros de la vista** (en la fila de semestres, a la derecha):
+    - Jornada: «Diurna» (`DIURNA`), «Nocturna» (`NOCTURNA`) y «Ambas» (`AMBAS`, no filtra). Se filtra por `curso.jornada`.
+    - Docentes: «Todos los docentes» (`TODOS`) y «Sin docente asignado» (`SIN_DOCENTE`, solo pendientes).
+    - Valores por defecto `DIURNA` y `TODOS`, al entrar y al cambiar de programa. No se guardan en localStorage. «Actualizar» conserva los filtros.
+  4. **Asignaturas de la malla sin curso programado** (`existeEnProgramacion: false`): toman la jornada del programa; si el programa es `AMBAS`, aparecen con cualquier filtro de jornada.
+  5. **Grupo:** cada curso ya trae su grupo de HU-046. La tarjeta y el modal muestran solo el número de grupo («53», sin la palabra «Grupo»), no el identificador `CÓDIGO-GRUPO` (`204133C-53`), igual que en «Cursos Programados» (decisión del 2026-11-06). El código de la asignatura se sigue mostrando aparte. Ya no se inventa «Grupo 50» cuando falta: una asignatura de la malla sin curso (la malla cambió después de generar) muestra «Sin grupo». Al asignarle docente, el backend crea el curso con el siguiente grupo de la serie.
+  6. **Contadores** con la jornada filtrada: con `TODOS`, «X/Y asignadas» por semestre y «X de Y materias con docente designado»; con `SIN_DOCENTE`, «N pendientes» o «Sin pendientes» por semestre y «N materias pendientes en el semestre · Total del programa: M pendientes» (criterio 1).
+  7. **Plazo del coordinador:** abierto si la hora actual está entre `plazoCoordinadorInicio` y `plazoCoordinadorFin` del periodo (bordes incluidos). Sin fechas definidas, el plazo está cerrado (HU-002, criterio 3: «solo consultan»). Con el plazo cerrado se ocultan «Asignar docente», «Cambiar docente» y «Quitar», y se muestra «Fuera del período habilitado: solo consulta». El administrador conserva el comportamiento anterior (siempre puede asignar).
+  8. **Orden de los mensajes:** (1) «Aún no tiene un programa asignado. Contacte al administrador»; (2) «No se pudo cargar» con «Reintentar»; (3) «Aún no hay programación iniciada» (el programa no tiene cursos en el periodo, contando los excluidos, o no hay periodo); (4) con `SIN_DOCENTE`, «No hay materias pendientes de asignación»; (5) con `TODOS`, «No hay materias de la jornada {Diurna/Nocturna} en el Semestre N» (con «Ambas», «No hay materias registradas en el Semestre N»).
+  9. Un coordinador sin programa ya no ve el primer programa del sistema: antes la vista tomaba `programas[0]`.
+  10. Sin programación iniciada no se listan las asignaturas de la malla, así que el coordinador no crea cursos desde la malla antes de que el administrador genere la programación (HU-045).
+* **Pendientes (no se hacen en esta HU):**
+  - `GET /api/programacion` acepta cualquier `codeProgram` para el rol coordinador: falta el filtro por programa en el servidor.
+  - La validación del plazo de edición en el backend, que en esta fecha solo hacía la interfaz, quedó implementada posteriormente en la decisión del 2026-11-12 sobre HU-012/HU-013.
+  - `getProgramacion` del frontend recurre a Supabase cuando el backend no responde; con el backend caído y Supabase disponible no aparece «No se pudo cargar».
+  - El plazo se evalúa al dibujar la vista; si la ventana cierra con la vista abierta, cambia al recargar o al interactuar.
+
+
+## [2026-11-12] HU-016: filtros sobre la tarjeta del programa y programa según la jornada
+
+* **HU afectadas:** HU-016 (materias pendientes), HU-040 (programas y jornadas), HU-060 (designar docente).
+* **Alcance:** frontend (`AsignacionDocenteView.jsx` y `.css`, y una línea en `App.jsx` que pasa el prop `programasTodos`, porque al coordinador `programas` le llega solo con el suyo). Sin cambios en el backend ni en la base de datos.
+* **Decisión (confirmada por el usuario):**
+  1. **Ubicación:** la barra de filtros va sola, a todo el ancho, entre la cabecera y la tarjeta del programa: Jornada a la izquierda y Docentes a su lado. En pantallas angostas pasan uno debajo del otro. El administrador tiene además el selector de programa en esa barra. La barra de semestres vuelve a ocupar todo el ancho.
+  2. **Programas relacionados** (función pura `programasRelacionados`): el programa de referencia (el del coordinador o el que elige el administrador) más los programas **activos** con el mismo código base, que es la parte antes del guion (`2839-DIU` y `2839-NOC` → `2839`). Si el código no tiene guion, se compara el `name_program` sin tildes, sin mayúsculas y sin espacios extra.
+  3. **Programa por jornada:** Diurna muestra el relacionado con jornada `DIURNA` o `AMBAS`; Nocturna, el de `NOCTURNA` o `AMBAS`; Ambas, todos los relacionados.
+  4. **Duración:** con Nocturna, `semestres_nocturna` (si falta, `numero_semestre`); con Diurna, `numero_semestre`. Con Ambas, cada programa usa su propia jornada (uno de jornada `AMBAS` toma la mayor de las dos) y la barra de semestres llega hasta la mayor duración entre los programas visibles.
+  5. **Qué cambia con la jornada:** las tarjetas de programa (código, nombre, facultad, jornada, duración y total de materias en malla), los semestres y sus contadores, la malla, y los cursos. Estos se cargan con `GET /api/programacion?periodoId&codeProgram&jornada` para cada programa visible (sin `jornada` cuando el filtro es Ambas).
+  6. **Ambas con dos programas:** una tarjeta por programa, una debajo de la otra. Cada materia muestra su programa y su jornada. La clave de cada materia es el `id` del curso.
+  7. **Sin programa en la jornada:** «Su programa no se oferta en jornada {Diurna/Nocturna}». Se ocultan los semestres y la lista; los filtros siguen activos.
+  8. **Valores iniciales:** Jornada Diurna y Todos los docentes; si el programa de referencia es solo nocturno, Jornada Nocturna. Se aplican al entrar y al cambiar de programa.
+  9. **Al cambiar de jornada:** vuelve al Semestre 1, se muestra el estado de carga y se ignora la respuesta de una carga anterior. El filtro Docentes se conserva. «Actualizar» recarga los programas visibles.
+  10. **Asignar docente:** el modal (HU-060) usa el programa del curso elegido, tanto en `codeProgram` como en el filtro «Solo docentes relacionados al programa». Después de asignar o quitar un docente, solo se recargan los cursos de ese programa.
+* **Contradicción registrada (pendiente de resolver con el equipo):** la decisión 3 del 2026-10-27 (HU-040) dice que todos los programas tienen código de 4 dígitos sin sufijo de jornada, y la decisión 2 dice que la malla es una sola con jornada `AMBAS`. La migración V26 (`V26__normalizar_programas_diu.sql`), aplicada después, volvió a poner los sufijos `-DIU` y `-NOC`, el DTO de programas los acepta y `createPrograma` del frontend los agrega. Esta HU sigue el patrón con sufijo porque es el que usan hoy los datos y el código. El agrupamiento por nombre cubre los programas sin guion.
+* **Pendientes:**
+  - **Permisos del coordinador:** el backend no valida que el curso pertenezca al programa del coordinador (`asignarDocente` y `asignarDocentePorMateria` en `ProgramacionService`). Un coordinador de `2839-DIU` puede asignar docentes en `2839-NOC`. No se cambia el backend en esta HU.
+  - No se verificó en la base de datos que existan programas con sufijo `-NOC`; la regla se probó con datos de ejemplo.
+
+
+## [2026-11-12] Sincronización del histórico de asociaciones docentes (HU-049)
+
+* **HU afectadas:** HU-049 (asociar docentes a asignaturas), HU-050 (numeración de migración), HU-060 (docentes asociados).
+* **Origen:** corrección solicitada por el usuario: la pantalla «Asociaciones docentes» debe mostrar también las asignaturas que cada docente ya dictó, además de las asociaciones manuales.
+* **Decisión (confirmada por el usuario):**
+  1. El histórico visible se complementa con dos fuentes: `cursos_programacion` (cursos con docente y no excluidos) y `evaluaciones_docentes`. `evaluaciones_docentes` no contiene todo el histórico, solo las asignaturas con calificación registrada; por eso se usa como complemento.
+  2. Las filas faltantes se guardan como asociaciones reales en `docente_asignatura`, para conservar las acciones de quitar y reactivar y para que el resto del sistema las use. No se crean filas duplicadas por la llave `(docente_id, code_course, id_facultad)`.
+  3. Si la asociación ya existe, **no se modifica**: se respeta su origen, su periodo y su estado. Una asociación manual inactiva sigue inactiva.
+  4. Las filas nuevas usan `origen = PROGRAMACION` y el periodo más reciente de las fuentes. No se agrega un origen `EVALUACION`, para no requerir una migración nueva.
+  5. La sincronización es idempotente y se ejecuta al iniciar la aplicación y después de guardar una evaluación para el curso evaluado. Se ejecuta en una transacción independiente: si falla, no bloquea el guardado de la calificación y queda registrada en el log.
+  6. El comportamiento existente de `registrarDesdeCursos` al asignar un docente desde programación no cambia: esa asignación explícita sigue reactivando la asociación. La regla de «respetar el estado manual» aplica a la sincronización del histórico.
+  7. No hay cambios en endpoints, DTO ni frontend: la pantalla sigue consultando `GET /api/docentes-asignaturas`.
+  8. **Sin migración nueva.** La V34 sigue reservada para HU-050.
+  9. Rama de trabajo: `feature/HU-049-sincronizar-historico`. Sin pruebas automatizadas por indicación del usuario; la verificación será manual.
+
+
+## [2026-11-12] Cupos de estudiantes por curso/grupo (HU-059)
+
+* **HU afectadas:** HU-059 (cupos), HU-014 (exportación), HU-045/HU-046 (programación), HU-047 (exclusiones), HU-058 (bitácora).
+* **Decisión (confirmada por el usuario):**
+  1. El **administrador** puede editar cupos de cualquier programa; el **coordinador** solo de su programa.
+  2. El máximo de cupos por grupo es **configurable** (`CUPOS_MAX_POR_GRUPO` / `cda.cupos.max-por-grupo`), con valor inicial **60**.
+  3. El **administrador puede editar siempre**; el plazo de coordinador solo bloquea al coordinador con el mensaje `El plazo de edición ya cerró`.
+  4. El **guardado es por fila**: el lápiz de la columna Acciones habilita solo el campo de cupos de ese grupo y la solicitud envía únicamente la fila editada. Se eliminó la exigencia de cubrir todos los cursos activos y el botón global de guardado para que el registro sea rápido.
+  5. **No se asignan cupos a cursos `EXCLUIDO`**; se muestran con `—`.
+  6. Cada cambio de cupos se registra en la **bitácora** (acción `EDITAR`, entidad `CURSO`, valor anterior y nuevo).
+  7. Se **reutiliza `ProgramacionCohortesView`** para el coordinador, con la pestaña «Cupos de estudiantes»; no se crea una vista nueva.
+  8. **Sin pruebas automatizadas** por indicación del usuario; la verificación será manual.
+  9. Migración **V34** (`V34__hu059_cupos_cursos_programacion.sql`) aprobada: agrega `cupos` a `cursos_programacion` con restricción `cupos IS NULL OR cupos > 0`. Queda registrada la posible colisión con la V34 reservada para HU-050; si HU-050 se implementa primero, su migración debe renumerarse.
+  10. Contrato `docs/contratos/HU-059.md` y ficha `docs/hu/HU-059.md` creados. Rama de trabajo: `feature/HU-059`.
+  11. **Ajuste de rendimiento (2026-11-12):** se agregó el botón de lápiz por fila y el backend carga todos los cursos enviados en una sola consulta (`findAllByIdWithDetails`), en lugar de una consulta por curso. El frontend envía solo la fila habilitada.
+  12. **Guardado inmediato (2026-11-12):** «Listo» valida el campo y guarda ese grupo en el mismo instante. Si el campo está vacío o el valor es inválido, no cierra la edición y muestra el error. Se retiraron el botón «Guardar cambios» y los modales de confirmación/descarte de cupos.
+
+
+## [2026-11-12] Edición y elegibilidad de docentes en la programación (HU-012 y HU-013)
+
+* **HU afectadas:** HU-012 (editar docentes asignados), HU-013 (coordinador puede asignarse como docente), HU-016 (materias pendientes), HU-060 (designación de docentes), HU-010 (login coordinador).
+* **Decisiones:**
+  1. El coordinador puede reemplazar el docente asignado o dejar la materia «Sin docente asignado» mientras su plazo de edición esté abierto y la materia pertenezca a su programa. Cancelar el modal no modifica la asignación existente.
+  2. Un candidato a asignación debe tener al menos una franja de disponibilidad registrada en el mismo período académico. Las franjas se muestran como información y no se comparan con días/horas concretos del curso.
+  3. El coordinador puede ser candidato cuando tiene una fila activa en `docentes`; la asignación usa `docentes.id`. Este perfil académico no cambia `usuarios.rol = 2`, no concede `ROLE_DOCENTE` ni acceso a pantallas o endpoints exclusivos del autoservicio docente. El login respeta `usuarios.rol` incluso si se solicita explícitamente otro rol o se intenta autodetectar. La disponibilidad del coordinador debe estar previamente registrada en su perfil de docente.
+  4. Se conservan la validación de `horas_semanales` obligatoria para asignar y el límite máximo de carga de 20 horas semanales. La disponibilidad no sustituye el cálculo de carga.
+  5. El backend aplica la ventana de edición del coordinador tanto al asignar/reemplazar como al desasignar. Los extremos de la ventana están incluidos; si no están definidas ambas fechas, el plazo está cerrado. El administrador conserva la facultad de editar siempre.
+  6. La evaluación mostrada en la designación corresponde a la última evaluación registrada para esa asignatura antes del período activo, aunque no pertenezca al período inmediatamente anterior.
+* **Implementación:** validación de disponibilidad y plazo en `ProgramacionService`; consulta de última evaluación por asignatura en `EvaluacionDocenteRepository`; vistas de edición en `AsignacionDocenteView.jsx`; autoridad de coordinador limitada a su rol en `GoogleAuthService`; reglas de `SecurityConfig` permiten al coordinador consultar únicamente el catálogo de docentes y las evaluaciones usadas por la asignación, no los endpoints de perfil o evaluación individual docente.

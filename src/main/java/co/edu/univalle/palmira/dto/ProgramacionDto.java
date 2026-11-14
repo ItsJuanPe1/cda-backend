@@ -6,6 +6,7 @@ import lombok.*;
 import java.time.Instant;
 import java.util.List;
 
+
 public class ProgramacionDto {
 
     @Getter
@@ -53,10 +54,14 @@ public class ProgramacionDto {
         private String codeCourse;
         private String nombreAsignatura;
         private Integer credits;
+        /** Horas semanales requeridas para elegir docente, sin planificar horarios. */
+        private Integer horasSemanales;
         private Integer semestre;
         private Jornada jornada;
         private String numeroResolucion;
         private Integer grupo;
+        /** HU-059: cupos de estudiantes del curso/grupo; null si aún no se registran. */
+        private Integer cupos;
         private Long idDocente;
         private String nombreDocente;
         private String estado;
@@ -72,6 +77,30 @@ public class ProgramacionDto {
 
     /** HU-047: justificación para excluir o reactivar un curso. La validación está en el servicio. */
     public record JustificacionRequest(String justificacion) {}
+
+    //HU-059
+
+    /** Cupos de un curso/grupo dentro de la solicitud de actualización. */
+    public record CupoItemRequest(Long cursoId, Integer cupos) {}
+
+    /** HU-059: actualización de cupos de los cursos activos de un período. */
+    public record ActualizarCuposRequest(Long periodoId, List<CupoItemRequest> cursos) {}
+
+    /** HU-059: parámetros que el frontend usa para habilitar o bloquear la edición. */
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class CuposConfigResponse {
+        private Integer maxPorGrupo;
+        private boolean plazoAbierto;
+        private boolean puedeEditar;
+        private boolean admin;
+    }
+
+    /** HU-059: resultado de guardar los cupos. */
+    public record ActualizarCuposResponse(List<CursoResponse> cursos, String mensaje) {}
 
     /** HU-047: cómo quedan los grupos de una asignatura en el periodo (vista previa o resultado). */
     @Getter
@@ -112,6 +141,7 @@ public class ProgramacionDto {
     @Builder
     public static class AsignarDocenteRequest {
         private Long idDocente;
+        private Boolean reemplazarDocente;
         private Long periodoId;
         private String codeProgram;
         private String codeCourse;

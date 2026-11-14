@@ -1,6 +1,7 @@
 package co.edu.univalle.palmira.controller;
 
 import co.edu.univalle.palmira.dto.DocenteDto;
+import co.edu.univalle.palmira.dto.EvaluacionDocenteDto;
 import co.edu.univalle.palmira.service.DocenteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,27 @@ public class DocenteController {
     @GetMapping
     public ResponseEntity<List<DocenteDto.Response>> listar() {
         return ResponseEntity.ok(docenteService.listarTodos());
+    }
+
+    @GetMapping("/evaluaciones")
+    public ResponseEntity<List<EvaluacionDocenteDto>> listarEvaluaciones(
+            @RequestParam("periodoId") Long periodoId,
+            @RequestParam("codeCourse") String codeCourse) {
+        return ResponseEntity.ok(
+                docenteService.listarEvaluacionesAnteriores(periodoId, codeCourse));
+    }
+
+    @GetMapping("/{id}/evaluaciones")
+    public ResponseEntity<List<EvaluacionDocenteDto.Curso>> listarCursosEvaluacion(
+            @PathVariable("id") Long id, @RequestParam("periodoId") Long periodoId) {
+        return ResponseEntity.ok(docenteService.listarCursosEvaluacion(id, periodoId));
+    }
+
+    @PutMapping("/{id}/evaluacion")
+    public ResponseEntity<EvaluacionDocenteDto.Resumen> guardarEvaluacion(
+            @PathVariable("id") Long id,
+            @Valid @RequestBody EvaluacionDocenteDto.Request request) {
+        return ResponseEntity.ok(docenteService.guardarEvaluacion(id, request));
     }
 
     // Activar / Inactivar docente

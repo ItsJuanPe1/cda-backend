@@ -51,12 +51,12 @@ public class GoogleAuthService {
 
     @Autowired
     public GoogleAuthService(UsuarioRepository usuarioRepository,
-            CoordinadorRepository coordinadorRepository,
-            DocenteRepository docenteRepository,
-            JwtEncoder jwtEncoder,
-            BitacoraService bitacoraService,
-            @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
-            @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
+                             CoordinadorRepository coordinadorRepository,
+                             DocenteRepository docenteRepository,
+                             JwtEncoder jwtEncoder,
+                             BitacoraService bitacoraService,
+                             @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
+                             @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
         this.usuarioRepository = usuarioRepository;
         this.coordinadorRepository = coordinadorRepository;
         this.docenteRepository = docenteRepository;
@@ -69,12 +69,12 @@ public class GoogleAuthService {
     }
 
     public GoogleAuthService(UsuarioRepository usuarioRepository,
-            CoordinadorRepository coordinadorRepository,
-            DocenteRepository docenteRepository,
-            JwtEncoder jwtEncoder,
-            String googleClientId,
-            long expirationMinutes,
-            GoogleIdTokenVerifier tokenVerifier) {
+                             CoordinadorRepository coordinadorRepository,
+                             DocenteRepository docenteRepository,
+                             JwtEncoder jwtEncoder,
+                             String googleClientId,
+                             long expirationMinutes,
+                             GoogleIdTokenVerifier tokenVerifier) {
         this.usuarioRepository = usuarioRepository;
         this.coordinadorRepository = coordinadorRepository;
         this.docenteRepository = docenteRepository;
@@ -88,10 +88,10 @@ public class GoogleAuthService {
 
     // Sobrecarga para mantener retrocompatibilidad con tests existentes
     public GoogleAuthService(UsuarioRepository usuarioRepository,
-            JwtEncoder jwtEncoder,
-            String googleClientId,
-            long expirationMinutes,
-            GoogleIdTokenVerifier tokenVerifier) {
+                             JwtEncoder jwtEncoder,
+                             String googleClientId,
+                             long expirationMinutes,
+                             GoogleIdTokenVerifier tokenVerifier) {
         this(usuarioRepository, null, null, jwtEncoder, googleClientId, expirationMinutes, tokenVerifier);
     }
 
@@ -146,7 +146,7 @@ public class GoogleAuthService {
     }
 
     private static IngresoRechazadoException rechazo(HttpStatus status, String mensaje,
-            MotivoRechazoIngreso motivo, String correo) {
+                                                     MotivoRechazoIngreso motivo, String correo) {
         return new IngresoRechazadoException(status, mensaje, motivo, correo);
     }
 
@@ -166,8 +166,8 @@ public class GoogleAuthService {
         try {
             GoogleIdTokenVerifier verifier = this.tokenVerifier != null ? this.tokenVerifier
                     : new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
-                            .setAudience(List.of(googleClientId))
-                            .build();
+                      .setAudience(List.of(googleClientId))
+                      .build();
 
             GoogleIdToken idToken = verifier.verify(credential);
             if (idToken == null) {
@@ -218,8 +218,26 @@ public class GoogleAuthService {
             }
         }
 
-        // 4. Si no se especificó rol, auto-detectar: Coordinador -> Administrador ->
-        // Docente
+        // 4. Sin rol explícito, usuarios.rol es la fuente de verdad. Los perfiles
+        // independientes se conservan como fallback para cuentas legadas sin fila en usuarios.
+        Optional<Usuario> usuarioOpt = usuarioRepository != null
+                ? usuarioRepository.buscarPorCorreoInstitucional(cleanEmail)
+                : Optional.empty();
+        if (usuarioOpt.isPresent()) {
+            Usuario usuario = usuarioOpt.get();
+            if (Integer.valueOf(AuthConstants.ROL_ADMIN).equals(usuario.getRol())) {
+                return emitirSesionAdmin(usuario);
+            }
+            if (Integer.valueOf(AuthConstants.ROL_COORDINADOR).equals(usuario.getRol())) {
+                return resolverLoginCoordinador(cleanEmail);
+            }
+            if (Integer.valueOf(AuthConstants.ROL_DOCENTE).equals(usuario.getRol())) {
+                return resolverLoginDocente(cleanEmail);
+            }
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, cleanEmail);
+        }
+
         if (coordinadorRepository != null) {
             Optional<Coordinador> coordinadorOpt = coordinadorRepository
                     .findByCorreoInstitucionalWithDetails(cleanEmail);
@@ -228,24 +246,8 @@ public class GoogleAuthService {
             }
         }
 
-        if (usuarioRepository != null) {
-            Optional<Usuario> usuarioOpt = usuarioRepository.buscarPorCorreoInstitucional(cleanEmail);
-            if (usuarioOpt.isPresent()) {
-                Usuario u = usuarioOpt.get();
-                if (Integer.valueOf(AuthConstants.ROL_ADMIN).equals(u.getRol())) {
-                    return emitirSesionAdmin(u);
-                } else if (Integer.valueOf(AuthConstants.ROL_COORDINADOR).equals(u.getRol())) {
-                    return emitirSesionUsuarioRol(u, AuthConstants.ROL_COORDINADOR, "ROLE_COORDINADOR", "COORDINADOR");
-                } else if (Integer.valueOf(AuthConstants.ROL_DOCENTE).equals(u.getRol())) {
-                    return emitirSesionUsuarioRol(u, AuthConstants.ROL_DOCENTE, "ROLE_DOCENTE", "DOCENTE");
-                }
-            }
-        }
-
         if (docenteRepository != null) {
-            Optional<Docente> docenteOpt = docenteRepository.findByCorreoInstitucionalWithDetails(cleanEmail); // <-
-                                                                                                               // antes:
-                                                                                                               // findByCorreoInstitucional
+            Optional<Docente> docenteOpt = docenteRepository.findByCorreoInstitucionalWithDetails(cleanEmail);
             if (docenteOpt.isPresent()) {
                 return emitirSesionDocente(docenteOpt.get());
             }
@@ -261,15 +263,25 @@ public class GoogleAuthService {
                     "Repositorio de coordinadores no disponible");
         }
 
+        Optional<Usuario> usuarioOpt = usuarioRepository != null
+                ? usuarioRepository.buscarPorCorreoInstitucional(email)
+                : Optional.empty();
+        if (usuarioOpt.isPresent()
+                && !Integer.valueOf(AuthConstants.ROL_COORDINADOR).equals(usuarioOpt.get().getRol())) {
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_COORDINADOR,
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
+        }
+        if (usuarioOpt.isPresent() && Boolean.FALSE.equals(usuarioOpt.get().getActivo())) {
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA,
+                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, email);
+        }
+
         Optional<Coordinador> coordinadorOpt = coordinadorRepository.findByCorreoInstitucionalWithDetails(email);
         if (coordinadorOpt.isPresent()) {
             return emitirSesionCoordinador(coordinadorOpt.get());
         }
 
-        Optional<Usuario> usuarioOpt = usuarioRepository != null
-                ? usuarioRepository.buscarPorCorreoInstitucional(email)
-                : Optional.empty();
-        if (usuarioOpt.isPresent() && Integer.valueOf(AuthConstants.ROL_COORDINADOR).equals(usuarioOpt.get().getRol())) {
+        if (usuarioOpt.isPresent()) {
             return emitirSesionUsuarioRol(usuarioOpt.get(), AuthConstants.ROL_COORDINADOR, "ROLE_COORDINADOR", "COORDINADOR");
         }
 
@@ -278,7 +290,7 @@ public class GoogleAuthService {
 
         if (existeEnOtroRol) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_COORDINADOR,
-                MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
 
         throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
@@ -291,26 +303,41 @@ public class GoogleAuthService {
                     "Repositorio de docentes no disponible");
         }
 
-        Optional<Docente> docenteOpt = docenteRepository.findByCorreoInstitucionalWithDetails(email); // <- antes:
-                                                                                                      // findByCorreoInstitucional
+        Optional<Usuario> usuarioOpt = usuarioRepository != null
+                ? usuarioRepository.buscarPorCorreoInstitucional(email)
+                : Optional.empty();
+
+        // Un perfil académico en docentes no permite al usuario con rol 2 iniciar
+        // sesión como docente ni obtener los permisos de autoservicio del rol 3.
+        if (usuarioOpt.isPresent()
+                && Integer.valueOf(AuthConstants.ROL_COORDINADOR).equals(usuarioOpt.get().getRol())) {
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_DOCENTE,
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
+        }
+        // Para cuentas legadas sin fila en usuarios, el perfil de coordinador tampoco
+        // se convierte en una sesión docente por tener además docentes.id.
+        if (usuarioOpt.isEmpty() && coordinadorRepository != null
+                && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email)) {
+            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_DOCENTE,
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
+        }
+
+        Optional<Docente> docenteOpt = docenteRepository.findByCorreoInstitucionalWithDetails(email);
         if (docenteOpt.isPresent()) {
             return emitirSesionDocente(docenteOpt.get());
         }
 
-        Optional<Usuario> usuarioOpt = usuarioRepository != null
-                ? usuarioRepository.buscarPorCorreoInstitucional(email)
-                : Optional.empty();
         if (usuarioOpt.isPresent() && Integer.valueOf(AuthConstants.ROL_DOCENTE).equals(usuarioOpt.get().getRol())) {
             return emitirSesionUsuarioRol(usuarioOpt.get(), AuthConstants.ROL_DOCENTE, "ROLE_DOCENTE", "DOCENTE");
         }
 
         boolean existeEnOtroRol = usuarioOpt.isPresent()
                 || (coordinadorRepository != null
-                        && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email));
+                && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email));
 
         if (existeEnOtroRol) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_DOCENTE,
-                MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
 
         throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
@@ -320,17 +347,14 @@ public class GoogleAuthService {
     private LoginResponse emitirSesionUsuarioRol(Usuario usuario, int rol, String roleAuthority, String shortAuthority) {
         if (Boolean.FALSE.equals(usuario.getActivo())) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
-                MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
+                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
         }
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 
+        // No se agregan autoridades de otros perfiles por la mera existencia de filas
+        // relacionadas. El rol 2 sigue siendo coordinador aunque también tenga docentes.id.
         List<String> authorities = new ArrayList<>(List.of(roleAuthority, shortAuthority));
-        if (rol == AuthConstants.ROL_COORDINADOR && docenteRepository != null
-                && docenteRepository.existsByCorreoInstitucional(usuario.getEmailInstitucional())) {
-            authorities.add("ROLE_DOCENTE");
-            authorities.add("DOCENTE");
-        }
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 .issuer("cda-backend")
@@ -368,7 +392,7 @@ public class GoogleAuthService {
     private LoginResponse emitirSesionCoordinador(Coordinador coordinador) {
         if (Boolean.FALSE.equals(coordinador.getActivo())) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
-                MotivoRechazoIngreso.PERFIL_DESACTIVADO, coordinador.getCorreoInstitucional());
+                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, coordinador.getCorreoInstitucional());
         }
 
         String codeProgram = coordinador.getPrograma() != null ? coordinador.getPrograma().getCodeProgram() : null;
@@ -390,14 +414,10 @@ public class GoogleAuthService {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 
+        // El rol funcional lo determina la sesión de usuarios (rol 2).
+        // Tener además una fila en docentes permite asignar ese perfil académico a cursos,
+        // pero no concede permisos ni pantallas de autoservicio exclusivos del rol docente.
         List<String> authorities = new ArrayList<>(List.of("ROLE_COORDINADOR", "COORDINADOR"));
-        // RN-07: Si el coordinador también está registrado como docente, hereda perfil
-        // docente
-        if (docenteRepository != null
-                && docenteRepository.existsByCorreoInstitucional(coordinador.getCorreoInstitucional())) {
-            authorities.add("ROLE_DOCENTE");
-            authorities.add("DOCENTE");
-        }
 
         JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
                 .issuer("cda-backend")
@@ -434,7 +454,7 @@ public class GoogleAuthService {
     private LoginResponse emitirSesionDocente(Docente docente) {
         if (Boolean.FALSE.equals(docente.getEstado())) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
-                MotivoRechazoIngreso.PERFIL_DESACTIVADO, docente.getCorreoInstitucional());
+                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, docente.getCorreoInstitucional());
         }
 
         String codeProgram = docente.getPrograma() != null ? docente.getPrograma().getCodeProgram() : null;
@@ -494,7 +514,7 @@ public class GoogleAuthService {
 
         if (existeEnOtroRol) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN,
-                MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
 
         throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_NO_REGISTRADA,
@@ -504,12 +524,12 @@ public class GoogleAuthService {
     private LoginResponse emitirSesionAdmin(Usuario usuario) {
         if (Boolean.FALSE.equals(usuario.getActivo())) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA,
-                MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
+                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
         }
 
         if (usuario.getRol() == null || usuario.getRol() != AuthConstants.ROL_ADMIN) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN,
-                MotivoRechazoIngreso.SIN_PERFIL_ROL, usuario.getEmailInstitucional());
+                    MotivoRechazoIngreso.SIN_PERFIL_ROL, usuario.getEmailInstitucional());
         }
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);

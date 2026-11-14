@@ -1,25 +1,36 @@
 package co.edu.univalle.palmira.service;
 
 import co.edu.univalle.palmira.dto.DocenteDto;
+import co.edu.univalle.palmira.dto.EvaluacionDocenteDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ConflictException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Docente;
+import co.edu.univalle.palmira.model.entity.CursoProgramacion;
 import co.edu.univalle.palmira.model.entity.Facultad;
 import co.edu.univalle.palmira.model.entity.Programa;
+import co.edu.univalle.palmira.model.entity.EvaluacionDocente;
+import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
+import co.edu.univalle.palmira.repository.EvaluacionDocenteRepository;
+import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
+import co.edu.univalle.palmira.repository.CursoProgramacionRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
 import co.edu.univalle.palmira.repository.FacultadRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Objects;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class DocenteService {
 
     // HU-015: mensajes de "Mi perfil"
@@ -29,14 +40,16 @@ public class DocenteService {
     private final DocenteRepository docenteRepository;
     private final ProgramaRepository programaRepository;
     private final FacultadRepository facultadRepository;
+    private final EvaluacionDocenteRepository evaluacionDocenteRepository;
+    private final PeriodoAcademicoRepository periodoAcademicoRepository;
+    private final CursoProgramacionRepository cursoProgramacionRepository;
+    private final DocenteAsignaturaService docenteAsignaturaService;
 
     // ---------------------------------------------------------------
     // HU-026: Crear perfil de docente
     // ---------------------------------------------------------------
     @Transactional
     public DocenteDto.Response crear(DocenteDto.CreateRequest req) {
-        validarEvaluacion(req.evaluacionPeriodo(), req.evaluacionValor());
-
         // Documento duplicado: el front ofrece actualizar (necesita el id existente)
         docenteRepository.findByNumeroDocumento(req.numeroDocumento())
                 .ifPresent(existente -> {
@@ -76,14 +89,13 @@ public class DocenteService {
                 .tipoDocumento(req.tipoDocumento())
                 .numeroDocumento(req.numeroDocumento())
                 .correoInstitucional(req.correoInstitucional().trim().toLowerCase())
-                .telefono(req.telefono())
+                .telefono(normalizarOpcional(req.telefono()))
+                .celular(normalizarOpcional(req.celular()))
                 .tipoDocente(req.tipoDocente())
                 .categoria(req.categoria())
                 .facultad(facultad)
                 .programa(programa)
                 .fotoUrl(req.fotoUrl())
-                .evaluacionPeriodo(req.evaluacionPeriodo())
-                .evaluacionValor(req.evaluacionValor())
                 .build();
 
         return toResponse(docenteRepository.save(docente));
@@ -131,7 +143,9 @@ public class DocenteService {
         if (req.tipoDocumento() != null)
             docente.setTipoDocumento(req.tipoDocumento());
         if (req.telefono() != null)
-            docente.setTelefono(req.telefono());
+            docente.setTelefono(normalizarOpcional(req.telefono()));
+        if (req.celular() != null)
+            docente.setCelular(normalizarOpcional(req.celular()));
         if (req.tipoDocente() != null)
             docente.setTipoDocente(req.tipoDocente());
         if (req.categoria() != null)
@@ -144,13 +158,6 @@ public class DocenteService {
         } else if (req.codeProgram() != null && !req.codeProgram().isBlank()) {
             docente.setPrograma(buscarPrograma(req.codeProgram()));
         }
-
-        // Evaluación: dos campos simples que se sobreescriben (sin historial)
-        if (req.evaluacionPeriodo() != null)
-            docente.setEvaluacionPeriodo(req.evaluacionPeriodo());
-        if (req.evaluacionValor() != null)
-            docente.setEvaluacionValor(req.evaluacionValor());
-        validarEvaluacion(docente.getEvaluacionPeriodo(), docente.getEvaluacionValor());
 
         return toResponse(docenteRepository.save(docente));
     }
@@ -198,13 +205,15 @@ public class DocenteService {
             correoPersonal = correoPersonal.toLowerCase();
         }
         String telefono = normalizarOpcional(req.telefono());
+        String celular = normalizarOpcional(req.celular());
 
         Integer idFacultadActual = docente.getFacultad() != null ? docente.getFacultad().getId() : null;
         Integer nuevoIdFacultad = req.idFacultad();
         boolean cambioFacultad = nuevoIdFacultad != null && !Objects.equals(nuevoIdFacultad, idFacultadActual);
 
         boolean cambioContacto = !Objects.equals(correoPersonal, docente.getCorreoPersonal())
-                || !Objects.equals(telefono, docente.getTelefono());
+                || !Objects.equals(telefono, docente.getTelefono())
+                || !Objects.equals(celular, docente.getCelular());
 
         if (!cambioContacto && !cambioFacultad) {
             throw new BadRequestException(MSG_SIN_CAMBIOS);
@@ -215,6 +224,7 @@ public class DocenteService {
         }
         docente.setCorreoPersonal(correoPersonal);
         docente.setTelefono(telefono);
+        docente.setCelular(celular);
         return toResponse(docenteRepository.save(docente));
     }
 
@@ -227,6 +237,119 @@ public class DocenteService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    /**
+     * Devuelve la última evaluación registrada de cada docente para la asignatura,
+     * en cualquier período anterior al período activo.
+     */
+    @Transactional(readOnly = true)
+    public List<EvaluacionDocenteDto> listarEvaluacionesAnteriores(Long periodoId, String codeCourse) {
+        PeriodoAcademico actual = periodoAcademicoRepository.findById(periodoId)
+                .orElseThrow(() -> new BadRequestException("El período académico no existe"));
+
+        List<EvaluacionDocente> evaluaciones = evaluacionDocenteRepository
+                .findAllByAsignaturaBeforePeriodo(codeCourse, actual.getFechaInicioSemestre());
+
+        // La consulta viene ordenada de más reciente a más antigua; la primera por docente es la vigente.
+        Map<Long, EvaluacionDocente> ultimaPorDocente = new LinkedHashMap<>();
+        for (EvaluacionDocente evaluacion : evaluaciones) {
+            ultimaPorDocente.putIfAbsent(evaluacion.getDocente().getId(), evaluacion);
+        }
+        return ultimaPorDocente.values().stream()
+                .map(this::toEvaluacionResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<EvaluacionDocenteDto.Curso> listarCursosEvaluacion(Long docenteId, Long periodoId) {
+        Docente docente = docenteRepository.findById(docenteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado"));
+        PeriodoAcademico anterior = buscarPeriodoAnterior(periodoId);
+        if (anterior == null) {
+            return List.of();
+        }
+        return cursoProgramacionRepository.findByPeriodoIdAndDocenteId(anterior.getId(), docenteId)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        curso -> curso.getAsignatura().getCodeCourse(),
+                        curso -> curso,
+                        (first, ignored) -> first))
+                .values()
+                .stream()
+                .map(curso -> {
+                    EvaluacionDocente evaluacion = evaluacionDocenteRepository
+                            .findByDocenteIdAndAsignaturaCodeCourseAndPeriodoId(
+                                    docenteId, curso.getAsignatura().getCodeCourse(), anterior.getId())
+                            .orElse(null);
+                    return new EvaluacionDocenteDto.Curso(
+                            docenteId,
+                            anterior.getId(),
+                            anterior.getNombre(),
+                            curso.getAsignatura().getCodeCourse(),
+                            curso.getAsignatura().getNameCourse(),
+                            evaluacion == null ? null : evaluacion.getCalificacion(),
+                            evaluacion != null);
+                })
+                .toList();
+    }
+
+    @Transactional
+    public EvaluacionDocenteDto.Resumen guardarEvaluacion(
+            Long docenteId, EvaluacionDocenteDto.Request request) {
+        if (request.codeCourse() == null || request.codeCourse().isBlank()) {
+            throw new BadRequestException("La asignatura es obligatoria");
+        }
+        if (request.calificacion() == null
+                || request.calificacion().compareTo(BigDecimal.ZERO) < 0
+                || request.calificacion().compareTo(BigDecimal.valueOf(5)) > 0) {
+            throw new BadRequestException("La calificación debe estar entre 0 y 5");
+        }
+        Docente docente = docenteRepository.findById(docenteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado"));
+        PeriodoAcademico anterior = buscarPeriodoAnterior(request.periodoId());
+        if (anterior == null) {
+            throw new BadRequestException("No existe un período anterior para registrar la calificación");
+        }
+
+        List<CursoProgramacion> cursos = cursoProgramacionRepository
+                .findByPeriodoIdAndDocenteId(anterior.getId(), docenteId);
+        CursoProgramacion curso = cursos.stream()
+                .filter(item -> request.codeCourse().equals(item.getAsignatura().getCodeCourse()))
+                .findFirst()
+                .orElseThrow(() -> new BadRequestException(
+                        "El docente no dictó esa asignatura en el período anterior"));
+        EvaluacionDocente evaluacion = evaluacionDocenteRepository
+                .findByDocenteIdAndAsignaturaCodeCourseAndPeriodoId(
+                        docenteId, request.codeCourse(), anterior.getId())
+                .orElseGet(() -> EvaluacionDocente.builder()
+                        .docente(docente)
+                        .asignatura(curso.getAsignatura())
+                        .periodo(anterior)
+                        .build());
+        evaluacion.setCalificacion(request.calificacion());
+        evaluacionDocenteRepository.save(evaluacion);
+
+        try {
+            docenteAsignaturaService.sincronizarDesdeCurso(curso.getId());
+        } catch (Exception ex) {
+            log.warn("No se pudo sincronizar el histórico para el curso {}", curso.getId(), ex);
+        }
+
+        return new EvaluacionDocenteDto.Resumen(
+                docenteId, anterior.getId(), anterior.getNombre(),
+                request.codeCourse(), request.calificacion());
+    }
+
+    private PeriodoAcademico buscarPeriodoAnterior(Long periodoId) {
+        PeriodoAcademico actual = periodoAcademicoRepository.findById(periodoId)
+                .orElseThrow(() -> new BadRequestException("El período académico no existe"));
+        return periodoAcademicoRepository.findAllByOrderByFechaInicioSemestreDesc()
+                .stream()
+                .filter(p -> p.getFechaInicioSemestre() != null
+                        && p.getFechaInicioSemestre().isBefore(actual.getFechaInicioSemestre()))
+                .findFirst()
+                .orElse(null);
     }
 
     // ---------------------------------------------------------------
@@ -261,14 +384,6 @@ public class DocenteService {
                         "El programa de adscripción no existe: " + codeProgram));
     }
 
-    /** Si hay valor de evaluación, el periodo es obligatorio. */
-    private void validarEvaluacion(String periodo, BigDecimal valor) {
-        if (valor != null && (periodo == null || periodo.isBlank())) {
-            throw new BadRequestException(
-                    "El periodo de la evaluación es obligatorio cuando se registra un valor");
-        }
-    }
-
     private DocenteDto.Response toResponse(Docente d) {
         Integer idFacultad = d.getFacultad() != null
                 ? d.getFacultad().getId()
@@ -293,10 +408,20 @@ public class DocenteService {
                 d.getPrograma() != null ? d.getPrograma().getNameProgram() : null,
                 d.getFotoUrl(),
                 false,
-                d.getEvaluacionPeriodo(),
-                d.getEvaluacionValor(),
+                null,
+                null,
                 d.getEstado(),
                 d.getCreatedAt(),
-                d.getUpdatedAt());
+                d.getUpdatedAt(),
+                d.getCelular());
+    }
+
+    private EvaluacionDocenteDto toEvaluacionResponse(EvaluacionDocente evaluacion) {
+        return new EvaluacionDocenteDto(
+                evaluacion.getDocente().getId(),
+                evaluacion.getAsignatura().getCodeCourse(),
+                evaluacion.getPeriodo().getId(),
+                evaluacion.getPeriodo().getNombre(),
+                evaluacion.getCalificacion());
     }
 }

@@ -55,6 +55,7 @@ public class AsignaturaService {
                 .esBasica(Boolean.TRUE.equals(request.esBasica()))
                 .facultad(request.facultad() != null ? request.facultad().trim() : null)
                 .idFacultad(request.idFacultad())
+                .horasSemanales(request.horasSemanales() != null ? Math.max(0, request.horasSemanales()) : 0)
                 .build();
 
         return toResponse(asignaturaRepository.save(asignatura));
@@ -95,6 +96,10 @@ public class AsignaturaService {
         }
         if (request.activo() != null) {
             asignatura.setActivo(request.activo());
+        }
+
+        if (request.horasSemanales() != null) {
+            asignatura.setHorasSemanales(request.horasSemanales());
         }
 
         return toResponse(asignaturaRepository.save(asignatura));
@@ -143,7 +148,8 @@ public class AsignaturaService {
                 a.getEsBasica(),
                 a.getFacultad(),
                 a.getIdFacultad(),
-                a.getActivo() != null ? a.getActivo() : true
+                a.getActivo() != null ? a.getActivo() : true,
+                a.getHorasSemanales()
         );
     }
 }

@@ -48,6 +48,10 @@ public class Docente {
     @Column(name = "telefono", length = 20)
     private String telefono;
 
+    // HU-015 (2026-11-10): celular opcional, distinto del teléfono, de 7 a 10 dígitos (V31)
+    @Column(name = "celular", length = 10)
+    private String celular;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_docente", length = 20, nullable = false)
     private TipoDocente tipoDocente;

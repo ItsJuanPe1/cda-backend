@@ -1,7 +1,9 @@
 package co.edu.univalle.palmira.repository;
 
 import co.edu.univalle.palmira.model.entity.Docente;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -33,6 +35,14 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
 
     @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa WHERE d.id = :id")
     Optional<Docente> findByIdWithDetails(@Param("id") Long id);
+
+    /**
+     * Carga académica: bloquea la fila del docente mientras se valida y se guarda una asignación,
+     * para que dos asignaciones simultáneas no superen el límite de horas.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Docente d WHERE d.id = :id")
+    Optional<Docente> findByIdForUpdate(@Param("id") Long id);
 
     boolean existsByCodigo(String codigo);
 }

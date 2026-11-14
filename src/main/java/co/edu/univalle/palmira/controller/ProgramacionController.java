@@ -39,6 +39,22 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.obtenerProgramacion(periodoId, codeProgram, codeCourse, jornada));
     }
 
+    @GetMapping("/cupos/config")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @Operation(summary = "Consultar máximo de cupos y si el plazo de edición está abierto")
+    public ResponseEntity<ProgramacionDto.CuposConfigResponse> obtenerConfiguracionCupos(
+            @RequestParam("periodoId") Long periodoId) {
+        return ResponseEntity.ok(programacionService.obtenerConfiguracionCupos(periodoId));
+    }
+
+    @PatchMapping("/cupos")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @Operation(summary = "Registrar los cupos de estudiantes de los cursos activos")
+    public ResponseEntity<ProgramacionDto.ActualizarCuposResponse> actualizarCupos(
+            @RequestBody(required = false) ProgramacionDto.ActualizarCuposRequest request) {
+        return ResponseEntity.ok(programacionService.actualizarCupos(request));
+    }
+
     @GetMapping("/resumen")
     @Operation(summary = "Consultar el resumen consolidado de cursos programados")
     public ResponseEntity<ProgramacionDto.ResumenResponse> obtenerResumen(@RequestParam("periodoId") Long periodoId) {
@@ -79,7 +95,8 @@ public class ProgramacionController {
             @PathVariable("id") Long id,
             @RequestBody(required = false) ProgramacionDto.AsignarDocenteRequest request) {
         Long idDocente = request != null ? request.getIdDocente() : null;
-        return ResponseEntity.ok(programacionService.asignarDocente(id, idDocente));
+        return ResponseEntity.ok(programacionService.asignarDocente(id, idDocente,
+                request != null && Boolean.TRUE.equals(request.getReemplazarDocente())));
     }
 
     @PostMapping("/asignar-docente")
@@ -91,6 +108,7 @@ public class ProgramacionController {
             throw new co.edu.univalle.palmira.exception.BadRequestException("Faltan parámetros obligatorios para la asignación");
         }
         return ResponseEntity.ok(programacionService.asignarDocentePorMateria(
-                request.getPeriodoId(), request.getCodeProgram(), request.getCodeCourse(), request.getSemestre(), request.getIdDocente()));
+                request.getPeriodoId(), request.getCodeProgram(), request.getCodeCourse(), request.getSemestre(),
+                request.getIdDocente(), Boolean.TRUE.equals(request.getReemplazarDocente())));
     }
 }
