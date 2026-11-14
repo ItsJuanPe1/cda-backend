@@ -55,6 +55,10 @@ public class CursoProgramacion {
     @Column(name = "cupos")
     private Integer cupos;
 
+    /** Espacio de la malla (ELE-PROF-I, ...) que ocupa una electiva programada a mano; null en el resto. */
+    @Column(name = "code_course_espacio", length = 50)
+    private String codeCourseEspacio;
+
     @Column(nullable = false)
     @Builder.Default
     private Integer credits = 0;

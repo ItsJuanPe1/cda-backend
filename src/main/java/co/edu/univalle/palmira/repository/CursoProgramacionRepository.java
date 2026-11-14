@@ -182,4 +182,14 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
             ORDER BY p.name_program ASC, c.semestre ASC, c.nombre_asignatura ASC, c.grupo ASC
             """, nativeQuery = true)
     List<Object[]> findPendientesParaExcel(@Param("periodoId") Long periodoId);
+
+    long countByPeriodoIdAndCodeCourseEspacioIsNotNull(Long periodoId);
+
+    @Query("SELECT c FROM CursoProgramacion c " +
+           "JOIN FETCH c.programa JOIN FETCH c.asignatura LEFT JOIN FETCH c.docente " +
+           "WHERE c.periodo.id = :periodoId AND c.programa.codeProgram = :codeProgram " +
+           "AND c.codeCourseEspacio IS NOT NULL AND c.estado <> 'EXCLUIDO' " +
+           "ORDER BY c.semestre ASC, c.codeCourseEspacio ASC")
+    List<CursoProgramacion> findElectivasProgramadas(@Param("periodoId") Long periodoId,
+                                                 @Param("codeProgram") String codeProgram);
 }
