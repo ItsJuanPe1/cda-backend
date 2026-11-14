@@ -329,4 +329,49 @@ class ProgramacionServiceAsignarDocenteTest {
 
         assertThrows(ResourceNotFoundException.class, () -> service.asignarDocente(999L, 12L, false));
     }
+
+    @Test
+    void asignar_dosDias_horarioDivididoExitoso() {
+        cursoCargado(curso(4, CursoProgramacion.ESTADO_PROGRAMADO, null));
+        docenteBloqueado(ana);
+        when(disponibilidadDocenteRepository.findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(12L, 5L))
+                .thenReturn(List.of(
+                        franja(1, "08:00", "12:00"),
+                        franja(3, "08:00", "12:00")
+                ));
+        when(cursoRepository.findByPeriodoIdWithDetails(5L)).thenReturn(List.of());
+
+        java.time.LocalTime h8 = java.time.LocalTime.of(8, 0);
+        java.time.LocalTime h10 = java.time.LocalTime.of(10, 0);
+
+        ProgramacionDto.CursoResponse r = service.asignarDocente(101L, 12L, false,
+                1, h8, h10, 3, h8, h10, "Lunes 08:00 - 10:00 / Miércoles 08:00 - 10:00");
+
+        assertEquals(12L, r.getIdDocente());
+        assertEquals(1, r.getDia());
+        assertEquals(h8, r.getHoraInicio());
+        assertEquals(h10, r.getHoraFin());
+        assertEquals(3, r.getDia2());
+        assertEquals(h8, r.getHoraInicio2());
+        assertEquals(h10, r.getHoraFin2());
+        assertEquals("Lunes 08:00 - 10:00 / Miércoles 08:00 - 10:00", r.getHorario());
+    }
+
+    @Test
+    void asignar_dosDias_mismoDiaRechaza() {
+        cursoCargado(curso(4, CursoProgramacion.ESTADO_PROGRAMADO, null));
+        docenteBloqueado(ana);
+        when(disponibilidadDocenteRepository.findAllByDocenteIdAndPeriodoIdOrderByDiaAscHoraInicioAsc(12L, 5L))
+                .thenReturn(List.of(franja(1, "08:00", "16:00")));
+
+        java.time.LocalTime h8 = java.time.LocalTime.of(8, 0);
+        java.time.LocalTime h10 = java.time.LocalTime.of(10, 0);
+        java.time.LocalTime h14 = java.time.LocalTime.of(14, 0);
+        java.time.LocalTime h16 = java.time.LocalTime.of(16, 0);
+
+        BadRequestException ex = assertThrows(BadRequestException.class, () ->
+                service.asignarDocente(101L, 12L, false,
+                        1, h8, h10, 1, h14, h16, "Horario"));
+        assertEquals("Los dos días de clase deben ser diferentes", ex.getMessage());
+    }
 }

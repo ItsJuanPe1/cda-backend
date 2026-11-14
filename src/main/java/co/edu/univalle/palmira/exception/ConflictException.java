@@ -1,6 +1,7 @@
 package co.edu.univalle.palmira.exception;
 
 public class ConflictException extends RuntimeException {
+    private static final long serialVersionUID = 1L;
 
     private final Long existingId;
 

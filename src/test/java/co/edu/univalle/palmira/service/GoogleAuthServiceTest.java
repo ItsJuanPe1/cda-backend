@@ -310,7 +310,6 @@ class GoogleAuthServiceTest {
 
         ArgumentCaptor<JwtEncoderParameters> jwtCaptor = ArgumentCaptor.forClass(JwtEncoderParameters.class);
         verify(jwtEncoder).encode(jwtCaptor.capture());
-        @SuppressWarnings("unchecked")
         List<String> authorities = jwtCaptor.getValue().getClaims().getClaim("authorities");
         assertEquals(List.of("ROLE_COORDINADOR", "COORDINADOR"), authorities);
     }

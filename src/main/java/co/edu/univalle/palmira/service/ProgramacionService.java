@@ -10,7 +10,8 @@ import co.edu.univalle.palmira.model.enums.AccionBitacora;
 import co.edu.univalle.palmira.model.enums.EstadoPrograma;
 import co.edu.univalle.palmira.model.enums.Jornada;
 import co.edu.univalle.palmira.repository.*;
-import lombok.RequiredArgsConstructor;
+//import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -22,7 +23,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class ProgramacionService {
 
     // HU-047: mensajes (la HU no los define; ver docs/contratos/HU-047.md)
@@ -67,6 +67,36 @@ public class ProgramacionService {
     private final CargaDocenteService cargaDocenteService;
     private final CuposProperties cuposProperties;
 
+    @Autowired
+    public ProgramacionService(
+            CursoProgramacionRepository cursoRepository,
+            CohortePeriodoRepository cohorteRepository,
+            PeriodoAcademicoRepository periodoRepository,
+            ProgramaRepository programaRepository,
+            PensumAcademicoRepository pensumRepository,
+            DocenteAsignaturaService docenteAsignaturaService,
+            BitacoraService bitacoraService,
+            DocenteRepository docenteRepository,
+            DisponibilidadDocenteRepository disponibilidadDocenteRepository,
+            AsignaturaRepository asignaturaRepository,
+            AccesoProgramaService accesoProgramaService,
+            CargaDocenteService cargaDocenteService,
+            CuposProperties cuposProperties) {
+        this.cursoRepository = cursoRepository;
+        this.cohorteRepository = cohorteRepository;
+        this.periodoRepository = periodoRepository;
+        this.programaRepository = programaRepository;
+        this.pensumRepository = pensumRepository;
+        this.docenteAsignaturaService = docenteAsignaturaService;
+        this.bitacoraService = bitacoraService;
+        this.docenteRepository = docenteRepository;
+        this.disponibilidadDocenteRepository = disponibilidadDocenteRepository;
+        this.asignaturaRepository = asignaturaRepository;
+        this.accesoProgramaService = accesoProgramaService;
+        this.cargaDocenteService = cargaDocenteService;
+        this.cuposProperties = cuposProperties;
+    }
+
     /** Curso que corresponde según las cohortes confirmadas y la malla. */
     private record CursoOfertado(CohortePeriodo cohorte, PensumAcademico pensum) {
         String clave() {
@@ -82,8 +112,10 @@ public class ProgramacionService {
                         () -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
 
         long conteoExistente = cursoRepository.countByPeriodoId(periodoId);
-        // Las electivas programadas a mano por el coordinador no cuentan como «programación generada».
-        long conteoGenerado = conteoExistente - cursoRepository.countByPeriodoIdAndCodeCourseEspacioIsNotNull(periodoId);
+        // Las electivas programadas a mano por el coordinador no cuentan como
+        // «programación generada».
+        long conteoGenerado = conteoExistente
+                - cursoRepository.countByPeriodoIdAndCodeCourseEspacioIsNotNull(periodoId);
         if (conteoGenerado > 0 && !sobrescribir) {
             throw new ConflictException("Ya existe una programación generada para este período con " + conteoGenerado
                     + " cursos. Requiere confirmación para regenerar.");
@@ -195,7 +227,8 @@ public class ProgramacionService {
         List<CohortePeriodo> cohortes = cohorteRepository.findByPeriodoIdAndConfirmadaTrue(periodoId);
         if (codeProgram != null && !codeProgram.isBlank()) {
             cohortes = cohortes.stream()
-                    .filter(c -> c.getPrograma() != null && codeProgram.equalsIgnoreCase(c.getPrograma().getCodeProgram()))
+                    .filter(c -> c.getPrograma() != null
+                            && codeProgram.equalsIgnoreCase(c.getPrograma().getCodeProgram()))
                     .collect(Collectors.toList());
         }
         Map<String, CursoOfertado> oferta = calcularOferta(cohortes, false);
@@ -487,8 +520,10 @@ public class ProgramacionService {
     }
 
     /**
-     * Electivas programadas a mano: vuelve a numerar desde 50 los grupos activos de la asignatura
-     * después de quitar un curso o cambiar su asignatura. Cada cambio va a la bitácora.
+     * Electivas programadas a mano: vuelve a numerar desde 50 los grupos activos de
+     * la asignatura
+     * después de quitar un curso o cambiar su asignatura. Cada cambio va a la
+     * bitácora.
      */
     @Transactional
     public void renumerarGrupos(Long periodoId, String codeCourse) {
@@ -542,10 +577,13 @@ public class ProgramacionService {
             }
 
             for (PensumAcademico pensum : obligatorias) {
-                // Los espacios «Electiva Profesional N» (y la complementaria) son el esqueleto de la malla, no
-                // cursos: la electiva real la programa el coordinador (ElectivaProgramadaService).
+                // Los espacios «Electiva Profesional N» (y la complementaria) son el esqueleto
+                // de la malla, no
+                // cursos: la electiva real la programa el coordinador
+                // (ElectivaProgramadaService).
                 if (pensum.getId() != null && pensum.getId().getCodeCourse() != null
-                        && pensum.getId().getCodeCourse().toUpperCase().startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
+                        && pensum.getId().getCodeCourse().toUpperCase()
+                                .startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
                     continue;
                 }
                 CursoOfertado ofertado = new CursoOfertado(cohorte, pensum);
@@ -573,7 +611,8 @@ public class ProgramacionService {
             return REVISION_SIN_COHORTE;
         }
         if (c.getCodeCourseEspacio() != null) {
-            // Electiva programada a mano: no sale de la malla obligatoria, no es «fuera de malla».
+            // Electiva programada a mano: no sale de la malla obligatoria, no es «fuera de
+            // malla».
             return null;
         }
         if (!oferta.containsKey(clave(c))) {
@@ -746,6 +785,22 @@ public class ProgramacionService {
     @Transactional
     public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
             boolean reemplazarDocente) {
+        return asignarDocente(cursoId, idDocente, reemplazarDocente, null, null, null, null);
+    }
+
+    @Transactional
+    public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
+            boolean reemplazarDocente, Integer dia, java.time.LocalTime horaInicio,
+            java.time.LocalTime horaFin, String horario) {
+        return asignarDocente(cursoId, idDocente, reemplazarDocente, dia, horaInicio, horaFin, null, null, null,
+                horario);
+    }
+
+    @Transactional
+    public ProgramacionDto.CursoResponse asignarDocente(Long cursoId, Long idDocente,
+            boolean reemplazarDocente, Integer dia, java.time.LocalTime horaInicio,
+            java.time.LocalTime horaFin, Integer dia2, java.time.LocalTime horaInicio2,
+            java.time.LocalTime horaFin2, String horario) {
         CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException("Curso no encontrado con id " + cursoId));
 
@@ -783,11 +838,96 @@ public class ProgramacionService {
                 throw new BadRequestException(
                         "El docente seleccionado no tiene disponibilidad horaria registrada para este período");
             }
-            long minutosDisponibles = franjas.stream()
-                    .filter(f -> f.getHoraInicio() != null && f.getHoraFin() != null)
-                    .mapToLong(f -> java.time.Duration.between(f.getHoraInicio(), f.getHoraFin()).toMinutes())
-                    .filter(m -> m > 0)
-                    .sum();
+
+            boolean esHorarioDividido = dia != null && horaInicio != null && horaFin != null
+                    && dia2 != null && horaInicio2 != null && horaFin2 != null;
+            boolean esHorarioUnico = dia != null && horaInicio != null && horaFin != null
+                    && !esHorarioDividido;
+
+            if (esHorarioDividido) {
+                if (dia.equals(dia2)) {
+                    throw new BadRequestException("Los dos días de clase deben ser diferentes");
+                }
+                if (!horaFin.isAfter(horaInicio) || !horaFin2.isAfter(horaInicio2)) {
+                    throw new BadRequestException(
+                            "La hora de fin debe ser posterior a la hora de inicio en ambas sesiones");
+                }
+                long duracionMin1 = java.time.Duration.between(horaInicio, horaFin).toMinutes();
+                long duracionMin2 = java.time.Duration.between(horaInicio2, horaFin2).toMinutes();
+                long duracionTotalMin = duracionMin1 + duracionMin2;
+
+                if (duracionTotalMin < horas * 60L) {
+                    throw new BadRequestException(String.format(
+                            "Las sesiones seleccionadas deben cubrir las %d horas presenciales del curso (tienen %.1f h)",
+                            horas, duracionTotalMin / 60.0));
+                }
+
+                boolean dentroDeDisponibilidad1 = franjas.stream().anyMatch(f -> f.getDia().equals(dia)
+                        && !f.getHoraInicio().isAfter(horaInicio)
+                        && !f.getHoraFin().isBefore(horaFin));
+                if (!dentroDeDisponibilidad1) {
+                    throw new BadRequestException(
+                            "El horario de la sesión 1 no se encuentra dentro de la disponibilidad horaria del docente");
+                }
+
+                boolean dentroDeDisponibilidad2 = franjas.stream().anyMatch(f -> f.getDia().equals(dia2)
+                        && !f.getHoraInicio().isAfter(horaInicio2)
+                        && !f.getHoraFin().isBefore(horaFin2));
+                if (!dentroDeDisponibilidad2) {
+                    throw new BadRequestException(
+                            "El horario de la sesión 2 no se encuentra dentro de la disponibilidad horaria del docente");
+                }
+
+                // Validar que el docente no tenga otro curso activo en el mismo período y
+                // horario en sesión 1 o sesión 2
+                List<CursoProgramacion> cursosDocente = cursoRepository
+                        .findByPeriodoIdWithDetails(curso.getPeriodo().getId()).stream()
+                        .filter(c -> c.getDocente() != null && c.getDocente().getId().equals(idDocente)
+                                && !c.getId().equals(curso.getId()) && !c.isExcluido())
+                        .toList();
+
+                for (CursoProgramacion otro : cursosDocente) {
+                    validarCruceHorario(dia, horaInicio, horaFin, otro, "sesión 1");
+                    validarCruceHorario(dia2, horaInicio2, horaFin2, otro, "sesión 2");
+                }
+            } else if (esHorarioUnico) {
+                if (!horaFin.isAfter(horaInicio)) {
+                    throw new BadRequestException("La hora de fin debe ser posterior a la hora de inicio");
+                }
+                long duracionMin = java.time.Duration.between(horaInicio, horaFin).toMinutes();
+                if (duracionMin < horas * 60L) {
+                    throw new BadRequestException(String.format(
+                            "La franja horaria seleccionada debe cubrir al menos las %d horas presenciales del curso (tiene %.1f h)",
+                            horas, duracionMin / 60.0));
+                }
+                boolean dentroDeDisponibilidad = franjas.stream().anyMatch(f -> f.getDia().equals(dia)
+                        && !f.getHoraInicio().isAfter(horaInicio)
+                        && !f.getHoraFin().isBefore(horaFin));
+                if (!dentroDeDisponibilidad) {
+                    throw new BadRequestException(
+                            "El horario seleccionado no se encuentra dentro de la disponibilidad horaria del docente");
+                }
+                // Validar que el docente no tenga otro curso activo en el mismo período y
+                // horario
+                List<CursoProgramacion> cursosDocente = cursoRepository
+                        .findByPeriodoIdWithDetails(curso.getPeriodo().getId()).stream()
+                        .filter(c -> c.getDocente() != null && c.getDocente().getId().equals(idDocente)
+                                && !c.getId().equals(curso.getId()) && !c.isExcluido())
+                        .toList();
+                for (CursoProgramacion otro : cursosDocente) {
+                    validarCruceHorario(dia, horaInicio, horaFin, otro, "el horario seleccionado");
+                }
+            }
+
+            long minutosDisponibles = 0L;
+            for (DisponibilidadDocente f : franjas) {
+                if (f.getHoraInicio() != null && f.getHoraFin() != null) {
+                    long min = java.time.Duration.between(f.getHoraInicio(), f.getHoraFin()).toMinutes();
+                    if (min > 0) {
+                        minutosDisponibles += min;
+                    }
+                }
+            }
             long horasYaAsignadas = cursoRepository.sumarHorasExcluyendo(
                     idDocente, curso.getPeriodo().getId(), curso.getId());
             long minutosRestantes = minutosDisponibles - horasYaAsignadas * 60L;
@@ -802,6 +942,13 @@ public class ProgramacionService {
             cargaDocenteService.validar(idDocente, curso.getPeriodo().getId(), curso.getId(), horas);
 
             curso.setDocente(docente);
+            curso.setDia(dia);
+            curso.setHoraInicio(horaInicio);
+            curso.setHoraFin(horaFin);
+            curso.setDia2(dia2);
+            curso.setHoraInicio2(horaInicio2);
+            curso.setHoraFin2(horaFin2);
+            curso.setHorario(horario);
             curso.setEstado(CursoProgramacion.ESTADO_ASIGNADO);
 
             docenteAsignaturaService.registrarDesdeCursos(List.of(curso));
@@ -813,6 +960,13 @@ public class ProgramacionService {
             }
         } else {
             curso.setDocente(null);
+            curso.setDia(null);
+            curso.setHoraInicio(null);
+            curso.setHoraFin(null);
+            curso.setDia2(null);
+            curso.setHoraInicio2(null);
+            curso.setHoraFin2(null);
+            curso.setHorario(null);
             curso.setEstado(CursoProgramacion.ESTADO_PROGRAMADO);
         }
 
@@ -824,6 +978,25 @@ public class ProgramacionService {
     public ProgramacionDto.CursoResponse asignarDocentePorMateria(
             Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente,
             boolean reemplazarDocente) {
+        return asignarDocentePorMateria(periodoId, codeProgram, codeCourse, semestre, idDocente, reemplazarDocente,
+                null, null, null, null);
+    }
+
+    @Transactional
+    public ProgramacionDto.CursoResponse asignarDocentePorMateria(
+            Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente,
+            boolean reemplazarDocente, Integer dia, java.time.LocalTime horaInicio,
+            java.time.LocalTime horaFin, String horario) {
+        return asignarDocentePorMateria(periodoId, codeProgram, codeCourse, semestre, idDocente, reemplazarDocente,
+                dia, horaInicio, horaFin, null, null, null, horario);
+    }
+
+    @Transactional
+    public ProgramacionDto.CursoResponse asignarDocentePorMateria(
+            Long periodoId, String codeProgram, String codeCourse, Integer semestre, Long idDocente,
+            boolean reemplazarDocente, Integer dia, java.time.LocalTime horaInicio,
+            java.time.LocalTime horaFin, Integer dia2, java.time.LocalTime horaInicio2,
+            java.time.LocalTime horaFin2, String horario) {
         // El coordinador solo asigna en su programa (antes de tocar nada)
         accesoProgramaService.exigirProgramaPropio(codeProgram);
 
@@ -845,12 +1018,38 @@ public class ProgramacionService {
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_CURSO_NO_PROGRAMADO));
 
-        return asignarDocente(curso.getId(), idDocente, reemplazarDocente);
+        return asignarDocente(curso.getId(), idDocente, reemplazarDocente,
+                dia, horaInicio, horaFin, dia2, horaInicio2, horaFin2, horario);
     }
 
-    /** ELE-PROF-I → «Electiva Profesional I»; null si el curso no ocupa un espacio de electiva. */
+    private void validarCruceHorario(Integer diaClase, java.time.LocalTime iniClase,
+            java.time.LocalTime finClase, CursoProgramacion otro, String sesionDesc) {
+        if (diaClase == null || iniClase == null || finClase == null || otro == null) {
+            return;
+        }
+        if (otro.getDia() != null && otro.getDia().equals(diaClase)
+                && otro.getHoraInicio() != null && otro.getHoraFin() != null) {
+            if (iniClase.isBefore(otro.getHoraFin()) && finClase.isAfter(otro.getHoraInicio())) {
+                throw new ConflictException("El docente ya tiene asignado otro curso en " + sesionDesc + " ("
+                        + otro.getNombreAsignatura() + ": " + otro.getHorario() + ")");
+            }
+        }
+        if (otro.getDia2() != null && otro.getDia2().equals(diaClase)
+                && otro.getHoraInicio2() != null && otro.getHoraFin2() != null) {
+            if (iniClase.isBefore(otro.getHoraFin2()) && finClase.isAfter(otro.getHoraInicio2())) {
+                throw new ConflictException("El docente ya tiene asignado otro curso en " + sesionDesc + " ("
+                        + otro.getNombreAsignatura() + ": " + otro.getHorario() + ")");
+            }
+        }
+    }
+
+    /**
+     * ELE-PROF-I → «Electiva Profesional I»; null si el curso no ocupa un espacio
+     * de electiva.
+     */
     private static String nombreEspacio(String codigoEspacio) {
-        if (codigoEspacio == null || !codigoEspacio.toUpperCase().startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
+        if (codigoEspacio == null
+                || !codigoEspacio.toUpperCase().startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
             return null;
         }
         return "Electiva Profesional " + codigoEspacio.substring(ElectivaProgramadaService.PREFIJO_ESPACIO.length());
@@ -882,6 +1081,13 @@ public class ProgramacionService {
                 .nombreEspacio(nombreEspacio(c.getCodeCourseEspacio()))
                 .idDocente(idDocente)
                 .nombreDocente(nombreDocente)
+                .dia(c.getDia())
+                .horaInicio(c.getHoraInicio())
+                .horaFin(c.getHoraFin())
+                .dia2(c.getDia2())
+                .horaInicio2(c.getHoraInicio2())
+                .horaFin2(c.getHoraFin2())
+                .horario(c.getHorario())
                 .estado(c.getEstado())
                 .codigoCurso(codigoCurso(c))
                 .justificacionExclusion(c.getJustificacionExclusion())
