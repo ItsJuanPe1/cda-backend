@@ -140,6 +140,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/programacion/asignar-docente").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         // HU-059: cupos de estudiantes
                         .requestMatchers(HttpMethod.PATCH, "/api/programacion/cupos").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.POST, "/api/programacion/electivas").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.PATCH, "/api/programacion/electivas/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+.requestMatchers(HttpMethod.DELETE, "/api/programacion/electivas/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
                         // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)

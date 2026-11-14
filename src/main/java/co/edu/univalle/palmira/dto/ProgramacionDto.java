@@ -62,6 +62,10 @@ public class ProgramacionDto {
         private Integer grupo;
         /** HU-059: cupos de estudiantes del curso/grupo; null si aún no se registran. */
         private Integer cupos;
+        /** Electiva profesional programada a mano: espacio de la malla que ocupa (ELE-PROF-I); null en el resto. */
+        private String codigoEspacio;
+        /** Nombre del espacio, p. ej. «Electiva Profesional I»; null en el resto. */
+        private String nombreEspacio;
         private Long idDocente;
         private String nombreDocente;
         private String estado;
