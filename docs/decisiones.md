@@ -261,8 +261,8 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
     - Jornada: «Diurna» (`DIURNA`), «Nocturna» (`NOCTURNA`) y «Ambas» (`AMBAS`, no filtra). Se filtra por `curso.jornada`.
     - Docentes: «Todos los docentes» (`TODOS`) y «Sin docente asignado» (`SIN_DOCENTE`, solo pendientes).
     - Valores por defecto `DIURNA` y `TODOS`, al entrar y al cambiar de programa. No se guardan en localStorage. «Actualizar» conserva los filtros.
-  4. **Asignaturas de la malla sin curso programado** (`existeEnProgramacion: false`): toman la jornada del programa; si el programa es `AMBAS`, aparecen con cualquier filtro de jornada.
-  5. **Grupo:** cada curso ya trae su grupo de HU-046. La tarjeta y el modal muestran solo el número de grupo («53», sin la palabra «Grupo»), no el identificador `CÓDIGO-GRUPO` (`204133C-53`), igual que en «Cursos Programados» (decisión del 2026-11-06). El código de la asignatura se sigue mostrando aparte. Ya no se inventa «Grupo 50» cuando falta: una asignatura de la malla sin curso (la malla cambió después de generar) muestra «Sin grupo». Al asignarle docente, el backend crea el curso con el siguiente grupo de la serie.
+  4. ~~**Asignaturas de la malla sin curso programado** (`existeEnProgramacion: false`): toman la jornada del programa; si el programa es `AMBAS`, aparecen con cualquier filtro de jornada.~~ *Reemplazado el 2026-11-13: la vista muestra solo cursos generados (ver «HU-016: solo cursos generados tras integrar develop»).*
+  5. **Grupo:** *(la parte de asignaturas sin curso quedó reemplazada el 2026-11-13; ver abajo)* cada curso ya trae su grupo de HU-046. La tarjeta y el modal muestran solo el número de grupo («53», sin la palabra «Grupo»), no el identificador `CÓDIGO-GRUPO` (`204133C-53`), igual que en «Cursos Programados» (decisión del 2026-11-06). El código de la asignatura se sigue mostrando aparte. Ya no se inventa «Grupo 50» cuando falta: una asignatura de la malla sin curso (la malla cambió después de generar) muestra «Sin grupo». Al asignarle docente, el backend crea el curso con el siguiente grupo de la serie.
   6. **Contadores** con la jornada filtrada: con `TODOS`, «X/Y asignadas» por semestre y «X de Y materias con docente designado»; con `SIN_DOCENTE`, «N pendientes» o «Sin pendientes» por semestre y «N materias pendientes en el semestre · Total del programa: M pendientes» (criterio 1).
   7. **Plazo del coordinador:** abierto si la hora actual está entre `plazoCoordinadorInicio` y `plazoCoordinadorFin` del periodo (bordes incluidos). Sin fechas definidas, el plazo está cerrado (HU-002, criterio 3: «solo consultan»). Con el plazo cerrado se ocultan «Asignar docente», «Cambiar docente» y «Quitar», y se muestra «Fuera del período habilitado: solo consulta». El administrador conserva el comportamiento anterior (siempre puede asignar).
   8. **Orden de los mensajes:** (1) «Aún no tiene un programa asignado. Contacte al administrador»; (2) «No se pudo cargar» con «Reintentar»; (3) «Aún no hay programación iniciada» (el programa no tiene cursos en el periodo, contando los excluidos, o no hay periodo); (4) con `SIN_DOCENTE`, «No hay materias pendientes de asignación»; (5) con `TODOS`, «No hay materias de la jornada {Diurna/Nocturna} en el Semestre N» (con «Ambas», «No hay materias registradas en el Semestre N»).
@@ -341,3 +341,33 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   5. El backend aplica la ventana de edición del coordinador tanto al asignar/reemplazar como al desasignar. Los extremos de la ventana están incluidos; si no están definidas ambas fechas, el plazo está cerrado. El administrador conserva la facultad de editar siempre.
   6. La evaluación mostrada en la designación corresponde a la última evaluación registrada para esa asignatura antes del período activo, aunque no pertenezca al período inmediatamente anterior.
 * **Implementación:** validación de disponibilidad y plazo en `ProgramacionService`; consulta de última evaluación por asignatura en `EvaluacionDocenteRepository`; vistas de edición en `AsignacionDocenteView.jsx`; autoridad de coordinador limitada a su rol en `GoogleAuthService`; reglas de `SecurityConfig` permiten al coordinador consultar únicamente el catálogo de docentes y las evaluaciones usadas por la asignación, no los endpoints de perfil o evaluación individual docente.
+
+
+## [2026-11-13] HU-016: solo cursos generados tras integrar develop
+
+* **HU afectadas:** HU-016 (materias pendientes), HU-052/HU-053 (carga docente), HU-060 (designar docente), HU-012/HU-013 (edición y elegibilidad).
+* **Origen:** resolución del conflicto del PR #50 del frontend (`feature/HU-016-materias-pendientes` contra `develop`, commits `3da13ba` y `0ceee21`), fusionado en `develop` (`2e00b80`). La vista `AsignacionDocenteView.jsx` se había ampliado en HU-016 y recortado en HU-052/053 (`cd864ee`).
+* **Decisión (confirmada por el usuario):**
+  1. **Reemplaza el punto 4 y la parte de asignaturas sin curso del punto 5 de la decisión del 2026-11-11.** La vista de asignación muestra **solo los cursos ya generados** en `cursos_programacion`. Las asignaturas de la malla sin curso ya no aparecen.
+  2. **Motivo:** en `develop`, `POST /api/programacion/asignar-docente` ya no crea el curso. Si la asignatura no tiene curso generado responde «La asignatura no está programada en este período para el programa» (`MSG_CURSO_NO_PROGRAMADO`).
+  3. El frontend asigna siempre por id de curso con `asignarDocenteACurso(id, docenteId, reemplazarDocente)`. Se quitó `asignarDocentePorMateria` de la vista. Se conserva el indicador de reemplazo, porque sin él «Cambiar docente» recibe 409 «El curso ya tiene un docente asignado. Confirme si desea reemplazarlo.».
+  4. La tarjeta del programa sigue mostrando «Total materias en malla» (opción A del merge). Por eso el total puede ser mayor que el número de materias de la lista, que solo incluye cursos generados. Queda abierta la opción de cambiarlo a «Cursos programados», como hacía `develop`.
+  5. «Aún no hay programación iniciada» se sigue calculando con los cursos generados (incluidos los excluidos). No cambia.
+* **Pendientes de la decisión del 2026-11-11 que ya quedaron resueltos en el backend** (decisión de HU-012/HU-013 del 2026-11-12): el backend valida el plazo del coordinador al asignar, reemplazar y desasignar, y exige que el curso pertenezca a su programa (`AccesoProgramaService.exigirProgramaPropio`).
+* **Pendientes (no se hacen ahora):**
+  - Con el filtro de la otra jornada (por ejemplo, un coordinador de `2839-DIU` que ve `2839-NOC`), la interfaz todavía ofrece «Asignar docente», y el backend lo rechaza. Falta decidir si esos programas se muestran en solo consulta o si el coordinador puede gestionar los dos (esto último sería un cambio de backend).
+  - Confirmar en la interfaz que los errores del backend al asignar (límite de 20 h, asignatura sin horas semanales, programa ajeno) llegan al toast con su mensaje.
+  - Probar la vista en el navegador después del merge: hasta ahora solo se verificó que el build compila.
+
+
+## [2026-11-15] Descarga de la malla curricular en Excel (HU-035)
+
+* **HU afectadas:** HU-035 (descargar la resolución de programa en Excel), HU-033 (detalle de la resolución, todavía en Backlog).
+* **Decisión (confirmada por el usuario):**
+  1. **Dónde:** Programas (Carreras) → programa → «Ver Malla Curricular» → «Opciones de Malla». Se agrega «Descargar Excel» y se conserva «Imprimir / Exportar Malla» (PDF con `window.print()`). Mientras no exista HU-033, esta vista es el «detalle» del criterio 1.
+  2. **Qué malla:** la versión que está en pantalla, sea la vigente o una del historial. Si es del historial, el archivo termina en `_historial` (`malla_<programa>_<jornada>_historial.xlsx`), no en el número de versión.
+  3. **Quién:** administrador y coordinador por igual. El coordinador solo descarga la malla de su programa; si pide otra, recibe 403 «Solo puede descargar la malla de su programa».
+  4. **Contenido:** todos los campos que conforman la malla: los datos de la resolución (número, descripción, jornada, periodo de oferta, número de semestres, versión, estado y edición) y, por asignatura, código, nombre, créditos, horas de clase, horas de estudio independiente, tipo, electiva, facultad y estado. Se agrupan por semestre, con subtotales.
+  5. **Generación:** en el backend con Apache POI (ya incluido por HU-054). No hay cambios en la base de datos.
+* **Contrato:** `docs/contratos/HU-035.md`.
+* **Pendiente:** un coordinador de `XXXX-DIU` que consulta la malla de `XXXX-NOC` recibe 403 al descargar, igual que en la asignación (ver el pendiente del 2026-11-13).
