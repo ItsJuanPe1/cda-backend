@@ -47,6 +47,7 @@ class ProgramacionServiceAsignarDocenteTest {
     @Mock AsignaturaRepository asignaturaRepository;
     @Mock AccesoProgramaService accesoProgramaService;
     @Mock CargaDocenteService cargaDocenteService;
+    @Mock ProgramacionExcelService programacionExcelService;
 
     @InjectMocks ProgramacionService service;
 

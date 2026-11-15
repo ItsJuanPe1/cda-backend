@@ -45,6 +45,7 @@ class ProgramacionAjusteServiceTest {
     @Mock private PensumAcademicoRepository pensumRepository;
     @Mock private DocenteAsignaturaService docenteAsignaturaService;
     @Mock private BitacoraService bitacoraService;
+    @Mock private ProgramacionExcelService programacionExcelService;
 
     @InjectMocks
     private ProgramacionService service;
