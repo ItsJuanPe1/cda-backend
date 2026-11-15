@@ -358,3 +358,16 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - Con el filtro de la otra jornada (por ejemplo, un coordinador de `2839-DIU` que ve `2839-NOC`), la interfaz todavía ofrece «Asignar docente», y el backend lo rechaza. Falta decidir si esos programas se muestran en solo consulta o si el coordinador puede gestionar los dos (esto último sería un cambio de backend).
   - Confirmar en la interfaz que los errores del backend al asignar (límite de 20 h, asignatura sin horas semanales, programa ajeno) llegan al toast con su mensaje.
   - Probar la vista en el navegador después del merge: hasta ahora solo se verificó que el build compila.
+
+
+## [2026-11-15] Descarga de la malla curricular en Excel (HU-035)
+
+* **HU afectadas:** HU-035 (descargar la resolución de programa en Excel), HU-033 (detalle de la resolución, todavía en Backlog).
+* **Decisión (confirmada por el usuario):**
+  1. **Dónde:** Programas (Carreras) → programa → «Ver Malla Curricular» → «Opciones de Malla». Se agrega «Descargar Excel» y se conserva «Imprimir / Exportar Malla» (PDF con `window.print()`). Mientras no exista HU-033, esta vista es el «detalle» del criterio 1.
+  2. **Qué malla:** la versión que está en pantalla, sea la vigente o una del historial. Si es del historial, el archivo termina en `_historial` (`malla_<programa>_<jornada>_historial.xlsx`), no en el número de versión.
+  3. **Quién:** administrador y coordinador por igual. El coordinador solo descarga la malla de su programa; si pide otra, recibe 403 «Solo puede descargar la malla de su programa».
+  4. **Contenido:** todos los campos que conforman la malla: los datos de la resolución (número, descripción, jornada, periodo de oferta, número de semestres, versión, estado y edición) y, por asignatura, código, nombre, créditos, horas de clase, horas de estudio independiente, tipo, electiva, facultad y estado. Se agrupan por semestre, con subtotales.
+  5. **Generación:** en el backend con Apache POI (ya incluido por HU-054). No hay cambios en la base de datos.
+* **Contrato:** `docs/contratos/HU-035.md`.
+* **Pendiente:** un coordinador de `XXXX-DIU` que consulta la malla de `XXXX-NOC` recibe 403 al descargar, igual que en la asignación (ver el pendiente del 2026-11-13).
