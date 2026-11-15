@@ -7,6 +7,7 @@ import co.edu.univalle.palmira.service.ProgramacionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -112,6 +113,27 @@ public class ProgramacionController {
     @Operation(summary = "Consultar el resumen consolidado de cursos programados")
     public ResponseEntity<ProgramacionDto.ResumenResponse> obtenerResumen(@RequestParam("periodoId") Long periodoId) {
         return ResponseEntity.ok(programacionService.obtenerResumen(periodoId));
+    }
+
+    /**
+     * Exporta la programación académica oficial a un archivo Excel (.xlsx).
+     *
+     * @param periodoId   identificador del período académico
+     * @param codeProgram código de programa opcional para filtrar
+     * @return archivo Excel descargable
+     */
+    @GetMapping("/exportar-excel")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @Operation(summary = "Exportar la programación académica a un archivo Excel")
+    public ResponseEntity<byte[]> exportarExcel(
+            @RequestParam("periodoId") Long periodoId,
+            @RequestParam(value = "codeProgram", required = false) String codeProgram) {
+        byte[] bytes = programacionService.exportarExcel(periodoId, codeProgram);
+        String filename = "programacion-academica-" + periodoId + ".xlsx";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .header(HttpHeaders.CONTENT_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .body(bytes);
     }
 
     /**

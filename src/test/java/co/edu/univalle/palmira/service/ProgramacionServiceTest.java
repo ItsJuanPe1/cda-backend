@@ -51,6 +51,9 @@ class ProgramacionServiceTest {
     @Mock
     private BitacoraService bitacoraService;
 
+    @Mock
+    private ProgramacionExcelService programacionExcelService;
+
     @InjectMocks
     private ProgramacionService programacionService;
 

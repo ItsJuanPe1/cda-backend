@@ -81,6 +81,7 @@ public class ProgramacionService {
     private final AccesoProgramaService accesoProgramaService;
     private final CargaDocenteService cargaDocenteService;
     private final CuposProperties cuposProperties;
+    private final ProgramacionExcelService programacionExcelService;
 
     @Autowired
     public ProgramacionService(
@@ -96,7 +97,8 @@ public class ProgramacionService {
             AsignaturaRepository asignaturaRepository,
             AccesoProgramaService accesoProgramaService,
             CargaDocenteService cargaDocenteService,
-            CuposProperties cuposProperties) {
+            CuposProperties cuposProperties,
+            ProgramacionExcelService programacionExcelService) {
         this.cursoRepository = cursoRepository;
         this.cohorteRepository = cohorteRepository;
         this.periodoRepository = periodoRepository;
@@ -110,6 +112,7 @@ public class ProgramacionService {
         this.accesoProgramaService = accesoProgramaService;
         this.cargaDocenteService = cargaDocenteService;
         this.cuposProperties = cuposProperties;
+        this.programacionExcelService = programacionExcelService;
     }
 
     /** Curso que corresponde según las cohortes confirmadas y la malla. */
@@ -267,11 +270,62 @@ public class ProgramacionService {
         return construirResumen(periodoId, "Resumen consolidado de la programación");
     }
 
+    /**
+     * Exporta la programación académica del período a un libro de Excel (.xlsx).
+     *
+     * @param periodoId   identificador del período académico
+     * @param codeProgram código de programa opcional (para coordinadores se fuerza su programa propio)
+     * @return arreglo de bytes del archivo Excel generado
+     */
+    @Transactional(readOnly = true)
+    public byte[] exportarExcel(Long periodoId, String codeProgram) {
+        PeriodoAcademico periodo = periodoRepository.findById(periodoId)
+                .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
+
+        AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+        String programaFiltrar = alcance.admin() ? codeProgram : alcance.codeProgram();
+
+        List<CursoProgramacion> cursos;
+        if (programaFiltrar != null && !programaFiltrar.isBlank()) {
+            cursos = cursoRepository.findByPeriodoIdAndCodeProgramWithDetails(periodoId, programaFiltrar.trim());
+        } else {
+            cursos = cursoRepository.findByPeriodoIdWithDetails(periodoId);
+        }
+
+        List<CursoProgramacion> activos = new ArrayList<>();
+        for (CursoProgramacion c : cursos) {
+            if (!c.isExcluido()) {
+                activos.add(c);
+            }
+        }
+        activos.sort((c1, c2) -> {
+            String p1 = c1.getPrograma() != null && c1.getPrograma().getCodeProgram() != null ? c1.getPrograma().getCodeProgram() : "";
+            String p2 = c2.getPrograma() != null && c2.getPrograma().getCodeProgram() != null ? c2.getPrograma().getCodeProgram() : "";
+            int cmpProg = p1.compareTo(p2);
+            if (cmpProg != 0) return cmpProg;
+
+            int s1 = c1.getSemestre() != null ? c1.getSemestre() : 0;
+            int s2 = c2.getSemestre() != null ? c2.getSemestre() : 0;
+            int cmpSem = Integer.compare(s1, s2);
+            if (cmpSem != 0) return cmpSem;
+
+            String n1 = c1.getNombreAsignatura() != null ? c1.getNombreAsignatura() : "";
+            String n2 = c2.getNombreAsignatura() != null ? c2.getNombreAsignatura() : "";
+            int cmpNom = n1.compareToIgnoreCase(n2);
+            if (cmpNom != 0) return cmpNom;
+
+            int g1 = c1.getGrupo() != null ? c1.getGrupo() : 0;
+            int g2 = c2.getGrupo() != null ? c2.getGrupo() : 0;
+            return Integer.compare(g1, g2);
+        });
+
+        return programacionExcelService.generar(periodo, activos);
+    }
+
     // ------------------------------------------------------------------ HU-047
 
     /**
-     * Criterio 2: cómo quedarían los grupos si se excluye el curso, sin guardar
-     * nada.
+     * Criterio 2: Como quedarian los grupos si se excluye el curso, sin guardar nada.
      */
     @Transactional(readOnly = true)
     public ProgramacionDto.AjusteGruposResponse vistaPreviaExclusion(Long cursoId) {
