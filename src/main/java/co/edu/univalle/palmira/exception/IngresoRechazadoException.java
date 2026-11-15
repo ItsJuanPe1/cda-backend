@@ -12,6 +12,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Getter
 public class IngresoRechazadoException extends ResponseStatusException {
 
+    private static final long serialVersionUID = 1L;
+
     private final MotivoRechazoIngreso motivo;
     /** Correo institucional verificado, o null si el rechazo ocurrió antes de verificarlo. */
     private final String correo;

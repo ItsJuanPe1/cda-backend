@@ -9,7 +9,6 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -35,13 +34,10 @@ import java.util.List;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    private static final String[] ADMIN = {"ROLE_ADMIN", "ADMIN"};
-    private static final String[] ADMIN_Y_COORDINADOR =
-            {"ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR"};
-    private static final String[] ADMIN_Y_DOCENTE =
-            {"ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE"};
-
-    private static final String[] DOCENTE = {"ROLE_DOCENTE", "DOCENTE"};        
+    private static final String[] ADMIN = { "ROLE_ADMIN", "ADMIN" };
+    private static final String[] ADMIN_Y_COORDINADOR = { "ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR" };
+    private static final String[] ADMIN_Y_DOCENTE = { "ROLE_ADMIN", "ADMIN", "ROLE_DOCENTE", "DOCENTE" };
+    private static final String[] DOCENTE = { "ROLE_DOCENTE", "DOCENTE" };
 
     @Value("${cors.allowed-origins:http://localhost:5173,http://localhost:3000}")
     private String allowedOrigins;
@@ -66,7 +62,7 @@ public class SecurityConfig {
         authenticationConverter.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
 
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(AbstractHttpConfigurer::disable)
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Rutas públicas: autenticación, Swagger y health
@@ -132,9 +128,9 @@ public class SecurityConfig {
                         // cualquier otro método responde 405 (criterio 4).
                         .requestMatchers("/api/bitacora", "/api/bitacora/**").hasAnyAuthority(ADMIN)
 
-                         // Mis cursos: solo el docente consulta los suyos (antes de /api/carga/**)
+                        // Mis cursos: solo el docente consulta los suyos (antes de /api/carga/**)
                         .requestMatchers(HttpMethod.GET, "/api/carga/mis-cursos").hasAnyAuthority(DOCENTE)
-                        
+
                         // Carga académica docente: consulta para admin y coordinador
                         .requestMatchers(HttpMethod.GET, "/api/carga/**").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
@@ -145,7 +141,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/programacion/cupos").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers(HttpMethod.POST, "/api/programacion/electivas").hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers(HttpMethod.PATCH, "/api/programacion/electivas/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
-.requestMatchers(HttpMethod.DELETE, "/api/programacion/electivas/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.DELETE, "/api/programacion/electivas/*").hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
                         // 5. Creaciones y modificaciones: exclusivo Administrador
                         .requestMatchers(HttpMethod.POST, "/api/**").hasAnyAuthority(ADMIN)
@@ -158,10 +154,10 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
-                        .authenticationEntryPoint((req, res, ex) ->
-                                escribirError(res, 401, "Sesión no válida o expirada"))
-                        .accessDeniedHandler((req, res, ex) ->
-                                escribirError(res, 403, "No tiene permisos para esta acción")));
+                        .authenticationEntryPoint((req, res, ex) -> escribirError(res, 401,
+                                "Sesión no válida o expirada"))
+                        .accessDeniedHandler((req, res, ex) -> escribirError(res, 403,
+                                "No tiene permisos para esta acción")));
 
         return http.build();
     }

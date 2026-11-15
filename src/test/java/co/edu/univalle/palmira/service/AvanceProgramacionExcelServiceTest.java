@@ -1,6 +1,6 @@
 package co.edu.univalle.palmira.service;
 
-import co.edu.univalle.palmira.dto.AvanceProgramacionDto;
+//import co.edu.univalle.palmira.dto.AvanceProgramacionDto;
 import co.edu.univalle.palmira.dto.AvanceProgramacionDto.CursoPendiente;
 import co.edu.univalle.palmira.dto.AvanceProgramacionDto.DocenteSinDisponibilidad;
 import co.edu.univalle.palmira.dto.AvanceProgramacionDto.Periodo;

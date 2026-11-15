@@ -263,8 +263,9 @@ public class DocenteService {
 
     @Transactional(readOnly = true)
     public List<EvaluacionDocenteDto.Curso> listarCursosEvaluacion(Long docenteId, Long periodoId) {
-        Docente docente = docenteRepository.findById(docenteId)
-                .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado"));
+        if (!docenteRepository.existsById(docenteId)) {
+            throw new ResourceNotFoundException("Docente no encontrado");
+        }
         PeriodoAcademico anterior = buscarPeriodoAnterior(periodoId);
         if (anterior == null) {
             return List.of();

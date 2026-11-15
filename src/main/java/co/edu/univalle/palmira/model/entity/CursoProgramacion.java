@@ -70,6 +70,27 @@ public class CursoProgramacion {
     @JoinColumn(name = "id_docente")
     private Docente docente;
 
+    @Column(name = "dia")
+    private Integer dia;
+
+    @Column(name = "hora_inicio")
+    private java.time.LocalTime horaInicio;
+
+    @Column(name = "hora_fin")
+    private java.time.LocalTime horaFin;
+
+    @Column(name = "dia2")
+    private Integer dia2;
+
+    @Column(name = "hora_inicio2")
+    private java.time.LocalTime horaInicio2;
+
+    @Column(name = "hora_fin2")
+    private java.time.LocalTime horaFin2;
+
+    @Column(name = "horario", length = 150)
+    private String horario;
+
     @Column(nullable = false, length = 20)
     @Builder.Default
     private String estado = ESTADO_PROGRAMADO;

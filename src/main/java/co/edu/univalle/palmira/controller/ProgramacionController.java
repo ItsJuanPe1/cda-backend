@@ -1,27 +1,33 @@
 package co.edu.univalle.palmira.controller;
 
 import co.edu.univalle.palmira.dto.ProgramacionDto;
+import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.model.enums.Jornada;
 import co.edu.univalle.palmira.service.ProgramacionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalTime;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/programacion")
-@RequiredArgsConstructor
-@Tag(name = "Programación Académica", description = "Endpoints para la generación y consulta de cursos de un período")
+@Tag(name = "Programacion Academica", description = "Endpoints para la generacion y consulta de cursos de un periodo")
 public class ProgramacionController {
 
     private final ProgramacionService programacionService;
 
+    @Autowired
+    public ProgramacionController(ProgramacionService programacionService) {
+        this.programacionService = programacionService;
+    }
+
     @PostMapping("/generar")
-    @Operation(summary = "Generar la programación académica a partir de cohortes confirmadas y mallas")
+    @Operation(summary = "Generar la programacion academica a partir de cohortes confirmadas y mallas")
     public ResponseEntity<ProgramacionDto.ResumenResponse> generarProgramacion(
             @RequestParam("periodoId") Long periodoId,
             @RequestBody(required = false) ProgramacionDto.GenerarRequest request) {
@@ -30,7 +36,7 @@ public class ProgramacionController {
     }
 
     @GetMapping
-    @Operation(summary = "Consultar cursos programados de un período con filtros opcionales")
+    @Operation(summary = "Consultar cursos programados de un periodo con filtros opcionales")
     public ResponseEntity<List<ProgramacionDto.CursoResponse>> obtenerProgramacion(
             @RequestParam("periodoId") Long periodoId,
             @RequestParam(value = "codeProgram", required = false) String codeProgram,
@@ -41,7 +47,7 @@ public class ProgramacionController {
 
     @GetMapping("/cupos/config")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
-    @Operation(summary = "Consultar máximo de cupos y si el plazo de edición está abierto")
+    @Operation(summary = "Consultar maximo de cupos y si el plazo de edicion esta abierto")
     public ResponseEntity<ProgramacionDto.CuposConfigResponse> obtenerConfiguracionCupos(
             @RequestParam("periodoId") Long periodoId) {
         return ResponseEntity.ok(programacionService.obtenerConfiguracionCupos(periodoId));
@@ -65,14 +71,14 @@ public class ProgramacionController {
 
     @GetMapping("/cursos/{id}/exclusion/vista-previa")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
-    @Operation(summary = "Ver cómo quedarían los grupos de la asignatura si se excluye el curso")
+    @Operation(summary = "Ver como quedarian los grupos de la asignatura si se excluye el curso")
     public ResponseEntity<ProgramacionDto.AjusteGruposResponse> vistaPreviaExclusion(@PathVariable("id") Long id) {
         return ResponseEntity.ok(programacionService.vistaPreviaExclusion(id));
     }
 
     @PatchMapping("/cursos/{id}/excluir")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
-    @Operation(summary = "Excluir un curso con justificación y renumerar los grupos de la asignatura")
+    @Operation(summary = "Excluir un curso con justificacion y renumerar los grupos de la asignatura")
     public ResponseEntity<ProgramacionDto.AjusteGruposResponse> excluir(
             @PathVariable("id") Long id,
             @RequestBody(required = false) ProgramacionDto.JustificacionRequest request) {
@@ -95,8 +101,16 @@ public class ProgramacionController {
             @PathVariable("id") Long id,
             @RequestBody(required = false) ProgramacionDto.AsignarDocenteRequest request) {
         Long idDocente = request != null ? request.getIdDocente() : null;
-        return ResponseEntity.ok(programacionService.asignarDocente(id, idDocente,
-                request != null && Boolean.TRUE.equals(request.getReemplazarDocente())));
+        boolean reemplazar = request != null && Boolean.TRUE.equals(request.getReemplazarDocente());
+        Integer dia = request != null ? request.getDia() : null;
+        LocalTime horaInicio = request != null ? request.getHoraInicio() : null;
+        LocalTime horaFin = request != null ? request.getHoraFin() : null;
+        Integer dia2 = request != null ? request.getDia2() : null;
+        LocalTime horaInicio2 = request != null ? request.getHoraInicio2() : null;
+        LocalTime horaFin2 = request != null ? request.getHoraFin2() : null;
+        String horario = request != null ? request.getHorario() : null;
+        return ResponseEntity.ok(programacionService.asignarDocente(
+                id, idDocente, reemplazar, dia, horaInicio, horaFin, dia2, horaInicio2, horaFin2, horario));
     }
 
     @PostMapping("/asignar-docente")
@@ -105,10 +119,13 @@ public class ProgramacionController {
     public ResponseEntity<ProgramacionDto.CursoResponse> asignarDocentePorMateria(
             @RequestBody ProgramacionDto.AsignarDocenteRequest request) {
         if (request == null || request.getPeriodoId() == null || request.getCodeProgram() == null || request.getCodeCourse() == null) {
-            throw new co.edu.univalle.palmira.exception.BadRequestException("Faltan parámetros obligatorios para la asignación");
+            throw new BadRequestException("Faltan parametros obligatorios para la asignacion");
         }
+        boolean reemplazar = Boolean.TRUE.equals(request.getReemplazarDocente());
         return ResponseEntity.ok(programacionService.asignarDocentePorMateria(
                 request.getPeriodoId(), request.getCodeProgram(), request.getCodeCourse(), request.getSemestre(),
-                request.getIdDocente(), Boolean.TRUE.equals(request.getReemplazarDocente())));
+                request.getIdDocente(), reemplazar,
+                request.getDia(), request.getHoraInicio(), request.getHoraFin(),
+                request.getDia2(), request.getHoraInicio2(), request.getHoraFin2(), request.getHorario()));
     }
 }
