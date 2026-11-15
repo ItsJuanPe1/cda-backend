@@ -22,6 +22,21 @@ import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Servicio central para la lógica de programación académica de la sede.
+ * <p>
+ * Responsabilidades principales:
+ * <ul>
+ *   <li><b>Generación de cursos</b>: crea las ofertas a partir de cohortes confirmadas y la malla curricular (pensum).</li>
+ *   <li><b>Gestión de cupos</b>: actualización de cupos por curso verificando plazos y topes permitidos.</li>
+ *   <li><b>Ajustes y exclusiones</b>: exclusión y reactivación justificada de cursos auditada en bitácora,
+ *       asegurando la renumeración ordenada de grupos (iniciando en 50).</li>
+ *   <li><b>Asignación docente</b>: asignación de profesores validando pertenencia a su disponibilidad semanal,
+ *       soporte para 1 día continuo o 2 días divididos, validación de cruces de horario y límite
+ *       máximo de 20 horas de carga semanal.</li>
+ * </ul>
+ * </p>
+ */
 @Service
 public class ProgramacionService {
 

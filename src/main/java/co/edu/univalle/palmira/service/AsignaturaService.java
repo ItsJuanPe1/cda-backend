@@ -11,6 +11,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * Servicio de negocio para el catálogo maestro de asignaturas.
+ * <p>
+ * Gestiona el ciclo de vida de las asignaturas (creación, edición, activación/inactivación),
+ * validando créditos, horas teóricas, horas prácticas y horas semanales presenciales.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class AsignaturaService {

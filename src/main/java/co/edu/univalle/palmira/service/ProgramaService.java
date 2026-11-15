@@ -26,7 +26,13 @@ import java.util.TreeSet;
 import java.util.List;
 import java.util.Map;
 
-// HU-040: crear, editar y desactivar programas académicos (docs/contratos/HU-040.md)
+/**
+ * Servicio de negocio para la administración de programas académicos (HU-040).
+ * <p>
+ * Gestiona el registro, modificación y desactivación de programas académicos de la sede,
+ * validando códigos únicos, jornadas, tipos de ingreso y resoluciones asociadas.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class ProgramaService {

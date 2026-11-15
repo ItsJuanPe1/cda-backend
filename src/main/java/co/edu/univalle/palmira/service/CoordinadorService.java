@@ -18,6 +18,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * Servicio de negocio para la gestión de coordinadores de programa académico.
+ * <p>
+ * Administra el registro, edición, asignación de programa y estado activo de los directores
+ * y coordinadores de programas académicos en la sede Palmira.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class CoordinadorService {

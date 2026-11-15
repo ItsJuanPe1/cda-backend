@@ -21,6 +21,13 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 
+/**
+ * Servicio encargado de la generación de libros de cálculo Excel (.xlsx) con Apache POI.
+ * <p>
+ * Genera hojas para el resumen general del período, los cursos pendientes de asignación o
+ * contratación, y la lista de docentes que aún no han registrado su disponibilidad.
+ * </p>
+ */
 @Service
 public class AvanceProgramacionExcelService {
 
@@ -29,6 +36,13 @@ public class AvanceProgramacionExcelService {
             DateTimeFormatter.ofPattern("dd/MM/yyyy hh:mm a", Locale.forLanguageTag("es-CO"))
                     .withZone(ZONA);
 
+    /**
+     * Construye el libro Excel completo a partir de las métricas de avance y lista de cursos pendientes.
+     *
+     * @param avance     resumen consolidado del período académico
+     * @param pendientes lista de cursos sin docente o pendientes de contratación
+     * @return arreglo de bytes del archivo .xlsx generado
+     */
     public byte[] generar(AvanceProgramacionDto.Resumen avance,
                           List<AvanceProgramacionDto.CursoPendiente> pendientes) {
         try (Workbook workbook = new XSSFWorkbook();

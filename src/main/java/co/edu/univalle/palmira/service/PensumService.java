@@ -22,6 +22,13 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Servicio de negocio para la gestión de las mallas curriculares (pensum académico).
+ * <p>
+ * Administra las asignaturas correspondientes a cada programa por semestre y número de resolución,
+ * incluyendo prerrequisitos, correquisitos, créditos y electivas.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class PensumService {
