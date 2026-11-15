@@ -29,6 +29,14 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Configuración central de seguridad web y autenticación mediante Spring Security.
+ * <p>
+ * Define la cadena de filtros de seguridad (SecurityFilterChain), la política de sesiones
+ * sin estado (stateless), la validación y decodificación de tokens JWT firmados con HMAC-SHA256,
+ * la política de CORS para clientes web frontend y las reglas de autorización por ruta y rol.
+ * </p>
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity

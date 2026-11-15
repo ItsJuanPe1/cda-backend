@@ -7,25 +7,50 @@ import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
 import co.edu.univalle.palmira.repository.CursoProgramacionRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
 import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
 
+/**
+ * Servicio para la consolidación del avance de la programación académica.
+ * <p>
+ * Agrupa métricas de cursos programados, asignados con docente, pendientes de asignación,
+ * pendientes de contratación y excluidos, además de listar los docentes que aún no han
+ * registrado su disponibilidad horaria.
+ * </p>
+ */
 @Service
-@RequiredArgsConstructor
 public class AvanceProgramacionService {
 
     public static final String MSG_PERIODO_NO_ENCONTRADO =
-            "Período académico no encontrado con ID: ";
+            "Periodo academico no encontrado con ID: ";
 
     private final PeriodoAcademicoRepository periodoRepository;
     private final CursoProgramacionRepository cursoRepository;
     private final DocenteRepository docenteRepository;
     private final AvanceProgramacionExcelService excelService;
 
+    @Autowired
+    public AvanceProgramacionService(
+            PeriodoAcademicoRepository periodoRepository,
+            CursoProgramacionRepository cursoRepository,
+            DocenteRepository docenteRepository,
+            AvanceProgramacionExcelService excelService) {
+        this.periodoRepository = periodoRepository;
+        this.cursoRepository = cursoRepository;
+        this.docenteRepository = docenteRepository;
+        this.excelService = excelService;
+    }
+
+    /**
+     * Obtiene el resumen del avance de programación para un período académico.
+     *
+     * @param periodoId identificador del período académico
+     * @return resumen con totales consolidados, desglose por programa y docentes sin disponibilidad
+     */
     @Transactional(readOnly = true)
     public AvanceProgramacionDto.Resumen obtenerAvance(Long periodoId) {
         PeriodoAcademico periodo = periodoRepository.findById(periodoId)
@@ -70,6 +95,12 @@ public class AvanceProgramacionService {
                 ahora);
     }
 
+    /**
+     * Genera un archivo Excel (.xlsx) con el reporte completo de avance de programación.
+     *
+     * @param periodoId identificador del período académico
+     * @return arreglo de bytes del archivo Excel generado
+     */
     @Transactional(readOnly = true)
     public byte[] generarExcel(Long periodoId) {
         AvanceProgramacionDto.Resumen avance = obtenerAvance(periodoId);

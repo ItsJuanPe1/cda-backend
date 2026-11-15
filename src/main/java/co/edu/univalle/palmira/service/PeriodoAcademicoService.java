@@ -12,6 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.net.URI;
 import java.util.List;
 
+/**
+ * Servicio de negocio para la administración de períodos académicos (semestres).
+ * <p>
+ * Gestiona la vigencia del período activo, fechas de inicio y fin de clases,
+ * y los plazos límite para registro de disponibilidad docente y asignación de coordinadores.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class PeriodoAcademicoService {

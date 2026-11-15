@@ -10,6 +10,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * Servicio de negocio para la gestión de facultades y dependencias académicas.
+ */
 @Service
 @RequiredArgsConstructor
 public class FacultadService {

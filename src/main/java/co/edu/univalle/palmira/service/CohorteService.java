@@ -20,6 +20,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Servicio de negocio para la administración de cohortes académicas por período.
+ * <p>
+ * Gestiona el número de grupos/cohortes previstos para cada programa académico y semestre,
+ * los cuales sirven como base directa para la generación automática de la programación de cursos.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 public class CohorteService {

@@ -35,6 +35,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+/**
+ * Servicio de autenticación institucional basado en Google OAuth2 y emisión de JWT.
+ * <p>
+ * Verifica la validez del token ID de Google, valida el dominio @correounivalle.edu.co,
+ * comprueba la existencia y estado activo del usuario en la base de datos (según roles:
+ * ADMIN, COORDINADOR, DOCENTE), genera el token JWT con los roles (authorities) y registra
+ * los intentos aceptados o rechazados en la bitácora de auditoría.
+ * </p>
+ */
 @Slf4j
 @Service
 public class GoogleAuthService {

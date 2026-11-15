@@ -14,6 +14,14 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalTime;
 import java.util.List;
 
+/**
+ * Controlador REST para la gestión de la programación académica.
+ * <p>
+ * Proporciona endpoints para la generación automática de cursos, consulta con filtros,
+ * exclusión y reactivación justificada de cursos, configuración y actualización de cupos,
+ * y asignación horaria de docentes con soporte para 1 día continuo o 2 días divididos.
+ * </p>
+ */
 @RestController
 @RequestMapping("/api/programacion")
 @Tag(name = "Programacion Academica", description = "Endpoints para la generacion y consulta de cursos de un periodo")
@@ -21,11 +29,23 @@ public class ProgramacionController {
 
     private final ProgramacionService programacionService;
 
+    /**
+     * Constructor con inyección de dependencias.
+     *
+     * @param programacionService servicio de lógica de programación académica
+     */
     @Autowired
     public ProgramacionController(ProgramacionService programacionService) {
         this.programacionService = programacionService;
     }
 
+    /**
+     * Genera la programación académica de un período a partir de cohortes confirmadas y mallas curriculares.
+     *
+     * @param periodoId identificador del período académico
+     * @param request   parámetros de generación (opción de sobrescribir)
+     * @return resumen con cantidad de cursos generados y métricas
+     */
     @PostMapping("/generar")
     @Operation(summary = "Generar la programacion academica a partir de cohortes confirmadas y mallas")
     public ResponseEntity<ProgramacionDto.ResumenResponse> generarProgramacion(
@@ -35,6 +55,15 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.generarProgramacion(periodoId, sobrescribir));
     }
 
+    /**
+     * Consulta los cursos programados para un período académico con filtros opcionales.
+     *
+     * @param periodoId   identificador del período académico
+     * @param codeProgram código opcional del programa
+     * @param codeCourse  código opcional de la asignatura
+     * @param jornada     jornada académica opcional (DIURNA, NOCTURNA)
+     * @return lista de cursos programados correspondientes
+     */
     @GetMapping
     @Operation(summary = "Consultar cursos programados de un periodo con filtros opcionales")
     public ResponseEntity<List<ProgramacionDto.CursoResponse>> obtenerProgramacion(
@@ -45,6 +74,12 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.obtenerProgramacion(periodoId, codeProgram, codeCourse, jornada));
     }
 
+    /**
+     * Obtiene los parámetros de configuración de cupos y verifica si el plazo de edición se encuentra abierto.
+     *
+     * @param periodoId identificador del período
+     * @return configuración con cupo máximo permitido y estado de vigencia del plazo
+     */
     @GetMapping("/cupos/config")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
     @Operation(summary = "Consultar maximo de cupos y si el plazo de edicion esta abierto")
@@ -53,6 +88,12 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.obtenerConfiguracionCupos(periodoId));
     }
 
+    /**
+     * Actualiza masivamente los cupos de estudiantes para los cursos activos del período.
+     *
+     * @param request lista de identificadores de curso y su nueva cantidad de cupos
+     * @return respuesta de confirmación de actualización
+     */
     @PatchMapping("/cupos")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
     @Operation(summary = "Registrar los cupos de estudiantes de los cursos activos")
@@ -61,14 +102,24 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.actualizarCupos(request));
     }
 
+    /**
+     * Consulta el resumen consolidado de cursos programados para un período.
+     *
+     * @param periodoId identificador del período
+     * @return resumen con totales de cursos, asignaciones y cupos
+     */
     @GetMapping("/resumen")
     @Operation(summary = "Consultar el resumen consolidado de cursos programados")
     public ResponseEntity<ProgramacionDto.ResumenResponse> obtenerResumen(@RequestParam("periodoId") Long periodoId) {
         return ResponseEntity.ok(programacionService.obtenerResumen(periodoId));
     }
 
-    // HU-047: ajustes del administrador. No hay endpoint para crear cursos (criterio 3).
-
+    /**
+     * Vista previa de la renumeración de grupos que ocurriría si se excluye un curso (HU-047).
+     *
+     * @param id identificador del curso
+     * @return detalle de reasignación de números de grupo
+     */
     @GetMapping("/cursos/{id}/exclusion/vista-previa")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
     @Operation(summary = "Ver como quedarian los grupos de la asignatura si se excluye el curso")
@@ -76,6 +127,13 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.vistaPreviaExclusion(id));
     }
 
+    /**
+     * Excluye un curso programado con justificación obligatoria y renumera los grupos restantes.
+     *
+     * @param id      identificador del curso
+     * @param request solicitud con el texto de justificación
+     * @return resultado del ajuste de grupos
+     */
     @PatchMapping("/cursos/{id}/excluir")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
     @Operation(summary = "Excluir un curso con justificacion y renumerar los grupos de la asignatura")
@@ -85,6 +143,13 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.excluir(id, request));
     }
 
+    /**
+     * Reactiva un curso previamente excluido asignándole el siguiente número de grupo disponible.
+     *
+     * @param id      identificador del curso
+     * @param request solicitud con justificación de reactivación
+     * @return resultado del ajuste de grupos
+     */
     @PatchMapping("/cursos/{id}/reactivar")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
     @Operation(summary = "Reactivar un curso excluido; toma el siguiente grupo de la serie")
@@ -94,6 +159,14 @@ public class ProgramacionController {
         return ResponseEntity.ok(programacionService.reactivar(id, request));
     }
 
+    /**
+     * Asigna o desasigna un docente a un curso específico por su identificador.
+     * Permite especificar franja en un único día o dividida en dos días de clase.
+     *
+     * @param id      identificador del curso
+     * @param request datos de asignación (idDocente, día(s), horas de inicio/fin y etiqueta de horario)
+     * @return detalle del curso actualizado
+     */
     @PatchMapping("/cursos/{id}/docente")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
     @Operation(summary = "Designar o desasignar un docente a un curso programado")
@@ -113,6 +186,12 @@ public class ProgramacionController {
                 id, idDocente, reemplazar, dia, horaInicio, horaFin, dia2, horaInicio2, horaFin2, horario));
     }
 
+    /**
+     * Asigna un docente buscando el curso por período, programa, código de materia y semestre.
+     *
+     * @param request datos de la materia, período y docente a asignar
+     * @return detalle del curso actualizado
+     */
     @PostMapping("/asignar-docente")
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
     @Operation(summary = "Designar o desasignar un docente por materia y semestre")

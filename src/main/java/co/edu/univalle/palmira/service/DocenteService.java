@@ -28,6 +28,14 @@ import java.util.Objects;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Servicio de negocio para la administración del personal docente y sus evaluaciones.
+ * <p>
+ * Gestiona el ciclo de vida de los docentes (creación, edición, activación/inactivación),
+ * la actualización de datos de contacto institucional, el histórico de evaluaciones de
+ * desempeño docente y la consulta de perfil para el docente autenticado.
+ * </p>
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
