@@ -3,15 +3,19 @@ package co.edu.univalle.palmira.controller;
 import co.edu.univalle.palmira.dto.DocenteDto;
 import co.edu.univalle.palmira.dto.EvaluacionDocenteDto;
 import co.edu.univalle.palmira.service.DocenteService;
+import co.edu.univalle.palmira.service.EvaluacionDocenteExcelService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
@@ -32,10 +36,14 @@ import java.util.List;
 public class DocenteController {
 
     private final DocenteService docenteService;
+    private final EvaluacionDocenteExcelService evaluacionDocenteExcelService;
 
     @Autowired
-    public DocenteController(DocenteService docenteService) {
+    public DocenteController(
+            DocenteService docenteService,
+            EvaluacionDocenteExcelService evaluacionDocenteExcelService) {
         this.docenteService = docenteService;
+        this.evaluacionDocenteExcelService = evaluacionDocenteExcelService;
     }
 
     /**
@@ -64,6 +72,23 @@ public class DocenteController {
             @RequestParam("codeCourse") String codeCourse) {
         return ResponseEntity.ok(
                 docenteService.listarEvaluacionesAnteriores(periodoId, codeCourse));
+    }
+
+    /**
+     * Importa masivamente las calificaciones docentes desde un libro Excel (.xlsx / .xls).
+     * Promedia múltiples grupos de la misma asignatura por docente y marca vacíos o 0 como "No evaluado".
+     *
+     * @param periodoId identificador del período activo
+     * @param file      archivo Excel con las calificaciones
+     * @return resumen detallado de los registros procesados
+     */
+    @PostMapping(value = "/evaluaciones/importar-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @Operation(summary = "Importar calificaciones docentes desde archivo Excel")
+    public ResponseEntity<EvaluacionDocenteDto.ImportacionExcelResponse> importarEvaluacionesExcel(
+            @RequestParam("periodoId") Long periodoId,
+            @RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(evaluacionDocenteExcelService.importar(periodoId, file));
     }
 
     /**

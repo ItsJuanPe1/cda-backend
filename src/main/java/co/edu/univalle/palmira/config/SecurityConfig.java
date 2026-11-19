@@ -92,6 +92,8 @@ public class SecurityConfig {
                         // quedan reservadas a administración o al propio rol docente.
                         .requestMatchers(HttpMethod.GET, "/api/docentes", "/api/docentes/evaluaciones")
                         .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .requestMatchers(HttpMethod.POST, "/api/docentes/evaluaciones/importar-excel")
+                        .hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers(HttpMethod.GET, "/api/docentes/*/evaluaciones").hasAnyAuthority(ADMIN)
                         .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
