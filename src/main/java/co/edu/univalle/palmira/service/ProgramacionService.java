@@ -182,11 +182,6 @@ public class ProgramacionService {
 
         // HU-047 criterio 4: «Requiere revisión» se calcula comparando con la oferta actual.
         List<CohortePeriodo> cohortes = cohorteRepository.findByPeriodoIdAndConfirmadaTrue(periodoId);
-        if (codeProgram != null && !codeProgram.isBlank()) {
-            cohortes = cohortes.stream()
-                    .filter(c -> c.getPrograma() != null && codeProgram.equalsIgnoreCase(c.getPrograma().getCodeProgram()))
-                    .collect(Collectors.toList());
-        }
         Map<String, CursoOfertado> oferta = calcularOferta(cohortes, false);
         Set<String> cohortesConfirmadas = cohortes.stream()
                 .map(c -> c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())
@@ -530,6 +525,10 @@ public class ProgramacionService {
         if (Boolean.FALSE.equals(c.getAsignatura().getActivo())) {
             return REVISION_ASIGNATURA_INACTIVA;
         }
+        if (ElectivaProgramadaService.esPropuesta(c.getCodeCourseEspacio())) {
+            // Complementaria propuesta por el coordinador: no pertenece a una cohorte ni a la malla.
+            return null;
+        }
         if (!cohortesConfirmadas.contains(c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())) {
             return REVISION_SIN_COHORTE;
         }
@@ -801,8 +800,14 @@ public class ProgramacionService {
 
     /** ELE-PROF-I → «Electiva Profesional I»; null si el curso no ocupa un espacio de electiva. */
     private static String nombreEspacio(String codigoEspacio) {
+        if (ElectivaProgramadaService.esPropuesta(codigoEspacio)) {
+            return "Electiva complementaria";
+        }
         if (codigoEspacio == null || !codigoEspacio.toUpperCase().startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
             return null;
+        }
+        if (ElectivaProgramadaService.esEspacioComplementaria(codigoEspacio)) {
+            return "Electiva Complementaria";
         }
         return "Electiva Profesional " + codigoEspacio.substring(ElectivaProgramadaService.PREFIJO_ESPACIO.length());
     }

@@ -46,6 +46,7 @@ class ElectivaProgramadaServiceTest {
     @Mock ProgramacionService programacionService;
     @Mock BitacoraService bitacoraService;
     @Mock CuposProperties cuposProperties;
+    @Mock EscuelaRepository escuelaRepository;
 
     ElectivaProgramadaService service;
     Programa programa;
@@ -58,7 +59,7 @@ class ElectivaProgramadaServiceTest {
     void setUp() {
         service = new ElectivaProgramadaService(cursoRepository, periodoRepository, programaRepository,
                 pensumRepository, cohorteRepository, asignaturaRepository, accesoProgramaService,
-                docenteAsignaturaService, programacionService, bitacoraService, cuposProperties);
+                docenteAsignaturaService, programacionService, bitacoraService, cuposProperties, escuelaRepository);
 
         programa = Programa.builder().codeProgram(PROGRAMA).nameProgram("Contaduría")
                 .idFacultadPrograma(1).jornada(Jornada.DIURNA).build();
@@ -184,11 +185,121 @@ class ElectivaProgramadaServiceTest {
     }
 
     @Test
-    void crear_espacioInexistenteOComplementaria_404() {
+    void crear_espacioInexistente_404() {
         assertThrows(ResourceNotFoundException.class, () -> service.crear(
                 new ElectivaProgramadaDto.CrearRequest(PROGRAMA, "ELE-PROF-IX", IA, 30)));
-        assertThrows(ResourceNotFoundException.class, () -> service.crear(
-                new ElectivaProgramadaDto.CrearRequest(PROGRAMA, "ELE-PROF-COMPLEMENTARIA", IA, 30)));
+    }
+
+    // ---------- banco por escuela ----------
+
+    private void conEscuelas(String... codigos) {
+        List<Escuela> escuelas = java.util.Arrays.stream(codigos)
+                .map(c -> Escuela.builder().codigo(c).nombre("ESCUELA " + c).build())
+                .toList();
+        when(escuelaRepository.findByPrograma(PROGRAMA)).thenReturn(escuelas);
+    }
+
+    private Asignatura electiva(String codigo, Integer facultad) {
+        return Asignatura.builder().codeCourse(codigo).nameCourse("Electiva " + codigo).credits(3)
+                .isElective(true).esComplementaria(false).idFacultad(facultad).activo(true).build();
+    }
+
+    @Test
+    void crear_programaConEscuela_rechazaLaElectivaDeOtraEscuelaAunqueSeaDeLaMismaFacultad() {
+        conEscuelas("710");
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.crear(pedido()));
+        assertEquals(ElectivaProgramadaService.MSG_NO_PROFESIONAL, ex.getMessage());
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void crear_programaConEscuela_aceptaLaDeSuEscuelaAunSinFacultad() {
+        conEscuelas("750");
+        when(asignaturaRepository.findById(IA)).thenReturn(Optional.of(electiva(IA, null)));
+        assertDoesNotThrow(() -> service.crear(pedido()));
+    }
+
+    @Test
+    void crear_programaConVariasEscuelas_aceptaLasDeCualquieraDeEllas() {
+        conEscuelas("801", "802");
+        when(asignaturaRepository.findById("802097M")).thenReturn(Optional.of(electiva("802097M", 4)));
+        assertDoesNotThrow(() -> service.crear(
+                new ElectivaProgramadaDto.CrearRequest(PROGRAMA, ESPACIO, "802097M", 30)));
+    }
+
+    @Test
+    void crear_programaConEscuela_aceptaElPrefijoTodasLasFacultades() {
+        conEscuelas("750");
+        when(asignaturaRepository.findById("990111M")).thenReturn(Optional.of(electiva("990111M", 1)));
+        assertDoesNotThrow(() -> service.crear(
+                new ElectivaProgramadaDto.CrearRequest(PROGRAMA, ESPACIO, "990111M", 30)));
+    }
+
+    @Test
+    void crear_programaConEscuela_sigueRechazandoLasComunes() {
+        conEscuelas("750");
+        when(asignaturaRepository.findById(IA)).thenReturn(Optional.of(electiva(IA, 2)));
+        assertThrows(BadRequestException.class, () -> service.crear(pedido()));
+    }
+
+    // ---------- complementaria del primer semestre ----------
+
+    private Asignatura complementaria() {
+        return Asignatura.builder().codeCourse("204024C").nameCourse("Lenguaje y Comunicación").credits(2)
+                .isElective(true).esComplementaria(true).idFacultad(2).activo(true).build();
+    }
+
+    private void espacioComplementariaEnSemestre(int semestre) {
+        PensumAcademico comp = PensumAcademico.builder()
+                .id(new PensumId(PROGRAMA, "ELE-PROF-COMPLEMENTARIA", 1)).semestre(semestre)
+                .nameCourseSnapshot("Electiva Complementaria").activo(true).vigente(true).build();
+        when(pensumRepository.findByIdCodeProgramAndVigenteTrue(PROGRAMA)).thenReturn(List.of(espacio, comp));
+        CohortePeriodo c = CohortePeriodo.builder().id(2L).periodo(periodo).programa(programa)
+                .semestre(semestre).jornada(Jornada.DIURNA).numeroResolucion("R-1").confirmada(true).build();
+        when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of(cohorte, c));
+    }
+
+    @Test
+    void crear_complementariaEnPrimerSemestre_seProgramaEnSuEspacio() {
+        espacioComplementariaEnSemestre(1);
+        Asignatura comp = complementaria();
+        when(asignaturaRepository.findById("204024C")).thenReturn(Optional.of(comp));
+
+        ElectivaProgramadaDto.Response r = service.crear(new ElectivaProgramadaDto.CrearRequest(
+                PROGRAMA, "ELE-PROF-COMPLEMENTARIA", "204024C", 40));
+
+        ArgumentCaptor<CursoProgramacion> guardado = ArgumentCaptor.forClass(CursoProgramacion.class);
+        verify(cursoRepository).save(guardado.capture());
+        assertEquals("ELE-PROF-COMPLEMENTARIA", guardado.getValue().getCodeCourseEspacio());
+        assertEquals(1, guardado.getValue().getSemestre());
+        assertEquals("Electiva Complementaria", r.nombreEspacio());
+        assertEquals("204024C-50", r.codigoCurso());
+    }
+
+    @Test
+    void crear_complementariaFueraDelPrimerSemestre_seRechaza() {
+        espacioComplementariaEnSemestre(2);
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.crear(
+                new ElectivaProgramadaDto.CrearRequest(PROGRAMA, "ELE-PROF-COMPLEMENTARIA", "204024C", 40)));
+        assertEquals(ElectivaProgramadaService.MSG_COMPLEMENTARIA_SEMESTRE, ex.getMessage());
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void crear_espacioComplementaria_noAceptaUnaProfesional() {
+        espacioComplementariaEnSemestre(1);
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.crear(
+                new ElectivaProgramadaDto.CrearRequest(PROGRAMA, "ELE-PROF-COMPLEMENTARIA", IA, 40)));
+        assertEquals(ElectivaProgramadaService.MSG_NO_COMPLEMENTARIA, ex.getMessage());
+    }
+
+    @Test
+    void crear_espacioProfesional_noAceptaUnaComplementaria() {
+        Asignatura comp = complementaria();
+        when(asignaturaRepository.findById("204024C")).thenReturn(Optional.of(comp));
+        BadRequestException ex = assertThrows(BadRequestException.class, () -> service.crear(
+                new ElectivaProgramadaDto.CrearRequest(PROGRAMA, ESPACIO, "204024C", 40)));
+        assertEquals(ElectivaProgramadaService.MSG_NO_PROFESIONAL, ex.getMessage());
     }
 
     @Test
@@ -365,6 +476,14 @@ class ElectivaProgramadaServiceTest {
     }
 
     @Test
+    void listar_devuelveLasEscuelasDelBancoDelPrograma() {
+        conEscuelas("801", "802");
+        ElectivaProgramadaDto.ListaResponse r = service.listar(PROGRAMA);
+        assertEquals(2, r.escuelasBanco().size());
+        assertEquals("801", r.escuelasBanco().get(0).codigo());
+    }
+
+    @Test
     void listar_sinPeriodoVigente_devuelveListaVacia() {
         when(periodoRepository.findFirstByVigenteTrue()).thenReturn(Optional.empty());
         ElectivaProgramadaDto.ListaResponse r = service.listar(PROGRAMA);
@@ -381,11 +500,195 @@ class ElectivaProgramadaServiceTest {
     }
 
     @Test
+    void esEspacioComplementaria_soloElEspacioDeLaComplementaria() {
+        assertTrue(ElectivaProgramadaService.esEspacioComplementaria("ELE-PROF-COMPLEMENTARIA"));
+        assertTrue(ElectivaProgramadaService.esEspacioComplementaria("ele-prof-complementaria"));
+        assertFalse(ElectivaProgramadaService.esEspacioComplementaria("ELE-PROF-I"));
+        assertFalse(ElectivaProgramadaService.esEspacioComplementaria(null));
+    }
+
+    @Test
     void esEspacio_soloElectivasProfesionales() {
         assertTrue(ElectivaProgramadaService.esEspacio("ELE-PROF-I"));
         assertTrue(ElectivaProgramadaService.esEspacio("ele-prof-iv"));
         assertFalse(ElectivaProgramadaService.esEspacio("ELE-PROF-COMPLEMENTARIA"));
         assertFalse(ElectivaProgramadaService.esEspacio("750022C"));
         assertFalse(ElectivaProgramadaService.esEspacio(null));
+    }
+
+    // ---------- complementarias propuestas por el coordinador ----------
+
+    static final String COMPLEMENTARIA = "204133C";
+    Asignatura comp;
+
+    private void conComplementaria() {
+        comp = Asignatura.builder().codeCourse(COMPLEMENTARIA).nameCourse("Cátedra de paz").credits(2)
+                .isElective(true).esComplementaria(true).idFacultad(2).activo(true).build();
+        lenient().when(asignaturaRepository.findById(COMPLEMENTARIA)).thenReturn(Optional.of(comp));
+        lenient().when(cursoRepository.findByPeriodoAndAsignatura(7L, COMPLEMENTARIA)).thenReturn(List.of());
+        lenient().when(cursoRepository.findByPeriodoAndAsignaturaForUpdate(7L, COMPLEMENTARIA))
+                .thenReturn(List.of());
+        lenient().when(asignaturaRepository.findAll()).thenReturn(List.of(comp, ia));
+    }
+
+    private ElectivaProgramadaDto.CrearRequest propuesta(String jornada) {
+        return new ElectivaProgramadaDto.CrearRequest(PROGRAMA, ElectivaProgramadaService.ESPACIO_PROPUESTA,
+                COMPLEMENTARIA, 25, jornada);
+    }
+
+    @Test
+    void propuesta_seGuardaSinEspacioDeMallaNiSemestre() {
+        conComplementaria();
+        ElectivaProgramadaDto.Response r = service.crear(propuesta("NOCTURNA"));
+
+        ArgumentCaptor<CursoProgramacion> guardado = ArgumentCaptor.forClass(CursoProgramacion.class);
+        verify(cursoRepository).save(guardado.capture());
+        CursoProgramacion c = guardado.getValue();
+        assertEquals("COMPLEMENTARIA", c.getCodeCourseEspacio());
+        assertEquals(ElectivaProgramadaService.SEMESTRE_PROPUESTA, c.getSemestre());
+        assertEquals(Jornada.NOCTURNA, c.getJornada());
+        assertEquals("R-1", c.getNumeroResolucion());
+        assertEquals(50, c.getGrupo());
+        assertEquals(25, c.getCupos());
+        assertNull(c.getDocente());
+        assertEquals("Electiva complementaria", r.nombreEspacio());
+        assertEquals(Jornada.NOCTURNA, r.jornada());
+        verify(bitacoraService).registrar(eq(AccionBitacora.CREAR), eq("CURSO"), eq("100"), eq(7L),
+                isNull(), any());
+    }
+
+    @Test
+    void propuesta_sinCohorteConfirmada_usaResolucionNoAplica() {
+        conComplementaria();
+        when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of());
+        service.crear(propuesta("DIURNA"));
+        ArgumentCaptor<CursoProgramacion> guardado = ArgumentCaptor.forClass(CursoProgramacion.class);
+        verify(cursoRepository).save(guardado.capture());
+        assertEquals("N/A", guardado.getValue().getNumeroResolucion());
+    }
+
+    @Test
+    void propuesta_sinJornadaONoValida_400_yNoUsaLaDelPrograma() {
+        conComplementaria();
+        for (String jornada : new String[]{null, "", "  ", "AMBAS", "TARDE"}) {
+            BadRequestException ex = assertThrows(BadRequestException.class, () -> service.crear(propuesta(jornada)));
+            assertEquals(ElectivaProgramadaService.MSG_JORNADA, ex.getMessage());
+        }
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void propuesta_yaProgramadaEnElPeriodo_enCualquierPrograma_409() {
+        conComplementaria();
+        Programa otro = Programa.builder().codeProgram("3751-DIU").nameProgram("Industrial").build();
+        CursoProgramacion existente = CursoProgramacion.builder().id(9L).periodo(periodo).programa(otro)
+                .asignatura(comp).semestre(0).jornada(Jornada.NOCTURNA).numeroResolucion("R-9").grupo(50)
+                .estado(CursoProgramacion.ESTADO_PROGRAMADO).codeCourseEspacio("COMPLEMENTARIA").build();
+        when(cursoRepository.findByPeriodoAndAsignatura(7L, COMPLEMENTARIA)).thenReturn(List.of(existente));
+
+        ConflictException ex = assertThrows(ConflictException.class, () -> service.crear(propuesta("DIURNA")));
+        assertEquals(ElectivaProgramadaService.MSG_COMPLEMENTARIA_REPETIDA, ex.getMessage());
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void propuesta_laExcluidaNoImpideProponerlaDeNuevo() {
+        conComplementaria();
+        CursoProgramacion excluida = CursoProgramacion.builder().id(9L).periodo(periodo).programa(programa)
+                .asignatura(comp).semestre(0).jornada(Jornada.DIURNA).numeroResolucion("R-9")
+                .estado(CursoProgramacion.ESTADO_EXCLUIDO).codeCourseEspacio("COMPLEMENTARIA").build();
+        when(cursoRepository.findByPeriodoAndAsignatura(7L, COMPLEMENTARIA)).thenReturn(List.of(excluida));
+        assertDoesNotThrow(() -> service.crear(propuesta("DIURNA")));
+    }
+
+    @Test
+    void propuesta_unaAsignaturaQueNoEsComplementaria_400() {
+        conComplementaria();
+        assertThrows(BadRequestException.class, () -> service.crear(new ElectivaProgramadaDto.CrearRequest(
+                PROGRAMA, ElectivaProgramadaService.ESPACIO_PROPUESTA, IA, 25, "DIURNA")));
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void propuesta_coordinadorDeOtroPrograma_403() {
+        conComplementaria();
+        when(accesoProgramaService.alcanceActual())
+                .thenReturn(new AccesoProgramaService.Alcance(false, "9999-DIU"));
+        assertThrows(AccessDeniedException.class, () -> service.crear(propuesta("DIURNA")));
+        verify(cursoRepository, never()).save(any());
+    }
+
+    @Test
+    void propuesta_plazoCerrado_coordinador409_peroElAdminPuede() {
+        conComplementaria();
+        periodo.setPlazoCoordinadorFin(Instant.now().minusSeconds(60));
+        assertThrows(ConflictException.class, () -> service.crear(propuesta("DIURNA")));
+        when(accesoProgramaService.alcanceActual()).thenReturn(new AccesoProgramaService.Alcance(true, null));
+        assertDoesNotThrow(() -> service.crear(propuesta("DIURNA")));
+    }
+
+    @Test
+    void propuesta_variasEnElMismoProgramaYPeriodo_sePermiten() {
+        conComplementaria();
+        Asignatura otra = Asignatura.builder().codeCourse("204200C").nameCourse("Ética").credits(2)
+                .isElective(true).esComplementaria(true).idFacultad(2).activo(true).build();
+        when(asignaturaRepository.findById("204200C")).thenReturn(Optional.of(otra));
+        when(cursoRepository.findByPeriodoAndAsignatura(7L, "204200C")).thenReturn(List.of());
+        when(cursoRepository.findByPeriodoAndAsignaturaForUpdate(7L, "204200C")).thenReturn(List.of());
+        service.crear(propuesta("DIURNA"));
+        assertDoesNotThrow(() -> service.crear(new ElectivaProgramadaDto.CrearRequest(
+                PROGRAMA, "complementaria", "204200C", 20, "NOCTURNA")));
+        verify(cursoRepository, times(2)).save(any());
+    }
+
+    @Test
+    void propuesta_sinDocente_sePuedeModificarYQuitar() {
+        conComplementaria();
+        CursoProgramacion c = CursoProgramacion.builder().id(5L).periodo(periodo).programa(programa)
+                .asignatura(comp).semestre(0).jornada(Jornada.DIURNA).numeroResolucion("R-1")
+                .nombreAsignatura("Cátedra de paz").cupos(25).grupo(50).credits(2)
+                .estado(CursoProgramacion.ESTADO_PROGRAMADO).codeCourseEspacio("COMPLEMENTARIA").build();
+        when(cursoRepository.findByIdWithDetails(5L)).thenReturn(Optional.of(c));
+
+        ElectivaProgramadaDto.Response r = service.modificar(5L, new ElectivaProgramadaDto.ModificarRequest(null, 40));
+        assertEquals(40, r.cupos());
+        service.quitar(5L);
+        verify(cursoRepository).delete(c);
+    }
+
+    @Test
+    void listar_separaLasPropuestasDeLasElectivasDeLaMalla_yOfreceElBanco() {
+        conComplementaria();
+        CursoProgramacion propuesta = CursoProgramacion.builder().id(6L).periodo(periodo).programa(programa)
+                .asignatura(comp).semestre(0).jornada(Jornada.NOCTURNA).numeroResolucion("R-1")
+                .nombreAsignatura("Cátedra de paz").cupos(25).grupo(50).credits(2)
+                .estado(CursoProgramacion.ESTADO_PROGRAMADO).codeCourseEspacio("COMPLEMENTARIA").build();
+        when(cursoRepository.findElectivasProgramadas(7L, PROGRAMA))
+                .thenReturn(List.of(cursoElectiva(5L, 50), propuesta));
+        // la ya programada no se ofrece de nuevo
+        when(cursoRepository.findByPeriodoAndAsignatura(7L, COMPLEMENTARIA)).thenReturn(List.of(propuesta));
+
+        ElectivaProgramadaDto.ListaResponse r = service.listar(PROGRAMA);
+        assertEquals(1, r.electivas().size());
+        assertEquals(1, r.complementarias().size());
+        assertEquals("COMPLEMENTARIA", r.complementarias().get(0).codeEspacio());
+        assertTrue(r.bancoComplementarias().isEmpty());
+    }
+
+    @Test
+    void listar_bancoComplementarias_soloLasActivasSinProgramar() {
+        conComplementaria();
+        ElectivaProgramadaDto.ListaResponse r = service.listar(PROGRAMA);
+        assertEquals(1, r.bancoComplementarias().size());
+        assertEquals(COMPLEMENTARIA, r.bancoComplementarias().get(0).codeCourse());
+    }
+
+    @Test
+    void esPropuesta_soloLaMarcaDeLasPropuestas() {
+        assertTrue(ElectivaProgramadaService.esPropuesta("COMPLEMENTARIA"));
+        assertTrue(ElectivaProgramadaService.esPropuesta(" complementaria "));
+        assertFalse(ElectivaProgramadaService.esPropuesta("ELE-PROF-COMPLEMENTARIA"));
+        assertFalse(ElectivaProgramadaService.esPropuesta("ELE-PROF-I"));
+        assertFalse(ElectivaProgramadaService.esPropuesta(null));
     }
 }

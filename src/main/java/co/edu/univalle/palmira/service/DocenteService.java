@@ -91,6 +91,7 @@ public class DocenteService {
                 .correoInstitucional(req.correoInstitucional().trim().toLowerCase())
                 .telefono(normalizarOpcional(req.telefono()))
                 .celular(normalizarOpcional(req.celular()))
+                .direccion(limpiar(req.direccion()))
                 .tipoDocente(req.tipoDocente())
                 .categoria(req.categoria())
                 .facultad(facultad)
@@ -146,6 +147,8 @@ public class DocenteService {
             docente.setTelefono(normalizarOpcional(req.telefono()));
         if (req.celular() != null)
             docente.setCelular(normalizarOpcional(req.celular()));
+        if (req.direccion() != null)
+            docente.setDireccion(limpiar(req.direccion()));
         if (req.tipoDocente() != null)
             docente.setTipoDocente(req.tipoDocente());
         if (req.categoria() != null)
@@ -206,6 +209,7 @@ public class DocenteService {
         }
         String telefono = normalizarOpcional(req.telefono());
         String celular = normalizarOpcional(req.celular());
+        String direccion = limpiar(req.direccion());
 
         Integer idFacultadActual = docente.getFacultad() != null ? docente.getFacultad().getId() : null;
         Integer nuevoIdFacultad = req.idFacultad();
@@ -213,7 +217,8 @@ public class DocenteService {
 
         boolean cambioContacto = !Objects.equals(correoPersonal, docente.getCorreoPersonal())
                 || !Objects.equals(telefono, docente.getTelefono())
-                || !Objects.equals(celular, docente.getCelular());
+                || !Objects.equals(celular, docente.getCelular())
+                || !Objects.equals(direccion, docente.getDireccion());
 
         if (!cambioContacto && !cambioFacultad) {
             throw new BadRequestException(MSG_SIN_CAMBIOS);
@@ -225,6 +230,7 @@ public class DocenteService {
         docente.setCorreoPersonal(correoPersonal);
         docente.setTelefono(telefono);
         docente.setCelular(celular);
+        docente.setDireccion(direccion);
         return toResponse(docenteRepository.save(docente));
     }
 
@@ -372,6 +378,10 @@ public class DocenteService {
         return valor.trim();
     }
 
+    private static String limpiar(String t) {
+        return t == null || t.isBlank() ? null : t.trim();
+    }
+
     private Facultad buscarFacultad(Integer idFacultad) {
         return facultadRepository.findById(idFacultad)
                 .orElseThrow(() -> new BadRequestException(
@@ -413,7 +423,8 @@ public class DocenteService {
                 d.getEstado(),
                 d.getCreatedAt(),
                 d.getUpdatedAt(),
-                d.getCelular());
+                d.getCelular(),
+                d.getDireccion());
     }
 
     private EvaluacionDocenteDto toEvaluacionResponse(EvaluacionDocente evaluacion) {
