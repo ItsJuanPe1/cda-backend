@@ -1,15 +1,21 @@
 package co.edu.univalle.palmira.controller;
 
 import co.edu.univalle.palmira.dto.PensumItemDto;
+import co.edu.univalle.palmira.service.MallaExcelService;
 import co.edu.univalle.palmira.service.PensumService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -18,7 +24,11 @@ import java.util.List;
 @Tag(name = "Pensum Académico", description = "Endpoints para la gestión de mallas curriculares")
 public class PensumController {
 
+    static final MediaType XLSX = MediaType.parseMediaType(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
     private final PensumService pensumService;
+    private final MallaExcelService mallaExcelService;
 
     @GetMapping
     @Operation(summary = "Listar todas las asignaciones de pensum")
@@ -43,6 +53,25 @@ public class PensumController {
             @PathVariable("codeProgram") String codeProgram,
             @PathVariable("version") Integer version) {
         return ResponseEntity.ok(pensumService.getVersion(codeProgram, version));
+    }
+
+    // HU-035: descarga en Excel la malla que está en pantalla (vigente o del historial).
+    @GetMapping("/programa/{codeProgram}/excel")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @Operation(summary = "Descargar en Excel la malla curricular vigente o una versión del historial")
+    public ResponseEntity<byte[]> descargarExcel(
+            @PathVariable("codeProgram") String codeProgram,
+            @RequestParam(value = "version", required = false) Integer version) {
+        MallaExcelService.Archivo archivo = mallaExcelService.exportar(codeProgram, version);
+        String disposition = ContentDisposition.attachment()
+                .filename(archivo.nombre(), StandardCharsets.UTF_8)
+                .build()
+                .toString();
+        return ResponseEntity.ok()
+                .contentType(XLSX)
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .contentLength(archivo.contenido().length)
+                .body(archivo.contenido());
     }
 
     @PostMapping("/programa/{codeProgram}/guardar")

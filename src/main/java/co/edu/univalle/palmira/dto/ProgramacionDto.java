@@ -68,6 +68,13 @@ public class ProgramacionDto {
         private String nombreEspacio;
         private Long idDocente;
         private String nombreDocente;
+        private Integer dia;
+        private java.time.LocalTime horaInicio;
+        private java.time.LocalTime horaFin;
+        private Integer dia2;
+        private java.time.LocalTime horaInicio2;
+        private java.time.LocalTime horaFin2;
+        private String horario;
         private String estado;
         /** HU-047: CÓDIGO-GRUPO, por ejemplo MAT101-50; null si el curso está excluido. */
         private String codigoCurso;
@@ -150,5 +157,12 @@ public class ProgramacionDto {
         private String codeProgram;
         private String codeCourse;
         private Integer semestre;
+        private Integer dia;
+        private java.time.LocalTime horaInicio;
+        private java.time.LocalTime horaFin;
+        private Integer dia2;
+        private java.time.LocalTime horaInicio2;
+        private java.time.LocalTime horaFin2;
+        private String horario;
     }
 }

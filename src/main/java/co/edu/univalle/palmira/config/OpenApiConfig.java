@@ -6,9 +6,17 @@ import io.swagger.v3.oas.models.info.Info;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Configuración de la especificación OpenAPI 3 para la documentación interactiva con Swagger UI.
+ */
 @Configuration
 public class OpenApiConfig {
 
+    /**
+     * Define la metadata general de la API (título, versión, descripción y contacto institucional).
+     *
+     * @return bean OpenAPI configurado
+     */
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
