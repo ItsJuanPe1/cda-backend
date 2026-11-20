@@ -196,7 +196,7 @@ class ElectivaProgramadaServiceTest {
         List<Escuela> escuelas = java.util.Arrays.stream(codigos)
                 .map(c -> Escuela.builder().codigo(c).nombre("ESCUELA " + c).build())
                 .toList();
-        when(escuelaRepository.findByPrograma(PROGRAMA)).thenReturn(escuelas);
+        lenient().when(escuelaRepository.findByPrograma(PROGRAMA)).thenReturn(escuelas);
     }
 
     private Asignatura electiva(String codigo, Integer facultad) {
@@ -253,10 +253,10 @@ class ElectivaProgramadaServiceTest {
         PensumAcademico comp = PensumAcademico.builder()
                 .id(new PensumId(PROGRAMA, "ELE-PROF-COMPLEMENTARIA", 1)).semestre(semestre)
                 .nameCourseSnapshot("Electiva Complementaria").activo(true).vigente(true).build();
-        when(pensumRepository.findByIdCodeProgramAndVigenteTrue(PROGRAMA)).thenReturn(List.of(espacio, comp));
+        lenient().when(pensumRepository.findByIdCodeProgramAndVigenteTrue(PROGRAMA)).thenReturn(List.of(espacio, comp));
         CohortePeriodo c = CohortePeriodo.builder().id(2L).periodo(periodo).programa(programa)
                 .semestre(semestre).jornada(Jornada.DIURNA).numeroResolucion("R-1").confirmada(true).build();
-        when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of(cohorte, c));
+        lenient().when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of(cohorte, c));
     }
 
     @Test
