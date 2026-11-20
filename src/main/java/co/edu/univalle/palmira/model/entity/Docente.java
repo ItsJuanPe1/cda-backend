@@ -57,11 +57,11 @@ public class Docente {
     private String direccion;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_docente", length = 20, nullable = false)
+    @Column(name = "tipo_docente", length = 20)
     private TipoDocente tipoDocente;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "categoria", length = 30, nullable = false)
+    @Column(name = "categoria", length = 30)
     private CategoriaDocente categoria;
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -1,5 +1,6 @@
 package co.edu.univalle.palmira.service;
 
+import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.DocenteDto;
 import co.edu.univalle.palmira.dto.EvaluacionDocenteDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
@@ -44,6 +45,7 @@ public class DocenteService {
     private final PeriodoAcademicoRepository periodoAcademicoRepository;
     private final CursoProgramacionRepository cursoProgramacionRepository;
     private final DocenteAsignaturaService docenteAsignaturaService;
+    private final UsuarioAccesoService usuarioAccesoService;
 
     // ---------------------------------------------------------------
     // HU-026: Crear perfil de docente
@@ -98,7 +100,9 @@ public class DocenteService {
                 .fotoUrl(req.fotoUrl())
                 .build();
 
-        return toResponse(docenteRepository.save(docente));
+        Docente guardado = docenteRepository.save(docente);
+        sincronizarUsuario(null, guardado);
+        return toResponse(guardado);
     }
 
     // ---------------------------------------------------------------
@@ -109,6 +113,7 @@ public class DocenteService {
     public DocenteDto.Response actualizar(Long id, DocenteDto.UpdateRequest req) {
         Docente docente = docenteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + id));
+        String correoAnterior = docente.getCorreoInstitucional();
 
         if (req.codigo() != null && !req.codigo().equals(docente.getCodigo())) {
             if (docenteRepository.existsByCodigo(req.codigo())) {
@@ -161,7 +166,9 @@ public class DocenteService {
             docente.setPrograma(buscarPrograma(req.codeProgram()));
         }
 
-        return toResponse(docenteRepository.save(docente));
+        Docente guardado = docenteRepository.save(docente);
+        sincronizarUsuario(correoAnterior, guardado);
+        return toResponse(guardado);
     }
 
     // ---------------------------------------------------------------
@@ -183,7 +190,9 @@ public class DocenteService {
         Docente docente = docenteRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + id));
         docente.setEstado(estado != null ? estado : true);
-        return toResponse(docenteRepository.save(docente));
+        Docente guardado = docenteRepository.save(docente);
+        usuarioAccesoService.cambiarEstado(guardado.getCorreoInstitucional(), Boolean.TRUE.equals(guardado.getEstado()));
+        return toResponse(guardado);
     }
 
     // ---------------------------------------------------------------
@@ -230,7 +239,9 @@ public class DocenteService {
         docente.setTelefono(telefono);
         docente.setCelular(celular);
         docente.setDireccion(direccion);
-        return toResponse(docenteRepository.save(docente));
+        Docente guardado = docenteRepository.save(docente);
+        sincronizarUsuario(null, guardado);
+        return toResponse(guardado);
     }
 
     // ---------------------------------------------------------------
@@ -360,6 +371,13 @@ public class DocenteService {
     // ---------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------
+    /** Refleja el docente en la tabla usuarios (rol docente) para que aparezca entre los usuarios de la app. */
+    private void sincronizarUsuario(String correoAnterior, Docente d) {
+        usuarioAccesoService.sincronizar(correoAnterior, d.getNombres(), d.getApellidos(),
+                d.getCorreoInstitucional(), d.getCorreoPersonal(), d.getCelular(),
+                AuthConstants.ROL_DOCENTE, !Boolean.FALSE.equals(d.getEstado()));
+    }
+
     private Docente buscarPerfilPropio(String correo) {
         if (correo == null || correo.isBlank()) {
             throw new ResourceNotFoundException(MSG_PERFIL_NO_ENCONTRADO);
