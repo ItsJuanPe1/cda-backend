@@ -196,7 +196,7 @@ class ElectivaProgramadaServiceTest {
         List<Escuela> escuelas = java.util.Arrays.stream(codigos)
                 .map(c -> Escuela.builder().codigo(c).nombre("ESCUELA " + c).build())
                 .toList();
-        when(escuelaRepository.findByPrograma(PROGRAMA)).thenReturn(escuelas);
+        lenient().when(escuelaRepository.findByPrograma(PROGRAMA)).thenReturn(escuelas);
     }
 
     private Asignatura electiva(String codigo, Integer facultad) {
