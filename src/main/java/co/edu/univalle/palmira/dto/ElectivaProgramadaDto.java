@@ -52,14 +52,17 @@ public class ElectivaProgramadaDto {
     public record EscuelaItem(String codigo, String nombre) {
     }
 
-    /** Complementaria disponible para proponer. */
-    public record AsignaturaItem(String codeCourse, String nombre, Integer credits) {
+    /**
+     * Complementaria del banco. programadaPor: programa que ya la tiene en el período (null si está libre);
+     * una complementaria se programa una sola vez, así que la ya programada se muestra pero no se puede elegir.
+     */
+    public record AsignaturaItem(String codeCourse, String nombre, Integer credits, String programadaPor) {
     }
 
     /**
      * electivas: las que ocupan un espacio de la malla; complementarias: las que propuso el coordinador;
-     * bancoComplementarias: las que aún se pueden proponer (una complementaria se programa una sola vez en
-     * el período); escuelasBanco vacío: el programa no tiene escuela y el banco profesional va por facultad.
+     * bancoComplementarias: todas las activas, con programadaPor si ya se programó (una complementaria se
+     * programa una sola vez en el período); escuelasBanco vacío: el programa no tiene escuela y el banco profesional va por facultad.
      */
     public record ListaResponse(Long periodoId, boolean plazoAbierto, boolean puedeEditar,
                                 List<Response> electivas, List<EscuelaItem> escuelasBanco,

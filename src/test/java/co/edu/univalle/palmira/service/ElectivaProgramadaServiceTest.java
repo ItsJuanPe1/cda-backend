@@ -196,7 +196,7 @@ class ElectivaProgramadaServiceTest {
         List<Escuela> escuelas = java.util.Arrays.stream(codigos)
                 .map(c -> Escuela.builder().codigo(c).nombre("ESCUELA " + c).build())
                 .toList();
-        lenient().when(escuelaRepository.findByPrograma(PROGRAMA)).thenReturn(escuelas);
+        when(escuelaRepository.findByPrograma(PROGRAMA)).thenReturn(escuelas);
     }
 
     private Asignatura electiva(String codigo, Integer facultad) {
@@ -238,7 +238,7 @@ class ElectivaProgramadaServiceTest {
     @Test
     void crear_programaConEscuela_sigueRechazandoLasComunes() {
         conEscuelas("750");
-        lenient().when(asignaturaRepository.findById(IA)).thenReturn(Optional.of(electiva(IA, 2)));
+        when(asignaturaRepository.findById(IA)).thenReturn(Optional.of(electiva(IA, 2)));
         assertThrows(BadRequestException.class, () -> service.crear(pedido()));
     }
 
@@ -253,10 +253,10 @@ class ElectivaProgramadaServiceTest {
         PensumAcademico comp = PensumAcademico.builder()
                 .id(new PensumId(PROGRAMA, "ELE-PROF-COMPLEMENTARIA", 1)).semestre(semestre)
                 .nameCourseSnapshot("Electiva Complementaria").activo(true).vigente(true).build();
-        lenient().when(pensumRepository.findByIdCodeProgramAndVigenteTrue(PROGRAMA)).thenReturn(List.of(espacio, comp));
+        when(pensumRepository.findByIdCodeProgramAndVigenteTrue(PROGRAMA)).thenReturn(List.of(espacio, comp));
         CohortePeriodo c = CohortePeriodo.builder().id(2L).periodo(periodo).programa(programa)
                 .semestre(semestre).jornada(Jornada.DIURNA).numeroResolucion("R-1").confirmada(true).build();
-        lenient().when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of(cohorte, c));
+        when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of(cohorte, c));
     }
 
     @Test
@@ -274,6 +274,21 @@ class ElectivaProgramadaServiceTest {
         assertEquals(1, guardado.getValue().getSemestre());
         assertEquals("Electiva Complementaria", r.nombreEspacio());
         assertEquals("204024C-50", r.codigoCurso());
+    }
+
+    @Test
+    void crear_complementariaEnPrimerSemestre_noLaBloqueaUnaGeneralDeOtroPrograma() {
+        espacioComplementariaEnSemestre(1);
+        Asignatura comp = complementaria();
+        when(asignaturaRepository.findById("204024C")).thenReturn(Optional.of(comp));
+        Programa otro = Programa.builder().codeProgram("3751-DIU").nameProgram("Industrial").build();
+        CursoProgramacion general = CursoProgramacion.builder().id(9L).periodo(periodo).programa(otro)
+                .asignatura(comp).semestre(0).jornada(Jornada.NOCTURNA).numeroResolucion("R-9").grupo(50)
+                .estado(CursoProgramacion.ESTADO_PROGRAMADO).codeCourseEspacio("COMPLEMENTARIA").build();
+        when(cursoRepository.findByPeriodoAndAsignatura(7L, "204024C")).thenReturn(List.of(general));
+
+        assertDoesNotThrow(() -> service.crear(new ElectivaProgramadaDto.CrearRequest(
+                PROGRAMA, "ELE-PROF-COMPLEMENTARIA", "204024C", 40)));
     }
 
     @Test
@@ -665,22 +680,24 @@ class ElectivaProgramadaServiceTest {
                 .estado(CursoProgramacion.ESTADO_PROGRAMADO).codeCourseEspacio("COMPLEMENTARIA").build();
         when(cursoRepository.findElectivasProgramadas(7L, PROGRAMA))
                 .thenReturn(List.of(cursoElectiva(5L, 50), propuesta));
-        // la ya programada no se ofrece de nuevo
+        // la ya programada sigue en el banco, pero marcada con el programa que la tiene
         when(cursoRepository.findByPeriodoAndAsignatura(7L, COMPLEMENTARIA)).thenReturn(List.of(propuesta));
 
         ElectivaProgramadaDto.ListaResponse r = service.listar(PROGRAMA);
         assertEquals(1, r.electivas().size());
         assertEquals(1, r.complementarias().size());
         assertEquals("COMPLEMENTARIA", r.complementarias().get(0).codeEspacio());
-        assertTrue(r.bancoComplementarias().isEmpty());
+        assertEquals(1, r.bancoComplementarias().size());
+        assertNotNull(r.bancoComplementarias().get(0).programadaPor());
     }
 
     @Test
-    void listar_bancoComplementarias_soloLasActivasSinProgramar() {
+    void listar_bancoComplementarias_sinProgramarNoTieneProgramaQueLaTenga() {
         conComplementaria();
         ElectivaProgramadaDto.ListaResponse r = service.listar(PROGRAMA);
         assertEquals(1, r.bancoComplementarias().size());
         assertEquals(COMPLEMENTARIA, r.bancoComplementarias().get(0).codeCourse());
+        assertNull(r.bancoComplementarias().get(0).programadaPor());
     }
 
     @Test

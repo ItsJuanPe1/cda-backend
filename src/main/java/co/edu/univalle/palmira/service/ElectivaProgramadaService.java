@@ -165,7 +165,7 @@ public class ElectivaProgramadaService {
         if (ocupado) {
             throw new ConflictException(MSG_ESPACIO_OCUPADO);
         }
-        exigirNoRepetida(periodo.getId(), asignatura, codeProgram, cohorte.getJornada(), null);
+        exigirNoRepetida(periodo.getId(), asignatura, codeProgram, cohorte.getJornada(), null, false);
 
         CursoProgramacion curso = CursoProgramacion.builder()
                 .periodo(periodo)
@@ -204,7 +204,7 @@ public class ElectivaProgramadaService {
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_PROGRAMA));
         Asignatura asignatura = buscarElectiva(codeCourse, programa, ESPACIO_PROPUESTA);
         Jornada jornada = jornadaDePropuesta(request.jornada());
-        exigirNoRepetida(periodo.getId(), asignatura, codeProgram, jornada, null);
+        exigirNoRepetida(periodo.getId(), asignatura, codeProgram, jornada, null, true);
 
         CursoProgramacion curso = CursoProgramacion.builder()
                 .periodo(periodo)
@@ -251,7 +251,8 @@ public class ElectivaProgramadaService {
         if (cambiaAsignatura) {
             Asignatura nueva = buscarElectiva(request.codeCourse().trim(), curso.getPrograma(),
                     curso.getCodeCourseEspacio());
-            exigirNoRepetida(curso.getPeriodo().getId(), nueva, codeProgram, curso.getJornada(), cursoId);
+            exigirNoRepetida(curso.getPeriodo().getId(), nueva, codeProgram, curso.getJornada(), cursoId,
+                    esPropuesta(curso.getCodeCourseEspacio()));
             curso.setGrupo(siguienteGrupo(curso.getPeriodo().getId(), nueva.getCodeCourse()));
             curso.setAsignatura(nueva);
             curso.setNombreAsignatura(nueva.getNameCourse());
@@ -420,9 +421,10 @@ public class ElectivaProgramadaService {
 
     /** La misma electiva no se repite en el programa y la jornada (misma clave que la programación). */
     private void exigirNoRepetida(Long periodoId, Asignatura asignatura, String codeProgram,
-                                  Jornada jornada, Long cursoIgnorado) {
-        if (Boolean.TRUE.equals(asignatura.getEsComplementaria())) {
-            // Una complementaria se programa una sola vez en todo el período (cualquier programa y jornada)
+                                  Jornada jornada, Long cursoIgnorado, boolean propuesta) {
+        if (propuesta && Boolean.TRUE.equals(asignatura.getEsComplementaria())) {
+            // La complementaria general se propone una sola vez en todo el período (cualquier programa y jornada).
+            // La del semestre 1 de la malla no cuenta: cada programa la programa en su espacio.
             if (complementariaProgramada(periodoId, asignatura.getCodeCourse(), cursoIgnorado)) {
                 throw new ConflictException(MSG_COMPLEMENTARIA_REPETIDA);
             }
@@ -441,19 +443,31 @@ public class ElectivaProgramadaService {
     private boolean complementariaProgramada(Long periodoId, String codeCourse, Long cursoIgnorado) {
         return cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
                 .filter(c -> !c.isExcluido())
+                .filter(c -> esPropuesta(c.getCodeCourseEspacio()))
                 .anyMatch(c -> cursoIgnorado == null || !cursoIgnorado.equals(c.getId()));
     }
 
-    /** Complementarias activas que todavía no se han programado en el período. */
+    /** Complementarias activas; las ya propuestas (generales) en el período llevan el programa que las propuso. */
     private List<ElectivaProgramadaDto.AsignaturaItem> bancoComplementarias(Long periodoId) {
         return asignaturaRepository.findAll().stream()
                 .filter(a -> Boolean.TRUE.equals(a.getActivo()) && Boolean.TRUE.equals(a.getIsElective())
                         && Boolean.TRUE.equals(a.getEsComplementaria()))
-                .filter(a -> !complementariaProgramada(periodoId, a.getCodeCourse(), null))
                 .sorted(java.util.Comparator.comparing(Asignatura::getNameCourse,
                         java.util.Comparator.nullsLast(String::compareToIgnoreCase)))
-                .map(a -> new ElectivaProgramadaDto.AsignaturaItem(a.getCodeCourse(), a.getNameCourse(), a.getCredits()))
+                .map(a -> new ElectivaProgramadaDto.AsignaturaItem(a.getCodeCourse(), a.getNameCourse(),
+                        a.getCredits(), programaQueLaTiene(periodoId, a.getCodeCourse())))
                 .toList();
+    }
+
+    /** Nombre del programa que ya programó la complementaria en el período; null si nadie la ha programado. */
+    private String programaQueLaTiene(Long periodoId, String codeCourse) {
+        return cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
+                .filter(c -> !c.isExcluido())
+                .filter(c -> esPropuesta(c.getCodeCourseEspacio()))
+                .findFirst()
+                .map(c -> c.getPrograma().getNameProgram() != null
+                        ? c.getPrograma().getNameProgram() : c.getPrograma().getCodeProgram())
+                .orElse(null);
     }
 
     /**
