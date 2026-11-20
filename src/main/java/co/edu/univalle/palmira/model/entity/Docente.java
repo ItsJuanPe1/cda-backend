@@ -52,6 +52,10 @@ public class Docente {
     @Column(name = "celular", length = 10)
     private String celular;
 
+    // Dirección de vivienda, opcional: la edita el docente en «Mi perfil» y el administrador en Plantilla (V39)
+    @Column(name = "direccion", length = 150)
+    private String direccion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_docente", length = 20, nullable = false)
     private TipoDocente tipoDocente;

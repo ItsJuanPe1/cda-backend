@@ -8,6 +8,7 @@ import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Asignatura;
 import co.edu.univalle.palmira.model.entity.CohortePeriodo;
 import co.edu.univalle.palmira.model.entity.CursoProgramacion;
+import co.edu.univalle.palmira.model.entity.Escuela;
 import co.edu.univalle.palmira.model.entity.PensumAcademico;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
 import co.edu.univalle.palmira.model.entity.Programa;
@@ -16,6 +17,7 @@ import co.edu.univalle.palmira.model.enums.Jornada;
 import co.edu.univalle.palmira.repository.AsignaturaRepository;
 import co.edu.univalle.palmira.repository.CohortePeriodoRepository;
 import co.edu.univalle.palmira.repository.CursoProgramacionRepository;
+import co.edu.univalle.palmira.repository.EscuelaRepository;
 import co.edu.univalle.palmira.repository.PensumAcademicoRepository;
 import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Electivas profesionales: el coordinador escoge una electiva del banco de su programa y la
@@ -46,6 +49,14 @@ public class ElectivaProgramadaService {
     public static final String ESPACIO_COMPLEMENTARIA = "ELE-PROF-COMPLEMENTARIA";
     /** Facultad de las asignaturas comunes: no son electivas profesionales. */
     static final int FACULTAD_COMUN = 2;
+    /** Escuelas «todas las facultades»: sus electivas las puede programar cualquier programa. */
+    static final Set<String> ESCUELAS_COMUNES = Set.of("990", "999");
+    /** La complementaria solo la programa el coordinador cuando su espacio está en este semestre. */
+    static final int SEMESTRE_COMPLEMENTARIA = 1;
+    /** Marca de las complementarias que propone el coordinador: no ocupan un espacio de la malla. */
+    public static final String ESPACIO_PROPUESTA = "COMPLEMENTARIA";
+    /** Las propuestas no tienen semestre de malla. */
+    public static final int SEMESTRE_PROPUESTA = 0;
 
     public static final String MSG_FUERA_DE_PROGRAMA = "Solo puede programar electivas de su programa";
     public static final String MSG_DATOS = "Debe indicar el programa, el espacio de la malla, la electiva y los cupos";
@@ -57,6 +68,13 @@ public class ElectivaProgramadaService {
     public static final String MSG_ASIGNATURA = "Asignatura no encontrada";
     public static final String MSG_NO_PROFESIONAL =
             "La asignatura no es una electiva profesional del banco de este programa";
+    public static final String MSG_COMPLEMENTARIA_REPETIDA =
+            "Esta electiva complementaria ya está programada en el período";
+    public static final String MSG_JORNADA = "Debe indicar la jornada (diurna o nocturna)";
+    public static final String MSG_NO_COMPLEMENTARIA =
+            "La asignatura no es una electiva complementaria";
+    public static final String MSG_COMPLEMENTARIA_SEMESTRE =
+            "La electiva complementaria solo la programa el coordinador en el primer semestre";
     public static final String MSG_ASIGNATURA_INACTIVA = "La asignatura está inactiva";
     public static final String MSG_ESPACIO_OCUPADO =
             "El espacio ya tiene una electiva programada; modifíquela o quítela";
@@ -84,6 +102,7 @@ public class ElectivaProgramadaService {
     private final ProgramacionService programacionService;
     private final BitacoraService bitacoraService;
     private final CuposProperties cuposProperties;
+    private final EscuelaRepository escuelaRepository;
 
     // ------------------------------------------------------------------ consulta
 
@@ -91,18 +110,28 @@ public class ElectivaProgramadaService {
     public ElectivaProgramadaDto.ListaResponse listar(String codeProgram) {
         String programa = texto(codeProgram, MSG_DATOS);
         AccesoProgramaService.Alcance alcance = validarAlcance(programa);
+        List<ElectivaProgramadaDto.EscuelaItem> escuelas = escuelaRepository.findByPrograma(programa).stream()
+                .map(e -> new ElectivaProgramadaDto.EscuelaItem(e.getCodigo(), e.getNombre()))
+                .toList();
         PeriodoAcademico periodo = periodoVigente().orElse(null);
         if (periodo == null) {
-            return new ElectivaProgramadaDto.ListaResponse(null, false, alcance.admin(), List.of());
+            return new ElectivaProgramadaDto.ListaResponse(null, false, alcance.admin(), List.of(), escuelas,
+                    List.of(), List.of());
         }
         boolean plazoAbierto = ProgramacionService.plazoCoordinadorAbierto(periodo);
         Map<String, String> nombres = nombresEspacios(programa);
-        List<ElectivaProgramadaDto.Response> electivas = cursoRepository
-                .findElectivasProgramadas(periodo.getId(), programa).stream()
+        List<CursoProgramacion> programadas = cursoRepository.findElectivasProgramadas(periodo.getId(), programa);
+        List<ElectivaProgramadaDto.Response> electivas = programadas.stream()
+                .filter(c -> !esPropuesta(c.getCodeCourseEspacio()))
+                .map(c -> respuesta(c, nombres))
+                .toList();
+        List<ElectivaProgramadaDto.Response> complementarias = programadas.stream()
+                .filter(c -> esPropuesta(c.getCodeCourseEspacio()))
                 .map(c -> respuesta(c, nombres))
                 .toList();
         return new ElectivaProgramadaDto.ListaResponse(periodo.getId(), plazoAbierto,
-                alcance.admin() || plazoAbierto, electivas);
+                alcance.admin() || plazoAbierto, electivas, escuelas, complementarias,
+                bancoComplementarias(periodo.getId()));
     }
 
     // ------------------------------------------------------------------ crear
@@ -116,6 +145,9 @@ public class ElectivaProgramadaService {
         String codeEspacio = texto(request.codeEspacio(), MSG_DATOS);
         String codeCourse = texto(request.codeCourse(), MSG_DATOS);
         validarCupos(request.cupos());
+        if (esPropuesta(codeEspacio)) {
+            return crearPropuesta(codeProgram, codeCourse, request);
+        }
 
         AccesoProgramaService.Alcance alcance = validarAlcance(codeProgram);
         PeriodoAcademico periodo = periodoVigente()
@@ -126,14 +158,14 @@ public class ElectivaProgramadaService {
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_PROGRAMA));
         PensumAcademico espacio = buscarEspacio(codeProgram, codeEspacio);
         CohortePeriodo cohorte = buscarCohorte(periodo, programa, espacio.getSemestre());
-        Asignatura asignatura = buscarElectiva(codeCourse, programa);
+        Asignatura asignatura = buscarElectiva(codeCourse, programa, espacio.getId().getCodeCourse());
 
         boolean ocupado = cursoRepository.findElectivasProgramadas(periodo.getId(), codeProgram).stream()
                 .anyMatch(c -> espacio.getId().getCodeCourse().equalsIgnoreCase(c.getCodeCourseEspacio()));
         if (ocupado) {
             throw new ConflictException(MSG_ESPACIO_OCUPADO);
         }
-        exigirNoRepetida(periodo.getId(), asignatura.getCodeCourse(), codeProgram, cohorte.getJornada(), null);
+        exigirNoRepetida(periodo.getId(), asignatura, codeProgram, cohorte.getJornada(), null, false);
 
         CursoProgramacion curso = CursoProgramacion.builder()
                 .periodo(periodo)
@@ -147,6 +179,45 @@ public class ElectivaProgramadaService {
                 .cupos(request.cupos())
                 .estado(CursoProgramacion.ESTADO_PROGRAMADO)
                 .codeCourseEspacio(espacio.getId().getCodeCourse())
+                .grupo(siguienteGrupo(periodo.getId(), asignatura.getCodeCourse()))
+                .build();
+        CursoProgramacion guardado = cursoRepository.save(curso);
+
+        bitacoraService.registrar(AccionBitacora.CREAR, ProgramacionService.ENTIDAD_CURSO,
+                String.valueOf(guardado.getId()), periodo.getId(), null, datos(guardado));
+
+        return respuesta(guardado, nombresEspacios(codeProgram));
+    }
+
+    /**
+     * Complementaria que propone el coordinador: no ocupa un espacio de la malla ni tiene semestre
+     * (SEMESTRE_PROPUESTA), y se programa una sola vez en todo el período. La jornada la elige quien propone.
+     */
+    private ElectivaProgramadaDto.Response crearPropuesta(String codeProgram, String codeCourse,
+                                                          ElectivaProgramadaDto.CrearRequest request) {
+        AccesoProgramaService.Alcance alcance = validarAlcance(codeProgram);
+        PeriodoAcademico periodo = periodoVigente()
+                .orElseThrow(() -> new BadRequestException(MSG_SIN_PERIODO));
+        exigirPlazo(alcance, periodo);
+
+        Programa programa = programaRepository.findById(codeProgram)
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_PROGRAMA));
+        Asignatura asignatura = buscarElectiva(codeCourse, programa, ESPACIO_PROPUESTA);
+        Jornada jornada = jornadaDePropuesta(request.jornada());
+        exigirNoRepetida(periodo.getId(), asignatura, codeProgram, jornada, null, true);
+
+        CursoProgramacion curso = CursoProgramacion.builder()
+                .periodo(periodo)
+                .programa(programa)
+                .asignatura(asignatura)
+                .semestre(SEMESTRE_PROPUESTA)
+                .jornada(jornada)
+                .numeroResolucion(resolucionDe(periodo, programa, jornada))
+                .credits(asignatura.getCredits() != null ? asignatura.getCredits() : 0)
+                .nombreAsignatura(asignatura.getNameCourse())
+                .cupos(request.cupos())
+                .estado(CursoProgramacion.ESTADO_PROGRAMADO)
+                .codeCourseEspacio(ESPACIO_PROPUESTA)
                 .grupo(siguienteGrupo(periodo.getId(), asignatura.getCodeCourse()))
                 .build();
         CursoProgramacion guardado = cursoRepository.save(curso);
@@ -178,9 +249,10 @@ public class ElectivaProgramadaService {
         boolean cambiaAsignatura = request.codeCourse() != null && !request.codeCourse().isBlank()
                 && !request.codeCourse().trim().equalsIgnoreCase(codigoAnterior);
         if (cambiaAsignatura) {
-            Asignatura nueva = buscarElectiva(request.codeCourse().trim(), curso.getPrograma());
-            exigirNoRepetida(curso.getPeriodo().getId(), nueva.getCodeCourse(), codeProgram,
-                    curso.getJornada(), cursoId);
+            Asignatura nueva = buscarElectiva(request.codeCourse().trim(), curso.getPrograma(),
+                    curso.getCodeCourseEspacio());
+            exigirNoRepetida(curso.getPeriodo().getId(), nueva, codeProgram, curso.getJornada(), cursoId,
+                    esPropuesta(curso.getCodeCourseEspacio()));
             curso.setGrupo(siguienteGrupo(curso.getPeriodo().getId(), nueva.getCodeCourse()));
             curso.setAsignatura(nueva);
             curso.setNombreAsignatura(nueva.getNameCourse());
@@ -229,6 +301,16 @@ public class ElectivaProgramadaService {
         return codigo.startsWith(PREFIJO_ESPACIO) && !codigo.equals(ESPACIO_COMPLEMENTARIA);
     }
 
+    /** Complementaria propuesta por el coordinador (sin espacio de malla). */
+    static boolean esPropuesta(String codeEspacio) {
+        return codeEspacio != null && codeEspacio.trim().equalsIgnoreCase(ESPACIO_PROPUESTA);
+    }
+
+    /** Espacio de la electiva complementaria (básicas): solo se programa si está en el primer semestre. */
+    static boolean esEspacioComplementaria(String codeCourse) {
+        return codeCourse != null && codeCourse.trim().equalsIgnoreCase(ESPACIO_COMPLEMENTARIA);
+    }
+
     private CursoProgramacion cursoEditable(Long cursoId) {
         CursoProgramacion curso = cursoRepository.findByIdWithDetails(cursoId)
                 .orElseThrow(() -> new ResourceNotFoundException(ProgramacionService.MSG_CURSO_NO_ENCONTRADO));
@@ -267,12 +349,18 @@ public class ElectivaProgramadaService {
     }
 
     private PensumAcademico buscarEspacio(String codeProgram, String codeEspacio) {
-        return pensumRepository.findByIdCodeProgramAndVigenteTrue(codeProgram).stream()
+        PensumAcademico espacio = pensumRepository.findByIdCodeProgramAndVigenteTrue(codeProgram).stream()
                 .filter(p -> Boolean.TRUE.equals(p.getActivo()))
-                .filter(p -> esEspacio(p.getId().getCodeCourse()))
+                .filter(p -> esEspacio(p.getId().getCodeCourse())
+                        || esEspacioComplementaria(p.getId().getCodeCourse()))
                 .filter(p -> p.getId().getCodeCourse().equalsIgnoreCase(codeEspacio))
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_ESPACIO));
+        if (esEspacioComplementaria(codeEspacio)
+                && !Objects.equals(espacio.getSemestre(), SEMESTRE_COMPLEMENTARIA)) {
+            throw new BadRequestException(MSG_COMPLEMENTARIA_SEMESTRE);
+        }
+        return espacio;
     }
 
     private CohortePeriodo buscarCohorte(PeriodoAcademico periodo, Programa programa, Integer semestre) {
@@ -289,27 +377,60 @@ public class ElectivaProgramadaService {
                 .orElse(cohortes.get(0));
     }
 
-    /** Banco profesional: electiva activa, no complementaria, de la facultad del programa (no común). */
-    private Asignatura buscarElectiva(String codeCourse, Programa programa) {
+    /**
+     * Espacio de complementaria: cualquier electiva complementaria activa. Espacio de profesional: electiva
+     * activa, no complementaria ni común, del banco del programa (ver {@link #delBancoDelPrograma}).
+     */
+    private Asignatura buscarElectiva(String codeCourse, Programa programa, String codeEspacio) {
         Asignatura asignatura = asignaturaRepository.findById(codeCourse)
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_ASIGNATURA));
         if (!Boolean.TRUE.equals(asignatura.getActivo())) {
             throw new BadRequestException(MSG_ASIGNATURA_INACTIVA);
         }
+        if (esEspacioComplementaria(codeEspacio) || esPropuesta(codeEspacio)) {
+            if (!Boolean.TRUE.equals(asignatura.getIsElective())
+                    || !Boolean.TRUE.equals(asignatura.getEsComplementaria())) {
+                throw new BadRequestException(MSG_NO_COMPLEMENTARIA);
+            }
+            return asignatura;
+        }
         boolean comun = Boolean.TRUE.equals(asignatura.getEsComplementaria())
                 || Objects.equals(asignatura.getIdFacultad(), FACULTAD_COMUN);
-        boolean delPrograma = programa.getIdFacultadPrograma() != null
-                && Objects.equals(asignatura.getIdFacultad(), programa.getIdFacultadPrograma());
-        if (!Boolean.TRUE.equals(asignatura.getIsElective()) || comun || !delPrograma) {
+        if (!Boolean.TRUE.equals(asignatura.getIsElective()) || comun || !delBancoDelPrograma(asignatura, programa)) {
             throw new BadRequestException(MSG_NO_PROFESIONAL);
         }
         return asignatura;
     }
 
+    /**
+     * Un programa con escuela ve las electivas cuyo código empieza por el código de alguna de sus escuelas
+     * (o por 990/999, «todas las facultades»); sin escuela, las de su facultad.
+     */
+    private boolean delBancoDelPrograma(Asignatura asignatura, Programa programa) {
+        List<String> escuelas = escuelaRepository.findByPrograma(programa.getCodeProgram()).stream()
+                .map(Escuela::getCodigo)
+                .toList();
+        if (escuelas.isEmpty()) {
+            return programa.getIdFacultadPrograma() != null
+                    && Objects.equals(asignatura.getIdFacultad(), programa.getIdFacultadPrograma());
+        }
+        String codigo = asignatura.getCodeCourse() == null ? "" : asignatura.getCodeCourse().trim();
+        String prefijo = codigo.length() >= 3 ? codigo.substring(0, 3) : codigo;
+        return escuelas.contains(prefijo) || ESCUELAS_COMUNES.contains(prefijo);
+    }
+
     /** La misma electiva no se repite en el programa y la jornada (misma clave que la programación). */
-    private void exigirNoRepetida(Long periodoId, String codeCourse, String codeProgram,
-                                  Jornada jornada, Long cursoIgnorado) {
-        boolean repetida = cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
+    private void exigirNoRepetida(Long periodoId, Asignatura asignatura, String codeProgram,
+                                  Jornada jornada, Long cursoIgnorado, boolean propuesta) {
+        if (propuesta && Boolean.TRUE.equals(asignatura.getEsComplementaria())) {
+            // La complementaria general se propone una sola vez en todo el período (cualquier programa y jornada).
+            // La del semestre 1 de la malla no cuenta: cada programa la programa en su espacio.
+            if (complementariaProgramada(periodoId, asignatura.getCodeCourse(), cursoIgnorado)) {
+                throw new ConflictException(MSG_COMPLEMENTARIA_REPETIDA);
+            }
+            return;
+        }
+        boolean repetida = cursoRepository.findByPeriodoAndAsignatura(periodoId, asignatura.getCodeCourse()).stream()
                 .filter(c -> !c.isExcluido())
                 .filter(c -> cursoIgnorado == null || !cursoIgnorado.equals(c.getId()))
                 .anyMatch(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram)
@@ -317,6 +438,69 @@ public class ElectivaProgramadaService {
         if (repetida) {
             throw new ConflictException(MSG_REPETIDA);
         }
+    }
+
+    private boolean complementariaProgramada(Long periodoId, String codeCourse, Long cursoIgnorado) {
+        return cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
+                .filter(c -> !c.isExcluido())
+                .filter(c -> esPropuesta(c.getCodeCourseEspacio()))
+                .anyMatch(c -> cursoIgnorado == null || !cursoIgnorado.equals(c.getId()));
+    }
+
+    /** Complementarias activas; las ya propuestas (generales) en el período llevan el programa que las propuso. */
+    private List<ElectivaProgramadaDto.AsignaturaItem> bancoComplementarias(Long periodoId) {
+        return asignaturaRepository.findAll().stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActivo()) && Boolean.TRUE.equals(a.getIsElective())
+                        && Boolean.TRUE.equals(a.getEsComplementaria()))
+                .sorted(java.util.Comparator.comparing(Asignatura::getNameCourse,
+                        java.util.Comparator.nullsLast(String::compareToIgnoreCase)))
+                .map(a -> new ElectivaProgramadaDto.AsignaturaItem(a.getCodeCourse(), a.getNameCourse(),
+                        a.getCredits(), programaQueLaTiene(periodoId, a.getCodeCourse())))
+                .toList();
+    }
+
+    /** Nombre del programa que ya programó la complementaria en el período; null si nadie la ha programado. */
+    private String programaQueLaTiene(Long periodoId, String codeCourse) {
+        return cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
+                .filter(c -> !c.isExcluido())
+                .filter(c -> esPropuesta(c.getCodeCourseEspacio()))
+                .findFirst()
+                .map(c -> c.getPrograma().getNameProgram() != null
+                        ? c.getPrograma().getNameProgram() : c.getPrograma().getCodeProgram())
+                .orElse(null);
+    }
+
+    /**
+     * La complementaria no se programa en la jornada del programa: la elige quien la propone
+     * (diurna o nocturna), sin valor por defecto.
+     */
+    private static Jornada jornadaDePropuesta(String texto) {
+        if (texto == null || texto.isBlank()) {
+            throw new BadRequestException(MSG_JORNADA);
+        }
+        try {
+            Jornada jornada = Jornada.valueOf(texto.trim().toUpperCase());
+            if (jornada == Jornada.AMBAS) {
+                throw new BadRequestException(MSG_JORNADA);
+            }
+            return jornada;
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException(MSG_JORNADA);
+        }
+    }
+
+    /** Resolución de la cohorte confirmada del programa (la de la misma jornada si existe); N/A si no hay. */
+    private String resolucionDe(PeriodoAcademico periodo, Programa programa, Jornada jornada) {
+        List<CohortePeriodo> cohortes = cohorteRepository
+                .findByPeriodoIdAndCodeProgram(periodo.getId(), programa.getCodeProgram()).stream()
+                .filter(c -> Boolean.TRUE.equals(c.getConfirmada()) && c.getNumeroResolucion() != null)
+                .toList();
+        return cohortes.stream()
+                .filter(c -> c.getJornada() == jornada)
+                .findFirst()
+                .or(() -> cohortes.stream().findFirst())
+                .map(CohortePeriodo::getNumeroResolucion)
+                .orElse("N/A");
     }
 
     /** Siguiente grupo de la serie de la asignatura en el período (desde 50). */
@@ -347,10 +531,12 @@ public class ElectivaProgramadaService {
     private Map<String, String> nombresEspacios(String codeProgram) {
         Map<String, String> nombres = new HashMap<>();
         for (PensumAcademico p : pensumRepository.findByIdCodeProgramAndVigenteTrue(codeProgram)) {
-            if (esEspacio(p.getId().getCodeCourse())) {
+            if (esEspacio(p.getId().getCodeCourse()) || esEspacioComplementaria(p.getId().getCodeCourse())) {
+                String porDefecto = esEspacioComplementaria(p.getId().getCodeCourse())
+                        ? "Electiva Complementaria" : "Electiva Profesional";
                 String nombre = p.getNameCourseSnapshot() != null && !p.getNameCourseSnapshot().isBlank()
                         ? p.getNameCourseSnapshot()
-                        : "Electiva Profesional";
+                        : porDefecto;
                 nombres.put(p.getId().getCodeCourse().toUpperCase(), nombre);
             }
         }
@@ -379,7 +565,8 @@ public class ElectivaProgramadaService {
                 c.getId(),
                 c.getPrograma().getCodeProgram(),
                 espacio,
-                espacio == null ? null : nombres.getOrDefault(espacio.toUpperCase(), "Electiva Profesional"),
+                espacio == null ? null : (esPropuesta(espacio) ? "Electiva complementaria"
+                        : nombres.getOrDefault(espacio.toUpperCase(), "Electiva Profesional")),
                 c.getSemestre(),
                 c.getAsignatura().getCodeCourse(),
                 c.getNombreAsignatura(),
@@ -391,6 +578,7 @@ public class ElectivaProgramadaService {
                 docente,
                 asociados,
                 asociados == 0,
-                asociados == 0 ? ALERTA_SIN_DOCENTES : null);
+                asociados == 0 ? ALERTA_SIN_DOCENTES : null,
+                c.getAsignatura().getHorasSemanales());
     }
 }

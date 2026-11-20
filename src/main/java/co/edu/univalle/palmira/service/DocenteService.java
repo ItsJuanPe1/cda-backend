@@ -28,14 +28,6 @@ import java.util.Objects;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * Servicio de negocio para la administración del personal docente y sus evaluaciones.
- * <p>
- * Gestiona el ciclo de vida de los docentes (creación, edición, activación/inactivación),
- * la actualización de datos de contacto institucional, el histórico de evaluaciones de
- * desempeño docente y la consulta de perfil para el docente autenticado.
- * </p>
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -86,9 +78,8 @@ public class DocenteService {
             if (programa.getIdFacultadPrograma() != null) {
                 facultad = facultadRepository.findById(programa.getIdFacultadPrograma()).orElse(null);
             }
-        } else {
-            throw new BadRequestException("La facultad de adscripción es obligatoria");
         }
+        // La facultad y el programa son opcionales: pueden completarse después
 
         Docente docente = Docente.builder()
                 .codigo(req.codigo().trim())
@@ -99,6 +90,7 @@ public class DocenteService {
                 .correoInstitucional(req.correoInstitucional().trim().toLowerCase())
                 .telefono(normalizarOpcional(req.telefono()))
                 .celular(normalizarOpcional(req.celular()))
+                .direccion(normalizarOpcional(req.direccion()))
                 .tipoDocente(req.tipoDocente())
                 .categoria(req.categoria())
                 .facultad(facultad)
@@ -154,6 +146,8 @@ public class DocenteService {
             docente.setTelefono(normalizarOpcional(req.telefono()));
         if (req.celular() != null)
             docente.setCelular(normalizarOpcional(req.celular()));
+        if (req.direccion() != null)
+            docente.setDireccion(normalizarOpcional(req.direccion()));
         if (req.tipoDocente() != null)
             docente.setTipoDocente(req.tipoDocente());
         if (req.categoria() != null)
@@ -201,7 +195,7 @@ public class DocenteService {
     }
 
     // ---------------------------------------------------------------
-    // HU-015: Editar mis datos de contacto (correo personal y teléfono) y facultad.
+    // HU-015: Editar mis datos de contacto (correo personal, teléfono, celular y dirección) y facultad.
     // Nombres, apellidos, correo institucional y demás datos no se editan aquí.
     // ---------------------------------------------------------------
     @Transactional
@@ -214,6 +208,7 @@ public class DocenteService {
         }
         String telefono = normalizarOpcional(req.telefono());
         String celular = normalizarOpcional(req.celular());
+        String direccion = normalizarOpcional(req.direccion());
 
         Integer idFacultadActual = docente.getFacultad() != null ? docente.getFacultad().getId() : null;
         Integer nuevoIdFacultad = req.idFacultad();
@@ -221,7 +216,8 @@ public class DocenteService {
 
         boolean cambioContacto = !Objects.equals(correoPersonal, docente.getCorreoPersonal())
                 || !Objects.equals(telefono, docente.getTelefono())
-                || !Objects.equals(celular, docente.getCelular());
+                || !Objects.equals(celular, docente.getCelular())
+                || !Objects.equals(direccion, docente.getDireccion());
 
         if (!cambioContacto && !cambioFacultad) {
             throw new BadRequestException(MSG_SIN_CAMBIOS);
@@ -233,6 +229,7 @@ public class DocenteService {
         docente.setCorreoPersonal(correoPersonal);
         docente.setTelefono(telefono);
         docente.setCelular(celular);
+        docente.setDireccion(direccion);
         return toResponse(docenteRepository.save(docente));
     }
 
@@ -271,9 +268,8 @@ public class DocenteService {
 
     @Transactional(readOnly = true)
     public List<EvaluacionDocenteDto.Curso> listarCursosEvaluacion(Long docenteId, Long periodoId) {
-        if (!docenteRepository.existsById(docenteId)) {
-            throw new ResourceNotFoundException("Docente no encontrado");
-        }
+        Docente docente = docenteRepository.findById(docenteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado"));
         PeriodoAcademico anterior = buscarPeriodoAnterior(periodoId);
         if (anterior == null) {
             return List.of();
@@ -422,7 +418,8 @@ public class DocenteService {
                 d.getEstado(),
                 d.getCreatedAt(),
                 d.getUpdatedAt(),
-                d.getCelular());
+                d.getCelular(),
+                d.getDireccion());
     }
 
     private EvaluacionDocenteDto toEvaluacionResponse(EvaluacionDocente evaluacion) {
