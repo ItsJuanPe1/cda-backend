@@ -238,7 +238,7 @@ class ElectivaProgramadaServiceTest {
     @Test
     void crear_programaConEscuela_sigueRechazandoLasComunes() {
         conEscuelas("750");
-        when(asignaturaRepository.findById(IA)).thenReturn(Optional.of(electiva(IA, 2)));
+        lenient().when(asignaturaRepository.findById(IA)).thenReturn(Optional.of(electiva(IA, 2)));
         assertThrows(BadRequestException.class, () -> service.crear(pedido()));
     }
 
@@ -253,10 +253,10 @@ class ElectivaProgramadaServiceTest {
         PensumAcademico comp = PensumAcademico.builder()
                 .id(new PensumId(PROGRAMA, "ELE-PROF-COMPLEMENTARIA", 1)).semestre(semestre)
                 .nameCourseSnapshot("Electiva Complementaria").activo(true).vigente(true).build();
-        when(pensumRepository.findByIdCodeProgramAndVigenteTrue(PROGRAMA)).thenReturn(List.of(espacio, comp));
+        lenient().when(pensumRepository.findByIdCodeProgramAndVigenteTrue(PROGRAMA)).thenReturn(List.of(espacio, comp));
         CohortePeriodo c = CohortePeriodo.builder().id(2L).periodo(periodo).programa(programa)
                 .semestre(semestre).jornada(Jornada.DIURNA).numeroResolucion("R-1").confirmada(true).build();
-        when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of(cohorte, c));
+        lenient().when(cohorteRepository.findByPeriodoIdAndCodeProgram(7L, PROGRAMA)).thenReturn(List.of(cohorte, c));
     }
 
     @Test
