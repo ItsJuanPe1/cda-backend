@@ -26,11 +26,11 @@ public class DocenteDto {
 
             @JsonProperty("telefono") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El teléfono solo admite de 7 a 10 dígitos") String telefono,
 
-            @JsonProperty("celular") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El celular solo admite de 7 a 10 dígitos") String celular,
+            @JsonProperty("celular") @Pattern(regexp = "^\\s*$|^3[0-9]{9}$", message = "El celular debe tener 10 dígitos y empezar por 3") String celular,
 
-            @JsonProperty("tipo_docente") @NotNull(message = "El tipo de docente es obligatorio") TipoDocente tipoDocente,
+            @JsonProperty("tipo_docente") TipoDocente tipoDocente,
 
-            @JsonProperty("categoria") @NotNull(message = "La categoría es obligatoria") CategoriaDocente categoria,
+            @JsonProperty("categoria") CategoriaDocente categoria,
 
             @JsonProperty("id_facultad") Integer idFacultad,
 
@@ -81,7 +81,7 @@ public class DocenteDto {
 
             @JsonProperty("telefono") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El teléfono solo admite de 7 a 10 dígitos") String telefono,
 
-            @JsonProperty("celular") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El celular solo admite de 7 a 10 dígitos") String celular,
+            @JsonProperty("celular") @Pattern(regexp = "^\\s*$|^3[0-9]{9}$", message = "El celular debe tener 10 dígitos y empezar por 3") String celular,
 
             @JsonProperty("tipo_docente") TipoDocente tipoDocente,
 
@@ -137,9 +137,9 @@ public class DocenteDto {
             @JsonProperty("id_facultad")
             Integer idFacultad,
 
-            // HU-015 (2026-11-10): celular opcional, distinto del teléfono.
+            // HU-015: celular colombiano opcional (10 dígitos empezando por 3), distinto del teléfono.
             @JsonProperty("celular")
-            @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "Por favor complete este campo correctamente")
+            @Pattern(regexp = "^\\s*$|^3[0-9]{9}$", message = "El celular debe tener 10 dígitos y empezar por 3")
             String celular,
 
             // Dirección de vivienda (opcional): null o vacío deja el campo sin valor.

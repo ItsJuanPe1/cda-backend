@@ -1,5 +1,6 @@
 package co.edu.univalle.palmira.service;
 
+import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.CatalogoItemDto;
 import co.edu.univalle.palmira.dto.CoordinadorDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
@@ -33,6 +34,7 @@ public class CoordinadorService {
     private final ProgramaRepository programaRepository;
     private final CategoriaRepository categoriaRepository;
     private final TipoContratoRepository tipoContratoRepository;
+    private final UsuarioAccesoService usuarioAccesoService;
 
     @Transactional(readOnly = true)
     public List<CoordinadorDto.Response> getAll() {
@@ -85,6 +87,9 @@ public class CoordinadorService {
     @Transactional
     public CoordinadorDto.Response create(CoordinadorDto.CreateRequest request) {
         String idDoc = request.identificacion().trim();
+        if (!idDoc.matches("^[0-9]{1,10}$")) {
+            throw new BadRequestException("La identificación solo admite números, hasta 10 dígitos");
+        }
         if (coordinadorRepository.existsByIdentificacion(idDoc)) {
             throw new BadRequestException("Ya existe un coordinador registrado con la identificación: " + idDoc);
         }
@@ -93,6 +98,8 @@ public class CoordinadorService {
         if (coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(emailInst)) {
             throw new BadRequestException("Ya existe un coordinador con el correo institucional: " + emailInst);
         }
+
+        validarCelular(request.telefono());
 
         Programa programa = null;
         if (request.codeProgram() != null && !request.codeProgram().trim().isEmpty()) {
@@ -116,13 +123,17 @@ public class CoordinadorService {
                 .activo(request.activo() != null ? request.activo() : true)
                 .build();
 
-        return toResponse(coordinadorRepository.save(coordinador));
+        Coordinador guardado = coordinadorRepository.save(coordinador);
+        sincronizarUsuario(null, guardado);
+        return toResponse(guardado);
     }
 
     @Transactional
     public CoordinadorDto.Response update(Integer id, CoordinadorDto.UpdateRequest request) {
         Coordinador coordinador = coordinadorRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
+
+        String correoAnterior = coordinador.getCorreoInstitucional();
 
         if (request.nombreCompleto() != null && !request.nombreCompleto().trim().isEmpty()) {
             coordinador.setNombreCompleto(request.nombreCompleto().trim());
@@ -142,6 +153,7 @@ public class CoordinadorService {
         }
 
         if (request.telefono() != null) {
+            validarCelular(request.telefono());
             coordinador.setTelefono(request.telefono().trim());
         }
 
@@ -168,7 +180,9 @@ public class CoordinadorService {
             coordinador.setActivo(request.activo());
         }
 
-        return toResponse(coordinadorRepository.save(coordinador));
+        Coordinador guardado = coordinadorRepository.save(coordinador);
+        sincronizarUsuario(correoAnterior, guardado);
+        return toResponse(guardado);
     }
 
     @Transactional
@@ -176,7 +190,9 @@ public class CoordinadorService {
         Coordinador coordinador = coordinadorRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
         coordinador.setActivo(activo != null ? activo : true);
-        return toResponse(coordinadorRepository.save(coordinador));
+        Coordinador guardado = coordinadorRepository.save(coordinador);
+        usuarioAccesoService.cambiarEstado(guardado.getCorreoInstitucional(), Boolean.TRUE.equals(guardado.getActivo()));
+        return toResponse(guardado);
     }
 
     /**
@@ -188,6 +204,20 @@ public class CoordinadorService {
                 .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
         coordinador.setActivo(false);
         coordinadorRepository.save(coordinador);
+        usuarioAccesoService.cambiarEstado(coordinador.getCorreoInstitucional(), false);
+    }
+
+    /** Refleja el coordinador en la tabla usuarios (rol coordinador) para que aparezca entre los usuarios de la app. */
+    private void sincronizarUsuario(String correoAnterior, Coordinador c) {
+        usuarioAccesoService.sincronizar(correoAnterior, c.getNombreCompleto(), c.getCorreoInstitucional(),
+                c.getCorreo(), c.getTelefono(), AuthConstants.ROL_COORDINADOR, !Boolean.FALSE.equals(c.getActivo()));
+    }
+
+    /** El teléfono del coordinador es un celular: 10 dígitos que empiezan por 3 (opcional). */
+    private static void validarCelular(String celular) {
+        if (celular != null && !celular.isBlank() && !celular.trim().matches("^3\\d{9}$")) {
+            throw new BadRequestException("El celular debe tener 10 dígitos y empezar por 3");
+        }
     }
 
     private Categoria resolveCategoria(Integer idCategoria, String nombreCategoria) {
