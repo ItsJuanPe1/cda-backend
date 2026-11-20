@@ -10,8 +10,16 @@ public class ElectivaProgramadaDto {
     private ElectivaProgramadaDto() {
     }
 
-    /** codeEspacio: espacio de la malla (ELE-PROF-I, ...); codeCourse: electiva del banco. */
-    public record CrearRequest(String codeProgram, String codeEspacio, String codeCourse, Integer cupos) {
+    /**
+     * codeEspacio: espacio de la malla (ELE-PROF-I, ...) o «COMPLEMENTARIA» para una complementaria que
+     * propone el coordinador sin espacio de malla; codeCourse: electiva del banco. jornada solo aplica a la
+     * propuesta y es obligatoria (DIURNA o NOCTURNA): no se programa en la jornada del programa.
+     */
+    public record CrearRequest(String codeProgram, String codeEspacio, String codeCourse, Integer cupos,
+                               String jornada) {
+        public CrearRequest(String codeProgram, String codeEspacio, String codeCourse, Integer cupos) {
+            this(codeProgram, codeEspacio, codeCourse, cupos, null);
+        }
     }
 
     /** Los campos nulos no se cambian. */
@@ -35,10 +43,29 @@ public class ElectivaProgramadaDto {
             int docentesAsociados,
             boolean sinDocentesAsociados,
             /** HU-051: mensaje para el admin cuando no hay docentes asociados; null si los hay. */
-            String alerta) {
+            String alerta,
+            /** Horas semanales de la asignatura (para validar la carga del docente al designarlo). */
+            Integer horasSemanales) {
     }
 
+    /** Escuela cuyas electivas profesionales puede programar el programa (codigo = prefijo de las asignaturas). */
+    public record EscuelaItem(String codigo, String nombre) {
+    }
+
+    /**
+     * Complementaria del banco. programadaPor: programa que ya la tiene en el período (null si está libre);
+     * una complementaria se programa una sola vez, así que la ya programada se muestra pero no se puede elegir.
+     */
+    public record AsignaturaItem(String codeCourse, String nombre, Integer credits, String programadaPor) {
+    }
+
+    /**
+     * electivas: las que ocupan un espacio de la malla; complementarias: las que propuso el coordinador;
+     * bancoComplementarias: todas las activas, con programadaPor si ya se programó (una complementaria se
+     * programa una sola vez en el período); escuelasBanco vacío: el programa no tiene escuela y el banco profesional va por facultad.
+     */
     public record ListaResponse(Long periodoId, boolean plazoAbierto, boolean puedeEditar,
-                                List<Response> electivas) {
+                                List<Response> electivas, List<EscuelaItem> escuelasBanco,
+                                List<Response> complementarias, List<AsignaturaItem> bancoComplementarias) {
     }
 }

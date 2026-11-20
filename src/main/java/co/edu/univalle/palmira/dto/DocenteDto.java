@@ -40,7 +40,20 @@ public class DocenteDto {
 
             @JsonProperty("evaluacion_periodo") @Size(max = 10, message = "El periodo no puede exceder 10 caracteres") String evaluacionPeriodo,
 
-            @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor) {
+            @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor,
+
+            // Dirección de vivienda: opcional; la edita el docente desde «Mi perfil» y el administrador desde Plantilla.
+            @JsonProperty("direccion") @Size(max = 150, message = "La dirección no puede exceder 150 caracteres") @Pattern(regexp = "^\\s*$|^[\\p{L}\\p{N}\\s#\\-.,°ºª/]+$", message = "La dirección solo admite letras, números y los signos # - . , / °") String direccion) {
+
+        public CreateRequest(
+                String codigo, String nombres, String apellidos, TipoDocumento tipoDocumento,
+                String numeroDocumento, String correoInstitucional, String telefono, String celular,
+                TipoDocente tipoDocente, CategoriaDocente categoria, Integer idFacultad, String codeProgram,
+                String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
+            this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
+                    telefono, celular, tipoDocente, categoria, idFacultad, codeProgram, fotoUrl, evaluacionPeriodo,
+                    evaluacionValor, null);
+        }
 
         public CreateRequest(
                 String codigo, String nombres, String apellidos, TipoDocumento tipoDocumento,
@@ -48,7 +61,8 @@ public class DocenteDto {
                 TipoDocente tipoDocente, CategoriaDocente categoria, String codeProgram,
                 String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
             this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
-                    telefono, null, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
+                    telefono, null, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo,
+                    evaluacionValor, null);
         }
     }
 
@@ -81,7 +95,20 @@ public class DocenteDto {
 
             @JsonProperty("evaluacion_periodo") @Size(max = 10, message = "El periodo no puede exceder 10 caracteres") String evaluacionPeriodo,
 
-            @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor) {
+            @JsonProperty("evaluacion_valor") BigDecimal evaluacionValor,
+
+            // Dirección de vivienda: opcional; la edita el docente desde «Mi perfil» y el administrador desde Plantilla.
+            @JsonProperty("direccion") @Size(max = 150, message = "La dirección no puede exceder 150 caracteres") @Pattern(regexp = "^\\s*$|^[\\p{L}\\p{N}\\s#\\-.,°ºª/]+$", message = "La dirección solo admite letras, números y los signos # - . , / °") String direccion) {
+
+        public UpdateRequest(
+                String codigo, String nombres, String apellidos, TipoDocumento tipoDocumento,
+                String numeroDocumento, String correoInstitucional, String telefono, String celular,
+                TipoDocente tipoDocente, CategoriaDocente categoria, Integer idFacultad, String codeProgram,
+                String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
+            this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
+                    telefono, celular, tipoDocente, categoria, idFacultad, codeProgram, fotoUrl, evaluacionPeriodo,
+                    evaluacionValor, null);
+        }
 
         public UpdateRequest(
                 String codigo, String nombres, String apellidos, TipoDocumento tipoDocumento,
@@ -89,7 +116,8 @@ public class DocenteDto {
                 TipoDocente tipoDocente, CategoriaDocente categoria, String codeProgram,
                 String fotoUrl, String evaluacionPeriodo, BigDecimal evaluacionValor) {
             this(codigo, nombres, apellidos, tipoDocumento, numeroDocumento, correoInstitucional,
-                    telefono, null, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo, evaluacionValor);
+                    telefono, null, tipoDocente, categoria, null, codeProgram, fotoUrl, evaluacionPeriodo,
+                    evaluacionValor, null);
         }
     }
 
@@ -112,14 +140,24 @@ public class DocenteDto {
             // HU-015 (2026-11-10): celular opcional, distinto del teléfono.
             @JsonProperty("celular")
             @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "Por favor complete este campo correctamente")
-            String celular) {
+            String celular,
+
+            // Dirección de vivienda (opcional): null o vacío deja el campo sin valor.
+            @JsonProperty("direccion")
+            @Size(max = 150, message = "La dirección no puede exceder 150 caracteres")
+            @Pattern(regexp = "^\\s*$|^[\\p{L}\\p{N}\\s#\\-.,°ºª/]+$", message = "La dirección solo admite letras, números y los signos # - . , / °")
+            String direccion) {
 
         public ContactoRequest(String correoPersonal, String telefono) {
-            this(correoPersonal, telefono, null, null);
+            this(correoPersonal, telefono, null, null, null);
         }
 
         public ContactoRequest(String correoPersonal, String telefono, Integer idFacultad) {
-            this(correoPersonal, telefono, idFacultad, null);
+            this(correoPersonal, telefono, idFacultad, null, null);
+        }
+
+        public ContactoRequest(String correoPersonal, String telefono, Integer idFacultad, String celular) {
+            this(correoPersonal, telefono, idFacultad, celular, null);
         }
     }
 
@@ -146,7 +184,23 @@ public class DocenteDto {
             @JsonProperty("estado") Boolean estado,
             @JsonProperty("created_at") LocalDateTime createdAt,
             @JsonProperty("updated_at") LocalDateTime updatedAt,
-            @JsonProperty("celular") String celular) {
+            @JsonProperty("celular") String celular,
+            @JsonProperty("direccion") String direccion) {
+
+        public Response(
+                Long id, String codigo, String nombres, String apellidos,
+                TipoDocumento tipoDocumento, String numeroDocumento,
+                String correoInstitucional, String correoPersonal, String telefono,
+                TipoDocente tipoDocente, CategoriaDocente categoria,
+                Integer idFacultad, String nombreFacultad,
+                String codeProgram, String nombrePrograma, String fotoUrl, Boolean tieneFoto,
+                String evaluacionPeriodo, BigDecimal evaluacionValor,
+                Boolean estado, LocalDateTime createdAt, LocalDateTime updatedAt, String celular) {
+            this(id, codigo, nombres, apellidos, tipoDocumento, numeroDocumento,
+                    correoInstitucional, correoPersonal, telefono, tipoDocente, categoria,
+                    idFacultad, nombreFacultad, codeProgram, nombrePrograma, fotoUrl, tieneFoto,
+                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, celular, null);
+        }
 
         public Response(
                 Long id, String codigo, String nombres, String apellidos,
@@ -159,7 +213,7 @@ public class DocenteDto {
             this(id, codigo, nombres, apellidos, tipoDocumento, numeroDocumento,
                     correoInstitucional, correoPersonal, telefono, tipoDocente, categoria,
                     null, null, codeProgram, nombrePrograma, fotoUrl, tieneFoto,
-                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, null);
+                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, null, null);
         }
     }
 }

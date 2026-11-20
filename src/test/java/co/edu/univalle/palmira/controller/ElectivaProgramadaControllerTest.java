@@ -25,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -69,7 +70,22 @@ class ElectivaProgramadaControllerTest {
     private ElectivaProgramadaDto.Response respuesta() {
         return new ElectivaProgramadaDto.Response(100L, "2135-DIU", "ELE-PROF-I", "Electiva Profesional I", 4,
                 "750022C", "Inteligencia artificial", 50, "750022C-50", 30, Jornada.DIURNA, null, null,
-                0, true, ElectivaProgramadaService.ALERTA_SIN_DOCENTES);
+                0, true, ElectivaProgramadaService.ALERTA_SIN_DOCENTES, 4);
+    }
+
+    @Test
+    void coordinador_proponeComplementaria_conJornada_201() throws Exception {
+        when(servicio.crear(any())).thenReturn(respuesta());
+        mockMvc.perform(post("/api/programacion/electivas").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"codeProgram\":\"2135-DIU\",\"codeEspacio\":\"COMPLEMENTARIA\","
+                                + "\"codeCourse\":\"204133C\",\"cupos\":25,\"jornada\":\"NOCTURNA\"}")
+                        .header("Authorization", token("ROLE_COORDINADOR")))
+                .andExpect(status().isCreated());
+        org.mockito.ArgumentCaptor<ElectivaProgramadaDto.CrearRequest> pedido =
+                org.mockito.ArgumentCaptor.forClass(ElectivaProgramadaDto.CrearRequest.class);
+        verify(servicio).crear(pedido.capture());
+        assertEquals("NOCTURNA", pedido.getValue().jornada());
+        assertEquals("COMPLEMENTARIA", pedido.getValue().codeEspacio());
     }
 
     @Test
@@ -85,7 +101,7 @@ class ElectivaProgramadaControllerTest {
     @Test
     void coordinador_consulta_200() throws Exception {
         when(servicio.listar("2135-DIU")).thenReturn(
-                new ElectivaProgramadaDto.ListaResponse(7L, true, true, List.of(respuesta())));
+                new ElectivaProgramadaDto.ListaResponse(7L, true, true, List.of(respuesta()), List.of(), List.of(), List.of()));
         mockMvc.perform(get("/api/programacion/electivas").param("codeProgram", "2135-DIU")
                         .header("Authorization", token("ROLE_COORDINADOR")))
                 .andExpect(status().isOk())

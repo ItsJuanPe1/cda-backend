@@ -675,8 +675,11 @@ public class ProgramacionService {
         if (Boolean.FALSE.equals(c.getAsignatura().getActivo())) {
             return REVISION_ASIGNATURA_INACTIVA;
         }
-        if (!cohortesConfirmadas
-                .contains(c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())) {
+        if (ElectivaProgramadaService.esPropuesta(c.getCodeCourseEspacio())) {
+            // Complementaria propuesta por el coordinador: no pertenece a una cohorte ni a la malla.
+            return null;
+        }
+        if (!cohortesConfirmadas.contains(c.getPrograma().getCodeProgram() + "#" + c.getSemestre() + "#" + c.getJornada())) {
             return REVISION_SIN_COHORTE;
         }
         if (c.getCodeCourseEspacio() != null) {
@@ -1117,9 +1120,15 @@ public class ProgramacionService {
      * de electiva.
      */
     private static String nombreEspacio(String codigoEspacio) {
+        if (ElectivaProgramadaService.esPropuesta(codigoEspacio)) {
+            return "Electiva complementaria";
+        }
         if (codigoEspacio == null
                 || !codigoEspacio.toUpperCase().startsWith(ElectivaProgramadaService.PREFIJO_ESPACIO)) {
             return null;
+        }
+        if (ElectivaProgramadaService.esEspacioComplementaria(codigoEspacio)) {
+            return "Electiva Complementaria";
         }
         return "Electiva Profesional " + codigoEspacio.substring(ElectivaProgramadaService.PREFIJO_ESPACIO.length());
     }
