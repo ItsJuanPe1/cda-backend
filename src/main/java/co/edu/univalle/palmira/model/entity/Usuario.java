@@ -1,4 +1,3 @@
-
 package co.edu.univalle.palmira.model.entity;
 
 import jakarta.persistence.*;
@@ -23,15 +22,17 @@ public class Usuario {
     @Column(nullable = false, length = 150)
     private String apellido;
 
-    @Column(nullable = true)
-    private Integer telefono;
+    // Celular (10 dígitos, empieza por 3). V41: antes era la columna entera "telefono" y no cabía un celular.
+    @Column(name = "celular", nullable = true, length = 10)
+    private String celular;
 
     @Column(name = "email_institucional", columnDefinition = "TEXT",
             nullable = false)
     private String emailInstitucional;
 
+    // Opcional (V41)
     @Column(name = "email_personal", columnDefinition = "TEXT",
-            nullable = false)
+            nullable = true)
     private String emailPersonal;
 
     @Column(nullable = false)

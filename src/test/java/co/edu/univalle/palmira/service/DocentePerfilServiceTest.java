@@ -5,8 +5,11 @@ import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.Facultad;
+import co.edu.univalle.palmira.repository.CursoProgramacionRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
+import co.edu.univalle.palmira.repository.EvaluacionDocenteRepository;
 import co.edu.univalle.palmira.repository.FacultadRepository;
+import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,6 +41,21 @@ class DocentePerfilServiceTest {
 
     @Mock
     private FacultadRepository facultadRepository;
+
+    @Mock
+    private EvaluacionDocenteRepository evaluacionDocenteRepository;
+
+    @Mock
+    private PeriodoAcademicoRepository periodoAcademicoRepository;
+
+    @Mock
+    private CursoProgramacionRepository cursoProgramacionRepository;
+
+    @Mock
+    private DocenteAsignaturaService docenteAsignaturaService;
+
+    @Mock
+    private UsuarioAccesoService usuarioAccesoService;
 
     @InjectMocks
     private DocenteService docenteService;
@@ -137,7 +155,7 @@ class DocentePerfilServiceTest {
     }
 
     // ---------------------------------------------------------------
-    // Celular (decisión del 2026-11-10): opcional, distinto del teléfono
+    // Celular colombiano: opcional, 10 dígitos empezando por 3
     // ---------------------------------------------------------------
 
     @Test
@@ -174,9 +192,9 @@ class DocentePerfilServiceTest {
         when(docenteRepository.save(any(Docente.class))).thenAnswer(inv -> inv.getArgument(0));
 
         DocenteDto.Response resp = docenteService.actualizarContacto(CORREO,
-                new DocenteDto.ContactoRequest("ana@example.com", "3001234567", null, "6022700"));
+                new DocenteDto.ContactoRequest("ana@example.com", "3001234567", null, "3201234567"));
 
-        assertEquals("6022700", resp.celular());
+        assertEquals("3201234567", resp.celular());
         verify(docenteRepository).save(any(Docente.class));
     }
 

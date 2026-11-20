@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * HU-015: validaciones del correo personal y del teléfono (decisiones del 2026-10-25).
+ * HU-015: validaciones del correo personal, teléfono y celular colombiano.
  */
 class DocenteContactoRequestValidationTest {
 
@@ -85,8 +85,8 @@ class DocenteContactoRequestValidationTest {
         assertEquals(Set.of("El teléfono solo admite de 7 a 10 dígitos"), mensajes(null, telefono));
     }
 
-    // Celular (decisión del 2026-11-10): opcional, de 7 a 10 dígitos, distinto del teléfono.
-    private static final String MENSAJE_CELULAR = "Por favor complete este campo correctamente";
+    // Celular colombiano: opcional, 10 dígitos y debe empezar por 3.
+    private static final String MENSAJE_CELULAR = "El celular debe tener 10 dígitos y empezar por 3";
 
     private Set<String> mensajesCelular(String celular) {
         return validator.validate(new DocenteDto.ContactoRequest(null, null, null, celular))
@@ -96,16 +96,27 @@ class DocenteContactoRequestValidationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"", "   ", "3001234", "3157654321", "0123456"})
-    @DisplayName("HU-015 C2: celular opcional o con 7 a 10 dígitos no tiene errores")
+    @ValueSource(strings = {"", "   ", "3001234567", "3157654321", "3209876543"})
+    @DisplayName("HU-015 C2: celular opcional o colombiano de 10 dígitos empezando por 3 no tiene errores")
     void celularValido(String celular) {
         assertTrue(mensajesCelular(celular).isEmpty());
         assertTrue(mensajesCelular(null).isEmpty());
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"1", "300123", "31576543210", "315-765-4321", "315 7654321", "+573157654321", "abcdefg"})
-    @DisplayName("HU-015 C2: celular con menos de 7 dígitos, más de 10 o con otros caracteres muestra «Por favor complete este campo correctamente»")
+    @ValueSource(strings = {
+            "1",
+            "300123",
+            "3001234",
+            "0123456789",
+            "2157654321",
+            "31576543210",
+            "315-765-4321",
+            "315 7654321",
+            "+573157654321",
+            "abcdefg"
+    })
+    @DisplayName("HU-015 C2: celular que no empiece por 3 o no tenga 10 dígitos muestra error")
     void celularInvalido(String celular) {
         assertEquals(Set.of(MENSAJE_CELULAR), mensajesCelular(celular));
     }
