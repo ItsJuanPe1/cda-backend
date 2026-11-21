@@ -26,6 +26,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Electivas profesionales: el coordinador escoge una electiva del banco de su programa y la
@@ -116,10 +118,11 @@ public class ElectivaProgramadaService {
         PeriodoAcademico periodo = periodoVigente().orElse(null);
         if (periodo == null) {
             return new ElectivaProgramadaDto.ListaResponse(null, false, alcance.admin(), List.of(), escuelas,
-                    List.of(), List.of());
+                    List.of(), List.of(), List.of());
         }
         boolean plazoAbierto = ProgramacionService.plazoCoordinadorAbierto(periodo);
-        Map<String, String> nombres = nombresEspacios(programa);
+        List<PensumAcademico> pensumVigente = pensumRepository.findByIdCodeProgramAndVigenteTrue(programa);
+        Map<String, String> nombres = nombresEspacios(pensumVigente);
         List<CursoProgramacion> programadas = cursoRepository.findElectivasProgramadas(periodo.getId(), programa);
         List<ElectivaProgramadaDto.Response> electivas = programadas.stream()
                 .filter(c -> !esPropuesta(c.getCodeCourseEspacio()))
@@ -129,9 +132,11 @@ public class ElectivaProgramadaService {
                 .filter(c -> esPropuesta(c.getCodeCourseEspacio()))
                 .map(c -> respuesta(c, nombres))
                 .toList();
+        List<ElectivaProgramadaDto.PendienteItem> pendientes =
+                pendientesObligatorias(periodo, programa, pensumVigente, nombres, electivas);
         return new ElectivaProgramadaDto.ListaResponse(periodo.getId(), plazoAbierto,
                 alcance.admin() || plazoAbierto, electivas, escuelas, complementarias,
-                bancoComplementarias(periodo.getId()));
+                bancoComplementarias(periodo.getId()), pendientes);
     }
 
     // ------------------------------------------------------------------ crear
@@ -330,7 +335,9 @@ public class ElectivaProgramadaService {
 
     private AccesoProgramaService.Alcance validarAlcance(String codeProgram) {
         AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
-        if (!alcance.admin() && !alcance.codeProgram().equalsIgnoreCase(codeProgram)) {
+        if (!alcance.admin()
+                && !alcance.codeProgram().equalsIgnoreCase(codeProgram)
+                && !accesoProgramaService.tieneAccesoAPrograma(codeProgram)) {
             throw new AccessDeniedException(MSG_FUERA_DE_PROGRAMA);
         }
         return alcance;
@@ -529,8 +536,12 @@ public class ElectivaProgramadaService {
     }
 
     private Map<String, String> nombresEspacios(String codeProgram) {
+        return nombresEspacios(pensumRepository.findByIdCodeProgramAndVigenteTrue(codeProgram));
+    }
+
+    private Map<String, String> nombresEspacios(List<PensumAcademico> pensumVigente) {
         Map<String, String> nombres = new HashMap<>();
-        for (PensumAcademico p : pensumRepository.findByIdCodeProgramAndVigenteTrue(codeProgram)) {
+        for (PensumAcademico p : pensumVigente) {
             if (esEspacio(p.getId().getCodeCourse()) || esEspacioComplementaria(p.getId().getCodeCourse())) {
                 String porDefecto = esEspacioComplementaria(p.getId().getCodeCourse())
                         ? "Electiva Complementaria" : "Electiva Profesional";
@@ -555,12 +566,62 @@ public class ElectivaProgramadaService {
         return datos;
     }
 
+    /**
+     * Calcula los espacios de electiva de la malla que pertenecen a semestres con cohorte confirmada
+     * en el período vigente y que el coordinador todavía no ha escogido. Al cambiar de período vigente,
+     * las electivas programadas del período anterior dejan de contar y los espacios se reinician.
+     */
+    private List<ElectivaProgramadaDto.PendienteItem> pendientesObligatorias(
+            PeriodoAcademico periodo,
+            String codeProgram,
+            List<PensumAcademico> pensumVigente,
+            Map<String, String> nombres,
+            List<ElectivaProgramadaDto.Response> electivas) {
+        Set<Integer> semestresConfirmados = cohorteRepository
+                .findByPeriodoIdAndCodeProgram(periodo.getId(), codeProgram).stream()
+                .filter(c -> Boolean.TRUE.equals(c.getConfirmada()) && c.getSemestre() != null)
+                .map(CohortePeriodo::getSemestre)
+                .collect(Collectors.toSet());
+        if (semestresConfirmados.isEmpty()) {
+            return List.of();
+        }
+        Set<String> espaciosOcupados = electivas.stream()
+                .map(ElectivaProgramadaDto.Response::codeEspacio)
+                .filter(Objects::nonNull)
+                .map(String::toUpperCase)
+                .collect(Collectors.toSet());
+
+        return pensumVigente.stream()
+                .filter(p -> Boolean.TRUE.equals(p.getActivo()))
+                .filter(p -> p.getSemestre() != null && semestresConfirmados.contains(p.getSemestre()))
+                .filter(p -> {
+                    String cod = p.getId().getCodeCourse();
+                    return esEspacio(cod)
+                            || (esEspacioComplementaria(cod) && Objects.equals(p.getSemestre(), SEMESTRE_COMPLEMENTARIA));
+                })
+                .filter(p -> !espaciosOcupados.contains(p.getId().getCodeCourse().toUpperCase()))
+                .sorted(Comparator.comparing(PensumAcademico::getSemestre)
+                        .thenComparing(p -> p.getId().getCodeCourse()))
+                .map(p -> {
+                    String cod = p.getId().getCodeCourse();
+                    boolean esComp = esEspacioComplementaria(cod);
+                    String nombre = nombres.getOrDefault(cod.toUpperCase(),
+                            esComp ? "Electiva Complementaria" : "Electiva Profesional");
+                    return new ElectivaProgramadaDto.PendienteItem(cod, nombre, p.getSemestre(), esComp);
+                })
+                .toList();
+    }
+
     private ElectivaProgramadaDto.Response respuesta(CursoProgramacion c, Map<String, String> nombres) {
+        String espacio = c.getCodeCourseEspacio();
+        boolean esComplementaria = esPropuesta(espacio) || esEspacioComplementaria(espacio);
+        // En complementarias los docentes suelen pertenecer a otra facultad/escuela (artes, deporte, idiomas),
+        // por eso no se restringe la búsqueda a la facultad del programa que la propone.
+        Integer idFacultadFiltro = esComplementaria ? null : c.getPrograma().getIdFacultadPrograma();
         int asociados = docenteAsignaturaService.listar(null, c.getAsignatura().getCodeCourse(),
-                c.getPrograma().getIdFacultadPrograma(), true).size();
+                idFacultadFiltro, true).size();
         String docente = c.getDocente() == null ? null
                 : (c.getDocente().getNombres() + " " + c.getDocente().getApellidos()).trim();
-        String espacio = c.getCodeCourseEspacio();
         return new ElectivaProgramadaDto.Response(
                 c.getId(),
                 c.getPrograma().getCodeProgram(),
@@ -579,6 +640,13 @@ public class ElectivaProgramadaService {
                 asociados,
                 asociados == 0,
                 asociados == 0 ? ALERTA_SIN_DOCENTES : null,
-                c.getAsignatura().getHorasSemanales());
+                c.getAsignatura().getHorasSemanales(),
+                c.getDia(),
+                c.getHoraInicio(),
+                c.getHoraFin(),
+                c.getDia2(),
+                c.getHoraInicio2(),
+                c.getHoraFin2(),
+                c.getHorario());
     }
 }

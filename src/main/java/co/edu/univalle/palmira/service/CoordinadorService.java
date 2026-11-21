@@ -4,15 +4,12 @@ import co.edu.univalle.palmira.constant.AuthConstants;
 import co.edu.univalle.palmira.dto.CatalogoItemDto;
 import co.edu.univalle.palmira.dto.CoordinadorDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
+import co.edu.univalle.palmira.exception.ConflictException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
-import co.edu.univalle.palmira.model.entity.Categoria;
 import co.edu.univalle.palmira.model.entity.Coordinador;
+import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.Programa;
-import co.edu.univalle.palmira.model.entity.TipoContrato;
-import co.edu.univalle.palmira.repository.CategoriaRepository;
-import co.edu.univalle.palmira.repository.CoordinadorRepository;
-import co.edu.univalle.palmira.repository.ProgramaRepository;
-import co.edu.univalle.palmira.repository.TipoContratoRepository;
+import co.edu.univalle.palmira.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,8 +19,9 @@ import java.util.List;
 /**
  * Servicio de negocio para la gestión de coordinadores de programa académico.
  * <p>
- * Administra el registro, edición, asignación de programa y estado activo de los directores
- * y coordinadores de programas académicos en la sede Palmira.
+ * Cada coordinador vincula un {@link Docente} existente con un {@link Programa} y su correo
+ * institucional de coordinación. Un docente puede coordinar múltiples programas (ej. DIU y NOC),
+ * pero cada programa tiene como máximo un coordinador activo a la vez.
  * </p>
  */
 @Service
@@ -31,6 +29,7 @@ import java.util.List;
 public class CoordinadorService {
 
     private final CoordinadorRepository coordinadorRepository;
+    private final DocenteRepository docenteRepository;
     private final ProgramaRepository programaRepository;
     private final CategoriaRepository categoriaRepository;
     private final TipoContratoRepository tipoContratoRepository;
@@ -86,41 +85,28 @@ public class CoordinadorService {
 
     @Transactional
     public CoordinadorDto.Response create(CoordinadorDto.CreateRequest request) {
-        String idDoc = request.identificacion().trim();
-        if (!idDoc.matches("^[0-9]{1,10}$")) {
-            throw new BadRequestException("La identificación solo admite números, hasta 10 dígitos");
+        Docente docente = docenteRepository.findById(request.docenteId())
+                .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id: " + request.docenteId()));
+        if (Boolean.FALSE.equals(docente.getEstado())) {
+            throw new BadRequestException("No se puede designar como coordinador a un docente inactivo");
         }
-        if (coordinadorRepository.existsByIdentificacion(idDoc)) {
-            throw new BadRequestException("Ya existe un coordinador registrado con la identificación: " + idDoc);
+
+        String progCode = request.codeProgram().trim().toUpperCase();
+        Programa programa = programaRepository.findById(progCode)
+                .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código: " + progCode));
+
+        boolean activo = request.activo() == null || request.activo();
+        if (activo && coordinadorRepository.existsByProgramaCodeProgramAndActivoTrue(progCode)) {
+            throw new ConflictException("El programa " + progCode + " ya tiene un coordinador activo asignado");
         }
 
         String emailInst = request.correoInstitucional().trim().toLowerCase();
-        if (coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(emailInst)) {
-            throw new BadRequestException("Ya existe un coordinador con el correo institucional: " + emailInst);
-        }
-
-        validarCelular(request.telefono());
-
-        Programa programa = null;
-        if (request.codeProgram() != null && !request.codeProgram().trim().isEmpty()) {
-            String progCode = request.codeProgram().trim().toUpperCase();
-            programa = programaRepository.findById(progCode)
-                    .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código: " + progCode));
-        }
-
-        Categoria categoria = resolveCategoria(request.idCategoria(), request.categoria());
-        TipoContrato tipoContrato = resolveTipoContrato(request.idTipoContrato(), request.tipoContrato());
 
         Coordinador coordinador = Coordinador.builder()
-                .identificacion(idDoc)
-                .nombreCompleto(request.nombreCompleto().trim())
-                .correo(request.correo() != null ? request.correo().trim().toLowerCase() : null)
-                .correoInstitucional(emailInst)
-                .telefono(request.telefono() != null ? request.telefono().trim() : null)
+                .docente(docente)
                 .programa(programa)
-                .categoria(categoria)
-                .tipoContrato(tipoContrato)
-                .activo(request.activo() != null ? request.activo() : true)
+                .correoInstitucional(emailInst)
+                .activo(activo)
                 .build();
 
         Coordinador guardado = coordinadorRepository.save(coordinador);
@@ -135,49 +121,35 @@ public class CoordinadorService {
 
         String correoAnterior = coordinador.getCorreoInstitucional();
 
-        if (request.nombreCompleto() != null && !request.nombreCompleto().trim().isEmpty()) {
-            coordinador.setNombreCompleto(request.nombreCompleto().trim());
+        if (request.docenteId() != null) {
+            Docente docente = docenteRepository.findById(request.docenteId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id: " + request.docenteId()));
+            if (Boolean.FALSE.equals(docente.getEstado())) {
+                throw new BadRequestException("No se puede designar como coordinador a un docente inactivo");
+            }
+            coordinador.setDocente(docente);
         }
 
-        if (request.correo() != null) {
-            coordinador.setCorreo(request.correo().trim().toLowerCase());
+        if (request.codeProgram() != null && !request.codeProgram().trim().isEmpty()) {
+            String progCode = request.codeProgram().trim().toUpperCase();
+            Programa programa = programaRepository.findById(progCode)
+                    .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código: " + progCode));
+            coordinador.setPrograma(programa);
         }
 
         if (request.correoInstitucional() != null && !request.correoInstitucional().trim().isEmpty()) {
-            String newInstEmail = request.correoInstitucional().trim().toLowerCase();
-            if (!newInstEmail.equalsIgnoreCase(coordinador.getCorreoInstitucional()) &&
-                    coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(newInstEmail)) {
-                throw new BadRequestException("Ya existe otro coordinador con el correo institucional: " + newInstEmail);
-            }
-            coordinador.setCorreoInstitucional(newInstEmail);
-        }
-
-        if (request.telefono() != null) {
-            validarCelular(request.telefono());
-            coordinador.setTelefono(request.telefono().trim());
-        }
-
-        if (request.codeProgram() != null) {
-            if (request.codeProgram().trim().isEmpty()) {
-                coordinador.setPrograma(null);
-            } else {
-                String progCode = request.codeProgram().trim().toUpperCase();
-                Programa programa = programaRepository.findById(progCode)
-                        .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado con código: " + progCode));
-                coordinador.setPrograma(programa);
-            }
-        }
-
-        if (request.idCategoria() != null || request.categoria() != null) {
-            coordinador.setCategoria(resolveCategoria(request.idCategoria(), request.categoria()));
-        }
-
-        if (request.idTipoContrato() != null || request.tipoContrato() != null) {
-            coordinador.setTipoContrato(resolveTipoContrato(request.idTipoContrato(), request.tipoContrato()));
+            coordinador.setCorreoInstitucional(request.correoInstitucional().trim().toLowerCase());
         }
 
         if (request.activo() != null) {
             coordinador.setActivo(request.activo());
+        }
+
+        if (Boolean.TRUE.equals(coordinador.getActivo()) && coordinador.getPrograma() != null
+                && coordinadorRepository.existsByProgramaCodeProgramAndActivoTrueAndIdNot(
+                        coordinador.getPrograma().getCodeProgram(), coordinador.getId())) {
+            throw new ConflictException(
+                    "El programa " + coordinador.getPrograma().getCodeProgram() + " ya tiene otro coordinador activo");
         }
 
         Coordinador guardado = coordinadorRepository.save(coordinador);
@@ -189,9 +161,16 @@ public class CoordinadorService {
     public CoordinadorDto.Response cambiarEstado(Integer id, Boolean activo) {
         Coordinador coordinador = coordinadorRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
-        coordinador.setActivo(activo != null ? activo : true);
+        boolean nuevoEstado = activo != null ? activo : true;
+        if (nuevoEstado && coordinador.getPrograma() != null
+                && coordinadorRepository.existsByProgramaCodeProgramAndActivoTrueAndIdNot(
+                        coordinador.getPrograma().getCodeProgram(), coordinador.getId())) {
+            throw new ConflictException(
+                    "El programa " + coordinador.getPrograma().getCodeProgram() + " ya tiene otro coordinador activo");
+        }
+        coordinador.setActivo(nuevoEstado);
         Coordinador guardado = coordinadorRepository.save(coordinador);
-        usuarioAccesoService.cambiarEstado(guardado.getCorreoInstitucional(), Boolean.TRUE.equals(guardado.getActivo()));
+        actualizarEstadoUsuarioSiCorresponde(guardado.getCorreoInstitucional());
         return toResponse(guardado);
     }
 
@@ -204,66 +183,53 @@ public class CoordinadorService {
                 .orElseThrow(() -> new ResourceNotFoundException("Coordinador no encontrado con id: " + id));
         coordinador.setActivo(false);
         coordinadorRepository.save(coordinador);
-        usuarioAccesoService.cambiarEstado(coordinador.getCorreoInstitucional(), false);
+        actualizarEstadoUsuarioSiCorresponde(coordinador.getCorreoInstitucional());
     }
 
-    /** Refleja el coordinador en la tabla usuarios (rol coordinador) para que aparezca entre los usuarios de la app. */
+    /** Refleja el correo de coordinación en la tabla usuarios (rol coordinador). */
     private void sincronizarUsuario(String correoAnterior, Coordinador c) {
-        usuarioAccesoService.sincronizar(correoAnterior, c.getNombreCompleto(), c.getCorreoInstitucional(),
-                c.getCorreo(), c.getTelefono(), AuthConstants.ROL_COORDINADOR, !Boolean.FALSE.equals(c.getActivo()));
+        boolean tieneAlgunaActiva = coordinadorRepository
+                .findAllByCorreoInstitucionalWithDetails(c.getCorreoInstitucional())
+                .stream()
+                .anyMatch(item -> Boolean.TRUE.equals(item.getActivo()));
+        usuarioAccesoService.sincronizar(
+                correoAnterior,
+                c.getNombreCompleto(),
+                c.getCorreoInstitucional(),
+                c.getCorreo(),
+                c.getTelefono(),
+                AuthConstants.ROL_COORDINADOR,
+                tieneAlgunaActiva || Boolean.TRUE.equals(c.getActivo()));
     }
 
-    /** El teléfono del coordinador es un celular: 10 dígitos que empiezan por 3 (opcional). */
-    private static void validarCelular(String celular) {
-        if (celular != null && !celular.isBlank() && !celular.trim().matches("^3\\d{9}$")) {
-            throw new BadRequestException("El celular debe tener 10 dígitos y empezar por 3");
-        }
-    }
-
-    private Categoria resolveCategoria(Integer idCategoria, String nombreCategoria) {
-        if (idCategoria != null) {
-            return categoriaRepository.findById(idCategoria)
-                    .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada con ID: " + idCategoria));
-        }
-        if (nombreCategoria != null && !nombreCategoria.trim().isEmpty()) {
-            return categoriaRepository.findByNombreIgnoreCase(nombreCategoria.trim())
-                    .orElseGet(() -> categoriaRepository.findByNombreIgnoreCase("Auxiliar")
-                            .orElse(null));
-        }
-        return categoriaRepository.findByNombreIgnoreCase("Auxiliar").orElse(null);
-    }
-
-    private TipoContrato resolveTipoContrato(Integer idTipoContrato, String nombreTipoContrato) {
-        if (idTipoContrato != null) {
-            return tipoContratoRepository.findById(idTipoContrato)
-                    .orElseThrow(() -> new ResourceNotFoundException("Tipo de contrato no encontrado con ID: " + idTipoContrato));
-        }
-        if (nombreTipoContrato != null && !nombreTipoContrato.trim().isEmpty()) {
-            return tipoContratoRepository.findByNombreIgnoreCase(nombreTipoContrato.trim())
-                    .orElseGet(() -> tipoContratoRepository.findByNombreIgnoreCase("Nombrado")
-                            .orElse(null));
-        }
-        return tipoContratoRepository.findByNombreIgnoreCase("Nombrado").orElse(null);
+    /** Mantiene el acceso activo si el correo de coordinación sigue activo en otro programa (ej. DIU/NOC). */
+    private void actualizarEstadoUsuarioSiCorresponde(String correoInstitucional) {
+        boolean sigueActivoEnOtro = coordinadorRepository
+                .findAllByCorreoInstitucionalWithDetails(correoInstitucional)
+                .stream()
+                .anyMatch(item -> Boolean.TRUE.equals(item.getActivo()));
+        usuarioAccesoService.cambiarEstado(correoInstitucional, sigueActivoEnOtro);
     }
 
     private CoordinadorDto.Response toResponse(Coordinador c) {
+        Docente d = c.getDocente();
         Programa p = c.getPrograma();
-        Categoria cat = c.getCategoria();
-        TipoContrato tc = c.getTipoContrato();
 
         return new CoordinadorDto.Response(
                 c.getId(),
+                d != null ? d.getId() : null,
                 c.getIdentificacion(),
                 c.getNombreCompleto(),
                 c.getCorreo(),
                 c.getCorreoInstitucional(),
+                d != null ? d.getCorreoInstitucional() : null,
                 c.getTelefono(),
                 p != null ? p.getCodeProgram() : null,
                 p != null ? p.getNameProgram() : null,
-                cat != null ? cat.getId() : null,
-                cat != null ? cat.getNombre() : "Auxiliar",
-                tc != null ? tc.getId() : null,
-                tc != null ? tc.getNombre() : "Nombrado",
+                null,
+                c.getCategoriaNombre(),
+                null,
+                c.getTipoContratoNombre(),
                 c.getActivo(),
                 c.getCreatedAt()
         );

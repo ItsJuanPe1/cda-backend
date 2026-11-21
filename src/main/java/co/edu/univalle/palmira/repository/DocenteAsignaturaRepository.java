@@ -32,11 +32,13 @@ public interface DocenteAsignaturaRepository extends JpaRepository<DocenteAsigna
             "WHERE (:docenteId IS NULL OR d.id = :docenteId) " +
             "AND (:codeCourse IS NULL OR a.codeCourse = :codeCourse) " +
             "AND (:idFacultad IS NULL OR f.id = :idFacultad) " +
+            "AND (CAST(:codigoEscuela AS string) IS NULL OR UPPER(a.codeCourse) LIKE CONCAT(UPPER(CAST(:codigoEscuela AS string)), '%')) " +
             "AND (:activo IS NULL OR da.activo = :activo) " +
             "ORDER BY d.apellidos ASC, d.nombres ASC, a.nameCourse ASC")
     List<DocenteAsignatura> buscar(
             @Param("docenteId") Long docenteId,
             @Param("codeCourse") String codeCourse,
             @Param("idFacultad") Integer idFacultad,
+            @Param("codigoEscuela") String codigoEscuela,
             @Param("activo") Boolean activo);
 }

@@ -20,14 +20,21 @@ public class DocenteAsignaturaController {
 
     private final DocenteAsignaturaService service;
 
+    @GetMapping("/escuelas")
+    @Operation(summary = "Listar escuelas disponibles para asociar docentes a asignaturas")
+    public ResponseEntity<List<co.edu.univalle.palmira.model.entity.Escuela>> listarEscuelas() {
+        return ResponseEntity.ok(service.listarEscuelas());
+    }
+
     @GetMapping
-    @Operation(summary = "Consultar asociaciones por docente, asignatura, facultad o estado")
+    @Operation(summary = "Consultar asociaciones por docente, asignatura, escuela, facultad o estado")
     public ResponseEntity<List<DocenteAsignaturaDto.Response>> listar(
             @RequestParam(value = "docenteId", required = false) Long docenteId,
             @RequestParam(value = "codeCourse", required = false) String codeCourse,
             @RequestParam(value = "idFacultad", required = false) Integer idFacultad,
+            @RequestParam(value = "codigoEscuela", required = false) String codigoEscuela,
             @RequestParam(value = "activo", required = false) Boolean activo) {
-        return ResponseEntity.ok(service.listar(docenteId, codeCourse, idFacultad, activo));
+        return ResponseEntity.ok(service.listar(docenteId, codeCourse, idFacultad, codigoEscuela, activo));
     }
 
     @PostMapping

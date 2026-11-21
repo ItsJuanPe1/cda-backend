@@ -9,6 +9,8 @@ import java.util.List;
 
 public interface EscuelaRepository extends JpaRepository<Escuela, String> {
 
+    List<Escuela> findAllByOrderByCodigoAsc();
+
     /** Escuelas cuyas electivas profesionales puede programar el programa (la propia primero). */
     @Query(value = "SELECT e.* FROM escuelas e JOIN programa_escuelas pe ON pe.codigo_escuela = e.codigo "
             + "WHERE pe.code_program = :codeProgram ORDER BY pe.propia DESC, e.codigo", nativeQuery = true)

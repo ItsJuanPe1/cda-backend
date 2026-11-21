@@ -41,17 +41,19 @@ class CoordinadorControllerTest {
 
         CoordinadorDto.Response mockResponse = new CoordinadorDto.Response(
                 1,
+                10L,
                 "111222",
                 "Juan Pérez",
                 "juan@gmail.com",
                 correo,
+                "juan.perez@correounivalle.edu.co",
                 "3001234567",
                 "3743",
                 "Tecnología en Desarrollo de Software",
-                1,
+                null,
+                "Auxiliar",
+                null,
                 "Nombrado",
-                1,
-                "Tiempo Completo",
                 true,
                 null
         );

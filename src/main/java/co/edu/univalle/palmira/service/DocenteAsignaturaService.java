@@ -40,6 +40,10 @@ public class DocenteAsignaturaService {
     static final String MSG_ASIGNATURA_INACTIVA = "La asignatura está inactiva";
     static final String MSG_ASIGNATURA_FUERA_DE_FACULTAD =
             "La asignatura no corresponde a la facultad de adscripción del docente";
+    static final String MSG_ESCUELA_NO_EXISTE =
+            "No existe una escuela con el código indicado";
+    static final String MSG_ASIGNATURA_FUERA_DE_ESCUELA =
+            "La asignatura no corresponde a la escuela seleccionada";
     static final String MSG_SIN_FACULTAD =
             "El docente no tiene facultad de adscripción para validar su perfil";
     static final String MSG_ASOCIACION_EXISTE =
@@ -51,19 +55,33 @@ public class DocenteAsignaturaService {
     private final ProgramaRepository programaRepository;
     private final PensumAcademicoRepository pensumRepository;
     private final FacultadRepository facultadRepository;
+    private final EscuelaRepository escuelaRepository;
     private final CursoProgramacionRepository cursoProgramacionRepository;
     private final EvaluacionDocenteRepository evaluacionDocenteRepository;
 
+    @Transactional(readOnly = true)
+    public List<Escuela> listarEscuelas() {
+        return escuelaRepository != null ? escuelaRepository.findAllByOrderByCodigoAsc() : List.of();
+    }
+
     // ---------------------------------------------------------------
-    // Criterio 5: consulta por docente, asignatura, facultad o estado
+    // Criterio 5: consulta por docente, asignatura, escuela, facultad o estado
     // ---------------------------------------------------------------
     @Transactional(readOnly = true)
     public List<DocenteAsignaturaDto.Response> listar(Long docenteId, String codeCourse,
                                                        Integer idFacultad, Boolean activo) {
+        return listar(docenteId, codeCourse, idFacultad, null, activo);
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocenteAsignaturaDto.Response> listar(Long docenteId, String codeCourse,
+                                                       Integer idFacultad, String codigoEscuela, Boolean activo) {
         String curso = normalizarCodigo(codeCourse);
-        return asociacionRepository.buscar(docenteId, curso, idFacultad, activo)
+        String escuela = normalizarCodigo(codigoEscuela);
+        Map<String, String> mapaEscuelas = construirMapaEscuelas();
+        return asociacionRepository.buscar(docenteId, curso, idFacultad, escuela, activo)
                 .stream()
-                .map(this::toResponse)
+                .map(da -> toResponse(da, mapaEscuelas))
                 .toList();
     }
 
@@ -74,14 +92,18 @@ public class DocenteAsignaturaService {
     public DocenteAsignaturaDto.Response asociar(DocenteAsignaturaDto.CreateRequest request) {
         Docente docente = docenteRepository.findByIdWithDetails(request.docenteId())
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_DOCENTE_NO_EXISTE));
-        Facultad facultad = resolverFacultad(docente);
+        String codigoEscuela = normalizarCodigo(request.codigoEscuela());
+        Facultad facultad = codigoEscuela != null
+                ? resolverFacultadOpcional(docente, new HashMap<>())
+                : resolverFacultad(docente);
         Resultado resultado = procesarAsociacion(
                 docente,
                 request.codeCourse(),
                 facultad,
+                codigoEscuela,
                 OrigenAsociacion.MANUAL,
                 null);
-        return toResponse(resultado.asociacion());
+        return toResponse(resultado.asociacion(), construirMapaEscuelas());
     }
 
     // ---------------------------------------------------------------
@@ -204,7 +226,7 @@ public class DocenteAsignaturaService {
     // Helpers
     // ---------------------------------------------------------------
     private Resultado procesarAsociacion(Docente docente, String codeCourse, Facultad facultad,
-                                          OrigenAsociacion origen, PeriodoAcademico periodo) {
+                                          String codigoEscuela, OrigenAsociacion origen, PeriodoAcademico periodo) {
         if (!Boolean.TRUE.equals(docente.getEstado())) {
             throw new BadRequestException(MSG_DOCENTE_INACTIVO);
         }
@@ -217,7 +239,17 @@ public class DocenteAsignaturaService {
             throw new BadRequestException(MSG_ASIGNATURA_INACTIVA);
         }
 
-        validarAsignaturaDeFacultad(asignatura, facultad);
+        if (codigoEscuela != null) {
+            validarAsignaturaDeEscuela(asignatura, codigoEscuela);
+            if (facultad == null && asignatura.getIdFacultad() != null) {
+                facultad = facultadRepository.findById(asignatura.getIdFacultad()).orElse(null);
+            }
+            if (facultad == null) {
+                throw new BadRequestException(MSG_SIN_FACULTAD);
+            }
+        } else {
+            validarAsignaturaDeFacultad(asignatura, facultad);
+        }
 
         DocenteAsignatura existente = asociacionRepository
                 .findByDocenteIdAndAsignaturaCodeCourseAndFacultadId(
@@ -467,11 +499,49 @@ public class DocenteAsignaturaService {
         return normalizado;
     }
 
+    private void validarAsignaturaDeEscuela(Asignatura asignatura, String codigoEscuela) {
+        if (escuelaRepository != null && !escuelaRepository.existsById(codigoEscuela)) {
+            throw new BadRequestException(MSG_ESCUELA_NO_EXISTE);
+        }
+        String code = normalizarCodigo(asignatura.getCodeCourse());
+        if (code == null || !code.startsWith(codigoEscuela)) {
+            throw new BadRequestException(MSG_ASIGNATURA_FUERA_DE_ESCUELA);
+        }
+    }
+
+    private Map<String, String> construirMapaEscuelas() {
+        Map<String, String> mapa = new HashMap<>();
+        if (escuelaRepository != null) {
+            for (Escuela e : escuelaRepository.findAllByOrderByCodigoAsc()) {
+                if (e.getCodigo() != null) {
+                    mapa.put(e.getCodigo().trim().toUpperCase(Locale.ROOT), e.getNombre());
+                }
+            }
+        }
+        return mapa;
+    }
+
+    private static String prefijoEscuela(String codeCourse) {
+        if (codeCourse == null) {
+            return null;
+        }
+        String clean = codeCourse.trim().toUpperCase(Locale.ROOT);
+        return clean.length() >= 3 ? clean.substring(0, 3) : null;
+    }
+
     private DocenteAsignaturaDto.Response toResponse(DocenteAsignatura da) {
+        return toResponse(da, construirMapaEscuelas());
+    }
+
+    private DocenteAsignaturaDto.Response toResponse(DocenteAsignatura da, Map<String, String> mapaEscuelas) {
         Docente docente = da.getDocente();
         Asignatura asignatura = da.getAsignatura();
         Facultad facultad = da.getFacultad();
         PeriodoAcademico periodo = da.getPeriodo();
+
+        String codeCourse = asignatura != null ? asignatura.getCodeCourse() : null;
+        String codigoEscuela = prefijoEscuela(codeCourse);
+        String nombreEscuela = codigoEscuela != null ? mapaEscuelas.get(codigoEscuela) : null;
 
         return new DocenteAsignaturaDto.Response(
                 da.getId(),
@@ -480,10 +550,12 @@ public class DocenteAsignaturaService {
                 docente != null ? (docente.getNombres() + " " + docente.getApellidos()).trim() : null,
                 docente != null ? docente.getCorreoInstitucional() : null,
                 docente != null ? docente.getNumeroDocumento() : null,
-                asignatura != null ? asignatura.getCodeCourse() : null,
+                codeCourse,
                 asignatura != null ? asignatura.getNameCourse() : null,
                 facultad != null ? facultad.getId() : null,
                 facultad != null ? facultad.getNombre() : null,
+                codigoEscuela,
+                nombreEscuela,
                 periodo != null ? periodo.getId() : null,
                 periodo != null ? periodo.getNombre() : null,
                 da.getOrigen(),
