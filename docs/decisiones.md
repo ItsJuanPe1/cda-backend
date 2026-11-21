@@ -371,3 +371,18 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   5. **Generación:** en el backend con Apache POI (ya incluido por HU-054). No hay cambios en la base de datos.
 * **Contrato:** `docs/contratos/HU-035.md`.
 * **Pendiente:** un coordinador de `XXXX-DIU` que consulta la malla de `XXXX-NOC` recibe 403 al descargar, igual que en la asignación (ver el pendiente del 2026-11-13).
+
+
+## [2026-11-21] «Seleccionar todo» por día alterna entre marcar y desmarcar (HU-007, HU-008 y HU-051)
+
+* **HU afectadas:** HU-007 (registrar disponibilidad), HU-008 (editar disponibilidad), HU-051 (el administrador registra en nombre del docente). Modifica la R1 de la segunda ronda del 2026-11-10.
+* **Alcance:** solo frontend (`DisponibilidadView.jsx`, que usan el docente y el administrador). Sin cambios en la API ni en la base de datos.
+* **Decisión (confirmada por el usuario):**
+  1. Si todas las horas habilitadas y seleccionables de un día ya están marcadas, pulsar de nuevo su botón «Seleccionar todo» las desmarca. Si falta alguna, las marca todas, como antes.
+  2. Solo afecta ese día. El botón «Seleccionar todo» general no cambia.
+  3. El texto del botón no cambia: siempre dice «Seleccionar todo».
+  4. Fuera del modo «Editar», las horas ya guardadas siguen bloqueadas: el botón no las cuenta para decidir ni las quita. En modo «Editar» sí cuentan y se pueden desmarcar.
+  5. Desmarcar no guarda: el cambio se registra al pulsar «Guardar disponibilidad» o «Guardar cambios».
+  6. Rama del frontend: `sanabria`.
+* **Texto propuesto para el Excel de HU-007 (no se modifica el Excel ni el CSV):**
+  - **2.7. (reemplaza el propuesto el 2026-11-10)** El sistema debe ofrecer, en cada día del esquema (lunes a sábado), un botón «Seleccionar todo» que marca todas las horas habilitadas de ese día (el sábado, de 7:00 a. m. a 7:00 p. m.), sin modificar la selección de los demás días. Si todas esas horas ya están marcadas, al pulsarlo de nuevo se desmarcan.
