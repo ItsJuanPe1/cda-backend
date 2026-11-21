@@ -9,16 +9,15 @@ import java.time.Instant;
 
 public class DocenteAsignaturaDto {
 
-    /** HU-049: asociación individual docente-asignatura. La facultad se deriva del docente. */
+    /** HU-049: asociación individual docente-asignatura por escuela. */
     public record CreateRequest(
-            @JsonProperty("docente_id")
-            @NotNull(message = "El docente es obligatorio")
-            Long docenteId,
-
-            @JsonProperty("code_course")
-            @NotBlank(message = "La asignatura es obligatoria")
-            String codeCourse
-    ) {}
+            @JsonProperty("docente_id") @NotNull(message = "El docente es obligatorio") Long docenteId,
+            @JsonProperty("code_course") @NotBlank(message = "La asignatura es obligatoria") String codeCourse,
+            @JsonProperty("codigo_escuela") String codigoEscuela) {
+        public CreateRequest(Long docenteId, String codeCourse) {
+            this(docenteId, codeCourse, null);
+        }
+    }
 
     public record Response(
             @JsonProperty("id") Long id,
@@ -31,12 +30,14 @@ public class DocenteAsignaturaDto {
             @JsonProperty("name_course") String nameCourse,
             @JsonProperty("id_facultad") Integer idFacultad,
             @JsonProperty("nombre_facultad") String nombreFacultad,
+            @JsonProperty("codigo_escuela") String codigoEscuela,
+            @JsonProperty("nombre_escuela") String nombreEscuela,
             @JsonProperty("periodo_id") Long periodoId,
             @JsonProperty("periodo_nombre") String periodoNombre,
             @JsonProperty("origen") OrigenAsociacion origen,
             @JsonProperty("activo") Boolean activo,
             @JsonProperty("created_at") Instant createdAt,
             @JsonProperty("updated_at") Instant updatedAt,
-            @JsonProperty("desactivado_at") Instant desactivadoAt
-    ) {}
+            @JsonProperty("desactivado_at") Instant desactivadoAt) {
+    }
 }

@@ -8,61 +8,60 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface CoordinadorRepository extends JpaRepository<Coordinador, Integer> {
 
-       @Query("SELECT c FROM Coordinador c " +
-               "LEFT JOIN FETCH c.programa " +
-               "LEFT JOIN FETCH c.categoria " +
-               "LEFT JOIN FETCH c.tipoContrato " +
-               "ORDER BY c.nombreCompleto ASC")
-       List<Coordinador> findAllWithDetails();
+    @Query("SELECT c FROM Coordinador c " +
+            "JOIN FETCH c.docente d " +
+            "LEFT JOIN FETCH c.programa p " +
+            "ORDER BY d.apellidos ASC, d.nombres ASC, p.codeProgram ASC")
+    List<Coordinador> findAllWithDetails();
 
-       @Query("SELECT c FROM Coordinador c " +
-               "LEFT JOIN FETCH c.programa " +
-               "LEFT JOIN FETCH c.categoria " +
-               "LEFT JOIN FETCH c.tipoContrato " +
-               "WHERE c.id = :id")
-       Optional<Coordinador> findByIdWithDetails(@Param("id") Integer id);
+    @Query("SELECT c FROM Coordinador c " +
+            "JOIN FETCH c.docente " +
+            "LEFT JOIN FETCH c.programa " +
+            "WHERE c.id = :id")
+    Optional<Coordinador> findByIdWithDetails(@Param("id") Integer id);
 
-       @Query("SELECT c FROM Coordinador c " +
-               "LEFT JOIN FETCH c.programa " +
-               "LEFT JOIN FETCH c.categoria " +
-               "LEFT JOIN FETCH c.tipoContrato " +
-               "WHERE c.programa.codeProgram = :codeProgram " +
-               "ORDER BY c.nombreCompleto ASC")
-       List<Coordinador> findByProgramaCodeProgram(@Param("codeProgram") String codeProgram);
+    @Query("SELECT c FROM Coordinador c " +
+            "JOIN FETCH c.docente d " +
+            "LEFT JOIN FETCH c.programa " +
+            "WHERE c.programa.codeProgram = :codeProgram " +
+            "ORDER BY d.apellidos ASC, d.nombres ASC")
+    List<Coordinador> findByProgramaCodeProgram(@Param("codeProgram") String codeProgram);
 
-       // También lo usa "Mi perfil" (CoordinadorPerfilService)
-       @Query("SELECT c FROM Coordinador c " +
-               "LEFT JOIN FETCH c.programa " +
-               "LEFT JOIN FETCH c.categoria " +
-               "LEFT JOIN FETCH c.tipoContrato " +
-               "WHERE LOWER(c.correoInstitucional) = LOWER(:correoInstitucional)")
-       Optional<Coordinador> findByCorreoInstitucionalWithDetails(
-               @Param("correoInstitucional") String correoInstitucional);
+    @Query("SELECT c FROM Coordinador c " +
+            "JOIN FETCH c.docente " +
+            "LEFT JOIN FETCH c.programa " +
+            "WHERE LOWER(c.correoInstitucional) = LOWER(:correoInstitucional) " +
+            "ORDER BY c.activo DESC, c.id ASC")
+    List<Coordinador> findAllByCorreoInstitucionalWithDetails(
+            @Param("correoInstitucional") String correoInstitucional);
 
+    default Optional<Coordinador> findByCorreoInstitucionalWithDetails(String correoInstitucional) {
+        return findAllByCorreoInstitucionalWithDetails(correoInstitucional).stream().findFirst();
+    }
 
-       // HU-037: solo los coordinadores activos cuentan como coordinador del programa
-       @Query("SELECT c FROM Coordinador c " +
-               "JOIN FETCH c.programa " +
-               "WHERE c.activo = true")
-       List<Coordinador> findActivosConPrograma();
+    @Query("SELECT c FROM Coordinador c " +
+            "JOIN FETCH c.docente " +
+            "JOIN FETCH c.programa " +
+            "WHERE c.activo = true")
+    List<Coordinador> findActivosConPrograma();
 
-       /** Bloquea coordinadores participantes en orden de ID para que el intercambio sea atómico. */
-       @Lock(LockModeType.PESSIMISTIC_WRITE)
-       @Query("SELECT c FROM Coordinador c WHERE c.id IN :ids ORDER BY c.id")
-       List<Coordinador> findAllByIdsForUpdate(@Param("ids") Collection<Integer> ids);
+    /** Bloquea coordinadores participantes en orden de ID para que el intercambio sea atómico. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Coordinador c WHERE c.id IN :ids ORDER BY c.id")
+    List<Coordinador> findAllByIdsForUpdate(@Param("ids") Collection<Integer> ids);
 
-       boolean existsByIdentificacion(String identificacion);
+    boolean existsByCorreoInstitucionalIgnoreCase(String correoInstitucional);
 
-       boolean existsByCorreoInstitucionalIgnoreCase(String correoInstitucional);
+    boolean existsByProgramaCodeProgramAndActivoTrue(String codeProgram);
 
-       Optional<Coordinador> findByIdentificacion(String identificacion);
+    boolean existsByProgramaCodeProgramAndActivoTrueAndIdNot(String codeProgram, Integer id);
 
-       Optional<Coordinador> findByCorreoInstitucionalIgnoreCase(String correoInstitucional);
+    Optional<Coordinador> findFirstByCorreoInstitucionalIgnoreCaseOrderByActivoDescIdAsc(String correoInstitucional);
 }

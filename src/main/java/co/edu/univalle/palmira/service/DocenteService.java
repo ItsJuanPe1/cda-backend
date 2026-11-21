@@ -266,6 +266,10 @@ public class DocenteService {
 
         List<EvaluacionDocente> evaluaciones = evaluacionDocenteRepository
                 .findAllByAsignaturaBeforePeriodo(codeCourse, actual.getFechaInicioSemestre());
+        if (evaluaciones.isEmpty()) {
+            evaluaciones = evaluacionDocenteRepository
+                    .findAllByPeriodoIdAndAsignaturaCodeCourse(periodoId, codeCourse);
+        }
 
         // La consulta viene ordenada de más reciente a más antigua; la primera por docente es la vigente.
         Map<Long, EvaluacionDocente> ultimaPorDocente = new LinkedHashMap<>();

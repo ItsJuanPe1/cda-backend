@@ -244,12 +244,37 @@ class DocenteAsignaturaServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 5: consulta normalizando el código y filtrando por facultad")
+    @DisplayName("Criterio 5: consulta normalizando el código y filtrando por facultad o escuela")
     void criterio5_listarNormalizaFiltros() {
-        when(asociacionRepository.buscar(7L, "MAT101", 1, true)).thenReturn(List.of());
+        when(asociacionRepository.buscar(7L, "MAT101", 1, null, true)).thenReturn(List.of());
 
         service.listar(7L, " mat101 ", 1, true);
 
-        verify(asociacionRepository).buscar(7L, "MAT101", 1, true);
+        verify(asociacionRepository).buscar(7L, "MAT101", 1, null, true);
+    }
+
+    @Test
+    @DisplayName("Asocia un docente a una asignatura validando pertenencia a la escuela seleccionada")
+    void asociarPorEscuela_validaPrefijoDeEscuela() {
+        Asignatura asigSistemas = Asignatura.builder()
+                .codeCourse("750001M")
+                .nameCourse("Fundamentos de Programación")
+                .activo(true)
+                .idFacultad(1)
+                .build();
+        when(docenteRepository.findByIdWithDetails(7L)).thenReturn(Optional.of(docente));
+        when(asignaturaRepository.findById("750001M")).thenReturn(Optional.of(asigSistemas));
+        when(asociacionRepository.findByDocenteIdAndAsignaturaCodeCourseAndFacultadId(7L, "750001M", 1))
+                .thenReturn(Optional.empty());
+        guardarDevuelveLoMismo();
+
+        DocenteAsignaturaDto.Response resp = service.asociar(
+                new DocenteAsignaturaDto.CreateRequest(7L, "750001M", "750"));
+
+        assertEquals("750001M", resp.codeCourse());
+        assertEquals("750", resp.codigoEscuela());
+
+        assertThrows(BadRequestException.class, () -> service.asociar(
+                new DocenteAsignaturaDto.CreateRequest(7L, "750001M", "760")));
     }
 }

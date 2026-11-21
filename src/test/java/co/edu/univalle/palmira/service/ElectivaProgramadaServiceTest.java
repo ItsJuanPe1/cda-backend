@@ -708,4 +708,47 @@ class ElectivaProgramadaServiceTest {
         assertFalse(ElectivaProgramadaService.esPropuesta("ELE-PROF-I"));
         assertFalse(ElectivaProgramadaService.esPropuesta(null));
     }
+
+    @Test
+    void listar_pendientesObligatorias_reportaEspaciosSinEscogerYSeReinicianAlCambiarPeriodo() {
+        // En el período vigente (7L), el semestre 4 tiene cohorte confirmada y ELE-PROF-I sin escoger.
+        ElectivaProgramadaDto.ListaResponse sinEscoger = service.listar(PROGRAMA);
+        assertEquals(1, sinEscoger.pendientesObligatorias().size());
+        assertEquals(ESPACIO, sinEscoger.pendientesObligatorias().get(0).codeEspacio());
+        assertEquals(4, sinEscoger.pendientesObligatorias().get(0).semestre());
+        assertFalse(sinEscoger.pendientesObligatorias().get(0).esComplementaria());
+
+        // Una vez el coordinador escoge la electiva en el período 7L, deja de estar pendiente.
+        when(cursoRepository.findElectivasProgramadas(7L, PROGRAMA)).thenReturn(List.of(cursoElectiva(5L, 50)));
+        ElectivaProgramadaDto.ListaResponse escogida = service.listar(PROGRAMA);
+        assertTrue(escogida.pendientesObligatorias().isEmpty());
+
+        // Al pasar a un nuevo período vigente (8L) con cohorte confirmada y sin cursos programados, vuelve a quedar limpia y pendiente.
+        PeriodoAcademico nuevoPeriodo = PeriodoAcademico.builder().id(8L).estado("VIGENTE").vigente(true)
+                .plazoCoordinadorInicio(Instant.now().minusSeconds(3600))
+                .plazoCoordinadorFin(Instant.now().plusSeconds(3600)).build();
+        CohortePeriodo nuevaCohorte = CohortePeriodo.builder().id(2L).periodo(nuevoPeriodo).programa(programa)
+                .semestre(4).jornada(Jornada.DIURNA).numeroResolucion("R-1").confirmada(true).build();
+        when(periodoRepository.findFirstByVigenteTrue()).thenReturn(Optional.of(nuevoPeriodo));
+        when(cohorteRepository.findByPeriodoIdAndCodeProgram(8L, PROGRAMA)).thenReturn(List.of(nuevaCohorte));
+        when(cursoRepository.findElectivasProgramadas(8L, PROGRAMA)).thenReturn(List.of());
+
+        ElectivaProgramadaDto.ListaResponse nuevoSemestre = service.listar(PROGRAMA);
+        assertTrue(nuevoSemestre.electivas().isEmpty());
+        assertEquals(1, nuevoSemestre.pendientesObligatorias().size());
+        assertEquals(ESPACIO, nuevoSemestre.pendientesObligatorias().get(0).codeEspacio());
+    }
+
+    @Test
+    void crear_complementaria_cuentaDocentesSinRestringirAFacultadDelPrograma() {
+        conComplementaria();
+        when(docenteAsignaturaService.listar(isNull(), eq(COMPLEMENTARIA), isNull(), eq(true)))
+                .thenReturn(Collections.nCopies(1, (DocenteAsignaturaDto.Response) null));
+
+        ElectivaProgramadaDto.Response r = service.crear(propuesta("DIURNA"));
+        assertFalse(r.sinDocentesAsociados());
+        assertEquals(1, r.docentesAsociados());
+        assertNull(r.alerta());
+        verify(docenteAsignaturaService).listar(isNull(), eq(COMPLEMENTARIA), isNull(), eq(true));
+    }
 }

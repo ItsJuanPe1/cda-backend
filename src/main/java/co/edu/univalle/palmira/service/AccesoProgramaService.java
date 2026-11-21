@@ -11,7 +11,9 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Resuelve, a partir del token de la sesión, si quien llama es administrador
@@ -42,7 +44,7 @@ public class AccesoProgramaService {
         }
         Set<String> roles = auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .collect(java.util.stream.Collectors.toSet());
+                .collect(Collectors.toSet());
 
         if (roles.stream().anyMatch(ROLES_ADMIN::contains)) {
             return new Alcance(true, null);
@@ -55,24 +57,57 @@ public class AccesoProgramaService {
         if (correo == null || correo.isBlank()) {
             throw new AccessDeniedException(MSG_SIN_PROGRAMA);
         }
-        Coordinador coordinador = coordinadorRepository.findByCorreoInstitucionalWithDetails(correo)
-                .filter(c -> Boolean.TRUE.equals(c.getActivo()))
-                .orElseThrow(() -> new AccessDeniedException(MSG_SIN_PROGRAMA));
-        if (coordinador.getPrograma() == null || coordinador.getPrograma().getCodeProgram() == null) {
+        List<Coordinador> activos = buscarCoordinacionesActivas(correo);
+        if (activos.isEmpty()) {
             throw new AccessDeniedException(MSG_SIN_PROGRAMA);
         }
-        return new Alcance(false, coordinador.getPrograma().getCodeProgram());
+        return new Alcance(false, activos.get(0).getPrograma().getCodeProgram());
     }
 
-    /** El admin pasa siempre; el coordinador solo si el programa es el suyo. */
+    /** Indica si el usuario autenticado (admin o coordinador) tiene permiso sobre el programa indicado. */
     @Transactional(readOnly = true)
-    public void exigirProgramaPropio(String codeProgram) {
+    public boolean tieneAccesoAPrograma(String codeProgram) {
+        if (codeProgram == null || codeProgram.isBlank()) {
+            return false;
+        }
         Alcance alcance = alcanceActual();
         if (alcance.admin()) {
-            return;
+            return true;
         }
-        if (codeProgram == null || !alcance.codeProgram().equalsIgnoreCase(codeProgram)) {
+        if (alcance.codeProgram() != null && alcance.codeProgram().equalsIgnoreCase(codeProgram)) {
+            return true;
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String correo = auth != null && auth.getPrincipal() instanceof Jwt jwt ? jwt.getClaimAsString("email") : null;
+        if (correo == null || correo.isBlank()) {
+            return false;
+        }
+        return buscarCoordinacionesActivas(correo).stream()
+                .anyMatch(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram));
+    }
+
+    /** El admin pasa siempre; el coordinador solo si el programa es uno de los suyos. */
+    @Transactional(readOnly = true)
+    public void exigirProgramaPropio(String codeProgram) {
+        if (!tieneAccesoAPrograma(codeProgram)) {
             throw new AccessDeniedException(MSG_FUERA_DE_PROGRAMA);
         }
+    }
+
+    private List<Coordinador> buscarCoordinacionesActivas(String correo) {
+        List<Coordinador> lista = coordinadorRepository.findAllByCorreoInstitucionalWithDetails(correo);
+        if (lista != null && !lista.isEmpty()) {
+            return lista.stream()
+                    .filter(c -> Boolean.TRUE.equals(c.getActivo())
+                            && c.getPrograma() != null
+                            && c.getPrograma().getCodeProgram() != null)
+                    .toList();
+        }
+        return coordinadorRepository.findByCorreoInstitucionalWithDetails(correo)
+                .filter(c -> Boolean.TRUE.equals(c.getActivo())
+                        && c.getPrograma() != null
+                        && c.getPrograma().getCodeProgram() != null)
+                .map(List::of)
+                .orElse(List.of());
     }
 }
