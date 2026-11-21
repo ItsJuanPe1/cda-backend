@@ -8,6 +8,8 @@ import co.edu.univalle.palmira.model.entity.Usuario;
 import co.edu.univalle.palmira.model.enums.EstadoEnvioNotificacion;
 import co.edu.univalle.palmira.model.enums.EstadoNotificacion;
 import co.edu.univalle.palmira.model.enums.TipoDestinatario;
+import co.edu.univalle.palmira.model.enums.CategoriaDocente;
+import co.edu.univalle.palmira.model.enums.TipoDocente;
 import co.edu.univalle.palmira.model.enums.TipoDocumento;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.DisplayName;
@@ -68,6 +70,7 @@ class NotificacionesPostgresIT {
     private Docente docente(String codigo, String correo, boolean activo) {
         return docenteRepository.save(Docente.builder().codigo(codigo).nombres("Prueba").apellidos("IT " + codigo)
                 .tipoDocumento(TipoDocumento.CC).numeroDocumento("9" + codigo).correoInstitucional(correo)
+                .tipoDocente(TipoDocente.HORA_CATEDRA).categoria(CategoriaDocente.AUXILIAR)
                 .estado(activo).build());
     }
 
