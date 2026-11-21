@@ -26,6 +26,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security-oauth2-resource-server'
 	implementation 'com.google.api-client:google-api-client:2.7.2'
 	implementation 'com.google.http-client:google-http-client-gson:1.45.2'
+	// HU-038: envío de correos por Gmail API con OAuth 2.0 (refresh token de la cuenta de notificaciones)
+	implementation 'com.google.apis:google-api-services-gmail:v1-rev20240520-2.0.0'
+	implementation 'com.google.auth:google-auth-library-oauth2-http:1.30.0'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.flywaydb:flyway-database-postgresql'
