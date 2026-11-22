@@ -63,3 +63,19 @@ cda:
     max-horas-docente: 20
   cupos:
     max-por-grupo: ${CUPOS_MAX_POR_GRUPO:60}
+  # HU-038: cola de correos. Los secretos de Gmail no llevan valor por defecto.
+  notificaciones:
+    mail-from: ${MAIL_FROM:}
+    copia: ${MAIL_COPIA_NOTIFICACIONES:}
+    app-url: ${APP_URL:}
+    recordatorio-dias-antes: ${RECORDATORIO_DIAS_ANTES:3}
+    zona: ${APP_TIMEZONE:America/Bogota}
+    intervalo-ms: 60000
+    lote: 100
+    max-intentos: 5
+    reintentos-minutos: 5,15,60,240
+  # Cliente OAuth de envío (Gmail API, scope gmail.send). Distinto de auth.google.client-id (inicio de sesión).
+  gmail:
+    client-id: ${GMAIL_CLIENT_ID:}
+    client-secret: ${GMAIL_CLIENT_SECRET:}
+    refresh-token: ${GMAIL_REFRESH_TOKEN:}

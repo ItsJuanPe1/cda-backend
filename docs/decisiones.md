@@ -371,3 +371,74 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   5. **Generación:** en el backend con Apache POI (ya incluido por HU-054). No hay cambios en la base de datos.
 * **Contrato:** `docs/contratos/HU-035.md`.
 * **Pendiente:** un coordinador de `XXXX-DIU` que consulta la malla de `XXXX-NOC` recibe 403 al descargar, igual que en la asignación (ver el pendiente del 2026-11-13).
+
+
+## [2026-11-21] «Seleccionar todo» por día alterna entre marcar y desmarcar (HU-007, HU-008 y HU-051)
+
+* **HU afectadas:** HU-007 (registrar disponibilidad), HU-008 (editar disponibilidad), HU-051 (el administrador registra en nombre del docente). Modifica la R1 de la segunda ronda del 2026-11-10.
+* **Alcance:** solo frontend (`DisponibilidadView.jsx`, que usan el docente y el administrador). Sin cambios en la API ni en la base de datos.
+* **Decisión (confirmada por el usuario):**
+  1. Si todas las horas habilitadas y seleccionables de un día ya están marcadas, pulsar de nuevo su botón «Seleccionar todo» las desmarca. Si falta alguna, las marca todas, como antes.
+  2. Solo afecta ese día. El botón «Seleccionar todo» general no cambia.
+  3. El texto del botón no cambia: siempre dice «Seleccionar todo».
+  4. Fuera del modo «Editar», las horas ya guardadas siguen bloqueadas: el botón no las cuenta para decidir ni las quita. En modo «Editar» sí cuentan y se pueden desmarcar.
+  5. Desmarcar no guarda: el cambio se registra al pulsar «Guardar disponibilidad» o «Guardar cambios».
+  6. Rama del frontend: `sanabria`.
+* **Texto propuesto para el Excel de HU-007 (no se modifica el Excel ni el CSV):**
+  - **2.7. (reemplaza el propuesto el 2026-11-10)** El sistema debe ofrecer, en cada día del esquema (lunes a sábado), un botón «Seleccionar todo» que marca todas las horas habilitadas de ese día (el sábado, de 7:00 a. m. a 7:00 p. m.), sin modificar la selección de los demás días. Si todas esas horas ya están marcadas, al pulsarlo de nuevo se desmarcan.
+
+
+## [2026-11-21] Recordatorios de fechas al docente (HU-038)
+
+* **HU afectadas:** HU-038 (recordatorio al docente); completa HU-002 (criterio 13), HU-003 (criterio 8) y HU-004 (criterio 5); relacionadas HU-015 (criterio 9), HU-030 (criterio 5), HU-058 (bitácora), HU-039, HU-055 y HU-057 (reutilizan la cola de correos) y HU-048 (criterio 3, solo dependencia).
+* **Ramas de trabajo:** backend `feature10-sanabria`, frontend `sanabria`.
+* **Decisiones tomadas con el cliente:**
+  1. **Momento de los envíos.** Los plazos tienen fecha y hora (`plazo_docente_inicio` y `plazo_docente_fin` son `TIMESTAMPTZ`). El aviso de apertura se envía cuando inicia `plazo_docente_inicio`. El recordatorio de cierre (criterio 2) se envía 3 días antes de `plazo_docente_fin`, a la misma hora. La antelación es configurable con `RECORDATORIO_DIAS_ANTES` (valor por defecto 3).
+  2. **Cuenta institucional `notificaciones.cda.palmira@correounivalle.edu.co`:**
+     - Es la cuenta con la que el administrador inicia sesión. Hay que verificar que exista como usuario con rol de administrador; no se crea sin avisar.
+     - Es el remitente de los correos.
+     - Recibe **una copia por evento** (no una por destinatario), con el resumen del evento y la lista de destinatarios.
+  3. **Eventos de HU-038 con copia a esa cuenta:** apertura del plazo docente, recordatorio de cierre y correo de actualización cuando el administrador cambia las fechas.
+  4. **Cola de correos:** una cola persistente en la base (estados `PENDIENTE`, `ENVIADO`, `FALLIDO` y `CANCELADO`, intentos, último error sin datos personales, fecha programada, referencia al período y tipo de evento), procesada con `@Scheduled` y con reintentos. Un fallo no bloquea el resto de envíos ni la operación principal (criterio 8). Se diseña reutilizable para HU-039, HU-055 y HU-057, pero solo se implementa HU-038.
+  5. **Envío por Gmail API con OAuth 2.0, no por SMTP ni con contraseña** (corrección del usuario, 2026-11-21): el dominio institucional no permite SMTP con contraseña. El cliente OAuth ya está creado en Google Cloud y el refresh token de la cuenta de notificaciones ya se obtuvo con el scope `https://www.googleapis.com/auth/gmail.send` (solo enviar). Se agrega `com.google.apis:google-api-services-gmail`. El backend obtiene y renueva solo los access tokens con el refresh token. Este cliente OAuth es distinto del de inicio de sesión (`GOOGLE_CLIENT_ID`) y no se mezclan.
+  5.1. **Configuración solo por variables de entorno.** Secretos, sin valor por defecto en `application.yaml`: `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`. No secretos: `MAIL_FROM`, `MAIL_COPIA_NOTIFICACIONES`, `APP_URL`, `RECORDATORIO_DIAS_ANTES` (por defecto 3). Si faltan los secretos, o Google responde `invalid_grant` (token revocado o vencido), la aplicación arranca y sigue funcionando: los correos quedan `FALLIDO` con el motivo registrado y queda un aviso claro en el log, sin datos personales ni valores de los secretos. Nunca se escriben tokens ni secretos en los logs. Se actualiza `.env.example` sin valores reales.
+  6. **Despliegue:** `docs/despliegue.md` explica cómo el coordinador de salas define las variables en SIA, por la ruta A (systemd con `EnvironmentFile=/etc/cda-backend/cda-backend.env`, dueño root, permisos 600) y por la ruta B (Docker con `--env-file`). No se asume cuál está aprobada. También explica cómo regenerar el refresh token con el OAuth Playground si se revoca (por ejemplo, al cambiar la contraseña de la cuenta de notificaciones).
+  7. **Pruebas:** cliente de Gmail simulado, sin llamar a Google ni enviar correos reales, y sin datos reales (Ley 1581 de 2012). Cada criterio tiene al menos una prueba JUnit que lo nombra, incluidos los bordes de apertura y cierre (UTC en la base, America/Bogota al mostrar).
+  8. **Enganches en `PeriodoAcademicoService`:**
+     - `crear()` programa la apertura y el recordatorio del nuevo período (HU-002 c13). Como llama a `marcarVigenteComoHistorial()`, cancela los pendientes del período que pasa a historial (c7).
+     - `actualizar()`: si cambian `plazo_docente_inicio` o `plazo_docente_fin`, envía el correo de actualización y reprograma (HU-003 c8, HU-038 c3). Solo el período vigente se edita.
+     - `desactivar()`: estado `DESACTIVADO` y cancela los pendientes (HU-004 c5).
+  9. **Resolución al enviar:** los destinatarios y el estado del perfil se resuelven al enviar, no al programar. Así el correo llega a la dirección actualizada (HU-015 c9) y los perfiles desactivados no reciben (c5, HU-030). Se envía aunque el docente ya haya registrado su disponibilidad (c4). Sin período vigente no se envía nada (c6).
+  10. **Bitácora (HU-058):** se registran las operaciones que cambian datos.
+  11. **Frontend:** la HU no pide pantallas; cualquier pantalla propuesta se justifica y espera aprobación.
+* **Respuestas del usuario (2026-11-21):**
+  1. **Destinatarios:** todos los docentes con `docentes.estado = true` que, si tienen cuenta en `usuarios`, también tengan `usuarios.activo = true`. La misma regla aplica a administradores y coordinadores con perfil docente. Se evalúa al enviar.
+  2. **Cuenta de notificaciones:** `notificaciones.cda.palmira@correounivalle.edu.co` ya existe como administrador en la base de Supabase (confirmado por el usuario; no se consultó la base). Las variables de entorno se entregan al usuario para configurarlas en su equipo local y después pasarlas al coordinador de salas para el servidor de la universidad.
+  3. **Bitácora:** se registra cuando se programan, reprograman o cancelan los avisos (entidad `NOTIFICACION`, acciones `CREAR`, `EDITAR` y `DESACTIVAR`) en la misma transacción del administrador. Los envíos individuales (ENVIADO o FALLIDO) no van a la bitácora; quedan en la cola. **Además** se registran crear, editar y desactivar el período y el paso del período anterior a historial (entidad `PERIODO`), que hoy no se registraban (HU-002, HU-003, HU-004).
+  4. **Flujo confirmado:** cuando el administrador establece la apertura y el cierre del plazo de disponibilidad, con la apertura se notifica a todos los docentes de la regla 1 y sale una copia a la cuenta de notificaciones; 3 días antes del cierre se les envía el recordatorio, también con copia.
+* **Contrato y migración:** el usuario aprobó el contrato `docs/contratos/HU-038.md` y ordenó ejecutar el plan, incluida la migración V46 (`V46__notificaciones_cola_correos.sql`), el 2026-11-21.
+* **Supuestos implementados, confirmados por el usuario el 2026-11-21:**
+  - Si al crear o editar quedan menos de 3 días para el cierre y el plazo sigue abierto, el recordatorio se envía de inmediato.
+  - Si el plazo dura menos de 3 días, el recordatorio sale junto con la apertura y no antes.
+  - Si la apertura ya se envió y cambian las fechas, no se repite: el correo de actualización la reemplaza. Si el recordatorio ya se envió y cambia el cierre, se programa uno nuevo.
+  - Una apertura o un recordatorio atrasados (por ejemplo, con el servidor apagado) no salen si el plazo ya cerró; el correo de actualización sí.
+  - «Esta misma acción funciona para coordinadores académicos» se interpreta como HU-039 (plazo de coordinadores), que no se implementa aquí. En HU-038 reciben los coordinadores y administradores con perfil docente activo.
+* **Detalles de implementación:**
+  - Reintentos: hasta 5 intentos, a los 5, 15, 60 y 240 minutos, solo para 429, 5xx y fallas de red. Sin configuración, `invalid_grant`, 400, 401 y 403 quedan `FALLIDO` sin reintentos.
+  - La tarea programada corre cada 60 s y se puede apagar con `cda.notificaciones.programador-habilitado=false`.
+  - La bitácora del período anterior que pasa a historial registra el estado `HISTORIAL`, que es el que guarda `marcarVigenteComoHistorial()`. **Inconsistencia existente, no corregida:** el enum `EstadoPeriodo` dice `HISTORICO`.
+* **Prueba real (2026-11-21, confirmada por el usuario):**
+  - Se ejecutó contra la base **compartida de Supabase** (PostgreSQL 17.6). **La V46 quedó aplicada en Supabase** («Current version of schema "public": 46»). Hay que avisar al equipo: las ramas sin la V46 encontrarán una versión que no conocen, y nadie más debe usar el número 46.
+  - Al editar el período vigente se procesaron dos eventos (apertura y actualización), cada uno con 6 docentes y una copia. El primer intento falló con «Gmail no disponible» sin más detalle; tras reiniciar el backend los envíos se completaron y llegaron los correos. La causa del primer fallo no quedó registrada (probablemente la configuración de Gmail cambió entre los dos arranques).
+  - Por ese fallo, `GmailCorreoSender` ahora escribe en el log un «Detalle técnico» seguro (tipos de excepción, código HTTP, código OAuth y razones de Gmail API, sin destinatarios, mensajes ni tokens) y trata `invalid_client`, `unauthorized_client`, `access_denied`, `invalid_scope` e `invalid_request` como «Gmail rechazó la autorización», sin reintentos.
+  - Hallazgo: el período existía antes de la V46 y no tenía apertura programada; al editarlo salieron a la vez la apertura (el plazo ya estaba abierto) y la actualización.
+* **Ajustes tras la prueba (confirmados por el usuario, 2026-11-21):**
+  1. **Al editar el período, la apertura solo se programa o se reprograma si el plazo todavía no ha abierto.** Si ya abrió, el correo de actualización la reemplaza y una apertura pendiente queda `CANCELADO` con el motivo `REEMPLAZADA_POR_ACTUALIZACION`. Al crear un período no cambia: si el plazo ya está abierto, la apertura sale de inmediato.
+  2. **Cada envío exitoso deja una línea INFO en el log** («Envío N ENVIADO (DOCENTE|COPIA, intento N)»), y cada omitido otra («Envío N OMITIDO…»), solo con ids internos, sin correos, nombres ni contenido.
+* **Prueba en PostgreSQL 17 local (2026-11-21, pedida por el usuario):**
+  - Clúster temporal de PostgreSQL 17.11 (la versión de SIA) en `127.0.0.1:55432`, base `cda_it`, creado en el scratchpad de la sesión y detenido al terminar. No se tocó el servicio de PostgreSQL instalado ni la base de Supabase: la conexión se pasó por variables de entorno, que tienen prioridad sobre el `.env`. Secretos de Gmail vacíos y tarea programada apagada: no se envió ningún correo.
+  - Las V9 y V13, que faltan en el repositorio, se reemplazaron con migraciones sustitutas **solo de prueba**, fuera de la carpeta de migraciones (`spring.flyway.locations` con una ruta del scratchpad): `disponibilidades_docentes` (id, id_docente, dia, hora_inicio, hora_fin) y `usuarios` (con `telefono` entero y `email_personal` obligatorio, como los esperan V16 y V44). Con ellas, **la cadena V1–V46 se aplica completa** en una base vacía.
+  - Resultado: 12 de 12 pruebas pasan: `NotificacionesPostgresIT` (4: destinatarios activos con la cuenta activa, cola con `SKIP LOCKED` y `jsonb`, cancelación de envíos pendientes, restricción de la copia), `BitacoraPostgresIT` (4), `ProgramacionAjustePostgresIT` (3) y `CdaBackendApplicationTests` (1).
+  - Hallazgo: `docentes.tipo_docente` y `docentes.categoria` son `NOT NULL` en la base, pero la entidad `Docente` no lo declara. Se corrigió el dato de prueba de `NotificacionesPostgresIT`; la entidad no se cambió.
+  - Hallazgo: con el filtro `--tests '*IT'` Gradle no tomó las clases de integración; hay que nombrarlas completas.
+* **Riesgos reportados, sin corregir hasta aprobación:** `application.yaml` trae un valor por defecto para `JWT_SECRET` en un repositorio público, y el `.env` del frontend está versionado en un repositorio público.

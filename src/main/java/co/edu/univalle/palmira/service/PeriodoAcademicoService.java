@@ -4,13 +4,19 @@ import co.edu.univalle.palmira.dto.PeriodoAcademicoDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
+import co.edu.univalle.palmira.model.enums.AccionBitacora;
 import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
+import co.edu.univalle.palmira.service.notificacion.RecordatorioDocenteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /**
  * Servicio de negocio para la administración de períodos académicos (semestres).
@@ -22,7 +28,12 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class PeriodoAcademicoService {
+    /** HU-058: entidad de la bitácora para los períodos académicos. */
+    public static final String ENTIDAD_PERIODO = "PERIODO";
+
     private final PeriodoAcademicoRepository repository;
+    private final BitacoraService bitacoraService;
+    private final RecordatorioDocenteService recordatorioDocenteService;
 
     @Transactional(readOnly = true)
     public List<PeriodoAcademicoDto.Response> listar() {
@@ -47,11 +58,25 @@ public class PeriodoAcademicoService {
     @Transactional
     public PeriodoAcademicoDto.Response crear(PeriodoAcademicoDto.Request request) {
         validar(request, null);
+        // HU-038 criterio 7: el período que pasa a historial pierde sus avisos pendientes.
+        Optional<PeriodoAcademico> anterior = repository.findFirstByVigenteTrue();
+        Map<String, Object> anteriorAntes = anterior.map(PeriodoAcademicoService::estadoBitacora).orElse(null);
+        anterior.ifPresent(a -> recordatorioDocenteService.cancelarPendientes(a.getId(),
+                RecordatorioDocenteService.MOTIVO_PERIODO_HISTORIAL));
         repository.marcarVigenteComoHistorial();
+        anterior.ifPresent(a -> bitacoraService.registrar(AccionBitacora.EDITAR, ENTIDAD_PERIODO,
+                String.valueOf(a.getId()), a.getId(), anteriorAntes, estadoBitacora(false, "HISTORIAL")));
+
         PeriodoAcademico periodo = fromRequest(request);
         periodo.setVigente(true);
         periodo.setEstado("VIGENTE");
-        return toResponse(repository.save(periodo));
+        PeriodoAcademico guardado = repository.save(periodo);
+        PeriodoAcademicoDto.Response respuesta = toResponse(guardado);
+        bitacoraService.registrar(AccionBitacora.CREAR, ENTIDAD_PERIODO, String.valueOf(guardado.getId()),
+                guardado.getId(), null, respuesta);
+        // HU-002 criterio 13: se programan la apertura y el recordatorio (HU-038).
+        recordatorioDocenteService.programarAlCrear(guardado);
+        return respuesta;
     }
 
     @Transactional
@@ -65,8 +90,19 @@ public class PeriodoAcademicoService {
             throw new BadRequestException("El período fue modificado por otro administrador. Recarga la información");
         }
         validar(request, id);
+        PeriodoAcademicoDto.Response antes = toResponse(periodo);
+        Instant inicioAnterior = periodo.getPlazoDocenteInicio();
+        Instant finAnterior = periodo.getPlazoDocenteFin();
         copy(request, periodo);
-        return toResponse(repository.save(periodo));
+        PeriodoAcademico guardado = repository.save(periodo);
+        PeriodoAcademicoDto.Response despues = toResponse(guardado);
+        if (!sinVersion(antes).equals(sinVersion(despues))) {
+            bitacoraService.registrar(AccionBitacora.EDITAR, ENTIDAD_PERIODO, String.valueOf(guardado.getId()),
+                    guardado.getId(), antes, despues);
+        }
+        // HU-003 criterio 8 y HU-038 criterio 3: correo de actualización y reprogramación.
+        recordatorioDocenteService.alCambiarPlazo(guardado, inicioAnterior, finAnterior);
+        return despues;
     }
 
     @Transactional
@@ -76,9 +112,34 @@ public class PeriodoAcademicoService {
         if (!periodo.isVigente()) {
             throw new BadRequestException("Solo el período vigente se puede eliminar");
         }
+        Map<String, Object> antes = estadoBitacora(periodo);
         periodo.setVigente(false);
         periodo.setEstado("DESACTIVADO");
         repository.save(periodo);
+        // HU-004 criterio 5: se cancelan los recordatorios pendientes.
+        recordatorioDocenteService.cancelarPendientes(periodo.getId(),
+                RecordatorioDocenteService.MOTIVO_PERIODO_DESACTIVADO);
+        bitacoraService.registrar(AccionBitacora.DESACTIVAR, ENTIDAD_PERIODO, String.valueOf(periodo.getId()),
+                periodo.getId(), antes, estadoBitacora(false, "DESACTIVADO"));
+    }
+
+    private static Map<String, Object> estadoBitacora(PeriodoAcademico p) {
+        return estadoBitacora(p.isVigente(), p.getEstado());
+    }
+
+    private static Map<String, Object> estadoBitacora(boolean vigente, String estado) {
+        Map<String, Object> datos = new LinkedHashMap<>();
+        datos.put("vigente", vigente);
+        datos.put("estado", estado);
+        return datos;
+    }
+
+    /** Compara dos respuestas sin el número de versión, que cambia en cada guardado. */
+    private static PeriodoAcademicoDto.Response sinVersion(PeriodoAcademicoDto.Response r) {
+        return new PeriodoAcademicoDto.Response(r.id(), r.nombre(), r.numeroResolucion(), r.fechaResolucion(),
+                r.fechaInicioSemestre(), r.fechaFinSemestre(), r.fechaAdicionInicio(), r.fechaAdicionFin(),
+                r.fechaCancelacionInicio(), r.fechaCancelacionFin(), r.plazoDocenteInicio(), r.plazoDocenteFin(),
+                r.plazoCoordinadorInicio(), r.plazoCoordinadorFin(), r.enlaceResolucion(), r.vigente(), r.estado(), 0L);
     }
 
     private void validar(PeriodoAcademicoDto.Request r, Long id) {
