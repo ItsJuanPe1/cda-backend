@@ -51,6 +51,10 @@ class NotificacionesPostgresIT {
     @Autowired
     private PeriodoAcademicoRepository periodoRepository;
     @Autowired
+    private CoordinadorRepository coordinadorRepository;
+    @Autowired
+    private CursoProgramacionRepository cursoRepository;
+    @Autowired
     private EntityManager entityManager;
     @Autowired
     private JdbcTemplate jdbc;
@@ -129,6 +133,27 @@ class NotificacionesPostgresIT {
 
         assertEquals(EstadoEnvioNotificacion.CANCELADO, envioRepository.findById(pendiente.getId()).orElseThrow().getEstado());
         assertEquals(EstadoEnvioNotificacion.ENVIADO, envioRepository.findById(enviado.getId()).orElseThrow().getEstado());
+    }
+
+    @Test
+    @DisplayName("HU-039: las consultas de coordinaciones activas, materias del criterio 3 y omitidos por motivo corren en PostgreSQL")
+    void hu039ConsultasCoordinador() {
+        PeriodoAcademico p = periodo();
+        Notificacion n = notificacionRepository.save(Notificacion.builder()
+                .tipoEvento(co.edu.univalle.palmira.model.enums.TipoEventoNotificacion.RECORDATORIO_CIERRE_COORDINADOR)
+                .periodoId(p.getId()).fechaProgramada(AHORA).estado(EstadoNotificacion.PROCESADO).build());
+        envioRepository.save(NotificacionEnvio.builder().notificacionId(n.getId())
+                .tipoDestinatario(TipoDestinatario.COORDINADOR).destinatarioId(1L)
+                .estado(EstadoEnvioNotificacion.OMITIDO).ultimoError("Asignación completa").proximoIntento(AHORA).build());
+        entityManager.flush();
+
+        assertDoesNotThrow(() -> coordinadorRepository.findActivosParaNotificacion());
+        assertEquals(0L, cursoRepository.contarActivosPorProgramas(p.getId(), List.of("IT-039")));
+        assertEquals(0L, cursoRepository.contarSinDocentePorProgramas(p.getId(), List.of("IT-039")));
+        List<Object[]> omitidos = envioRepository.contarOmitidosPorMotivo(n.getId());
+        assertEquals(1, omitidos.size());
+        assertEquals("Asignación completa", omitidos.get(0)[0]);
+        assertEquals(1L, ((Number) omitidos.get(0)[1]).longValue());
     }
 
     @Test

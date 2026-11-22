@@ -6,6 +6,7 @@ import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
 import co.edu.univalle.palmira.model.enums.AccionBitacora;
 import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
+import co.edu.univalle.palmira.service.notificacion.RecordatorioCoordinadorService;
 import co.edu.univalle.palmira.service.notificacion.RecordatorioDocenteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class PeriodoAcademicoService {
     private final PeriodoAcademicoRepository repository;
     private final BitacoraService bitacoraService;
     private final RecordatorioDocenteService recordatorioDocenteService;
+    private final RecordatorioCoordinadorService recordatorioCoordinadorService;
 
     @Transactional(readOnly = true)
     public List<PeriodoAcademicoDto.Response> listar() {
@@ -74,8 +76,9 @@ public class PeriodoAcademicoService {
         PeriodoAcademicoDto.Response respuesta = toResponse(guardado);
         bitacoraService.registrar(AccionBitacora.CREAR, ENTIDAD_PERIODO, String.valueOf(guardado.getId()),
                 guardado.getId(), null, respuesta);
-        // HU-002 criterio 13: se programan la apertura y el recordatorio (HU-038).
+        // HU-002 criterio 13: se programan los recordatorios (HU-038 y HU-039).
         recordatorioDocenteService.programarAlCrear(guardado);
+        recordatorioCoordinadorService.programarAlCrear(guardado);
         return respuesta;
     }
 
@@ -93,6 +96,8 @@ public class PeriodoAcademicoService {
         PeriodoAcademicoDto.Response antes = toResponse(periodo);
         Instant inicioAnterior = periodo.getPlazoDocenteInicio();
         Instant finAnterior = periodo.getPlazoDocenteFin();
+        Instant coordinadorInicioAnterior = periodo.getPlazoCoordinadorInicio();
+        Instant coordinadorFinAnterior = periodo.getPlazoCoordinadorFin();
         copy(request, periodo);
         PeriodoAcademico guardado = repository.save(periodo);
         PeriodoAcademicoDto.Response despues = toResponse(guardado);
@@ -102,6 +107,7 @@ public class PeriodoAcademicoService {
         }
         // HU-003 criterio 8 y HU-038 criterio 3: correo de actualización y reprogramación.
         recordatorioDocenteService.alCambiarPlazo(guardado, inicioAnterior, finAnterior);
+        recordatorioCoordinadorService.alCambiarPlazo(guardado, coordinadorInicioAnterior, coordinadorFinAnterior);
         return despues;
     }
 

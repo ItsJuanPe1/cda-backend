@@ -441,4 +441,29 @@ Este documento registra las decisiones acordadas con el equipo y confirmadas por
   - Resultado: 12 de 12 pruebas pasan: `NotificacionesPostgresIT` (4: destinatarios activos con la cuenta activa, cola con `SKIP LOCKED` y `jsonb`, cancelación de envíos pendientes, restricción de la copia), `BitacoraPostgresIT` (4), `ProgramacionAjustePostgresIT` (3) y `CdaBackendApplicationTests` (1).
   - Hallazgo: `docentes.tipo_docente` y `docentes.categoria` son `NOT NULL` en la base, pero la entidad `Docente` no lo declara. Se corrigió el dato de prueba de `NotificacionesPostgresIT`; la entidad no se cambió.
   - Hallazgo: con el filtro `--tests '*IT'` Gradle no tomó las clases de integración; hay que nombrarlas completas.
+* **Aviso al equipo (2026-11-21):** el usuario confirmó que ya avisó al equipo que la V46 está aplicada en Supabase y que la siguiente migración es la V47.
 * **Riesgos reportados, sin corregir hasta aprobación:** `application.yaml` trae un valor por defecto para `JWT_SECRET` en un repositorio público, y el `.env` del frontend está versionado en un repositorio público.
+
+
+## [2026-11-21] Recordatorios de fechas al coordinador (HU-039)
+
+* **HU afectadas:** HU-039; completa la parte de coordinador de HU-002 (criterio 13) y HU-003 (criterio 8); reutiliza la cola de HU-038 (V46). Sin migración nueva.
+* **Ramas de trabajo:** backend `feature10-sanabria`, frontend `sanabria`.
+* **Respuestas del usuario (2026-11-21):**
+  1. **Destinatario:** el correo de la cuenta de coordinación del programa (`coordinadores.correo_institucional`; por ejemplo, la cuenta de Desarrollo de Software diurno). La copia por evento va a la cuenta de notificaciones, igual que en HU-038. Para las pruebas, el coordinador de un programa en Supabase tiene como correo de cuenta el correo de prueba del usuario, porque no hay acceso a las cuentas reales de coordinación.
+  2. **Eventos (solo estos tres):**
+     - a) Cuando el administrador configura las fechas de apertura y cierre del plazo de asignación de docentes.
+     - b) Cuando el administrador modifica esas fechas: un correo nuevo con las fechas actualizadas.
+     - c) Igual que en docentes: un recordatorio 3 días antes del cierre del plazo de asignación.
+* **Confirmado por el usuario (2026-11-21):**
+  3. **Evento a)** sale en el momento en que el administrador guarda el período con el plazo de coordinadores (al crearlo, o al editarlo si antes no tenía fechas). No hay un correo aparte el día que abre el plazo; en esto difiere de HU-038.
+  4. **Criterio 3 se aplica:** el recordatorio de cierre se omite si ninguna materia no excluida de los programas de la cuenta queda sin docente en el período. Se evalúa al enviar. Si los programas aún no tienen cursos generados, sí se envía. El envío queda `OMITIDO` con el motivo «Asignación completa».
+  5. **Plazo quitado:** si el administrador deja el plazo de coordinadores sin fechas, se cancela el recordatorio pendiente y no se envía ningún correo.
+* **Supuestos (heredados de HU-038):** mismo `RECORDATORIO_DIAS_ANTES`; recordatorio a la misma hora, nunca antes del inicio y de inmediato si ya pasó con el plazo abierto; el correo b) solo sale si cambia el plazo de coordinadores; si varias coordinaciones activas comparten la cuenta, esa cuenta recibe un solo correo; destinatario activo = coordinación activa, programa activo, docente activo y cuenta de `usuarios` activa si existe, evaluado al enviar; copia por evento a la cuenta de notificaciones.
+* **Pendiente para otra HU:** el backend no bloquea cambios de asignación durante las fechas de adición y cancelación; el criterio 2 solo pide el aviso en el correo.
+* **Contrato:** `docs/contratos/HU-039.md`, aprobado por el usuario el 2026-11-21. Sin migración.
+* **Implementación (2026-11-21):**
+  - Los avisos a) y b) se programan con fecha «ahora» y salen en la siguiente corrida de la cola (hasta 60 s).
+  - Si el aviso a) aún no salió cuando el administrador vuelve a cambiar el plazo, no se agrega un correo b): el aviso a) se arma al enviar y ya lleva las fechas nuevas.
+  - Cada envío `OMITIDO` guarda su motivo en `ultimo_error` («Perfil desactivado» o «Asignación completa»); la copia de HU-038 sigue mostrando un solo total de omitidos por perfil desactivado.
+  - Probado en PostgreSQL 17.11 local con las sustitutas de V9 y V13: 13 de 13 pruebas de integración pasan.

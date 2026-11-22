@@ -4,6 +4,7 @@ import co.edu.univalle.palmira.dto.PeriodoAcademicoDto;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
 import co.edu.univalle.palmira.model.enums.AccionBitacora;
 import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
+import co.edu.univalle.palmira.service.notificacion.RecordatorioCoordinadorService;
 import co.edu.univalle.palmira.service.notificacion.RecordatorioDocenteService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,12 +42,14 @@ class PeriodoAcademicoServiceNotificacionesTest {
     private BitacoraService bitacoraService;
     @Mock
     private RecordatorioDocenteService recordatorioDocenteService;
+    @Mock
+    private RecordatorioCoordinadorService recordatorioCoordinadorService;
 
     private PeriodoAcademicoService service;
 
     @BeforeEach
     void setUp() {
-        service = new PeriodoAcademicoService(repository, bitacoraService, recordatorioDocenteService);
+        service = new PeriodoAcademicoService(repository, bitacoraService, recordatorioDocenteService, recordatorioCoordinadorService);
     }
 
     private static PeriodoAcademicoDto.Request request(Instant inicio, Instant fin) {
@@ -91,6 +94,23 @@ class PeriodoAcademicoServiceNotificacionesTest {
         verify(bitacoraService).registrar(eq(AccionBitacora.CREAR), eq(PeriodoAcademicoService.ENTIDAD_PERIODO),
                 eq("8"), eq(8L), isNull(), any());
         verify(recordatorioDocenteService, never()).cancelarPendientes(any(), any());
+        verify(recordatorioCoordinadorService).programarAlCrear(guardado.getValue());
+    }
+
+    @Test
+    @DisplayName("HU-039 (HU-003 criterio 8): al editar se pasa el plazo de coordinadores anterior para avisar y reprogramar")
+    void hu039ActualizarPasaPlazoCoordinadorAnterior() {
+        Instant coordInicio = Instant.parse("2027-02-15T13:00:00Z");
+        Instant coordFin = Instant.parse("2027-02-28T22:00:00Z");
+        PeriodoAcademico actual = vigente(8L);
+        actual.setPlazoCoordinadorInicio(coordInicio);
+        actual.setPlazoCoordinadorFin(coordFin);
+        when(repository.findById(8L)).thenReturn(Optional.of(actual));
+        guardarConId(8L);
+
+        service.actualizar(8L, request(INICIO, FIN));
+
+        verify(recordatorioCoordinadorService).alCambiarPlazo(any(PeriodoAcademico.class), eq(coordInicio), eq(coordFin));
     }
 
     @Test

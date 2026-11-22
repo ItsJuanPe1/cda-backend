@@ -21,8 +21,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -34,6 +36,8 @@ import java.util.Optional;
 public class NotificacionProcesador {
 
     public static final String MOTIVO_EVENTO_NO_VIGENTE = "EVENTO_NO_VIGENTE";
+    /** Motivo de un envío OMITIDO porque el perfil estaba desactivado al enviar (HU-038 c5). */
+    public static final String MOTIVO_PERFIL_DESACTIVADO = "Perfil desactivado";
     static final String ERROR_INTERNO = "Error interno al preparar el correo";
     static final String ERROR_SIN_MANEJADOR = "Tipo de evento sin manejador";
     private static final int MAX_ID_PROVEEDOR = 100;
@@ -144,14 +148,16 @@ public class NotificacionProcesador {
             List<Long> ids = envioRepository
                     .findByNotificacionIdAndTipoDestinatarioNotOrderByIdAsc(notificacion.getId(), TipoDestinatario.COPIA)
                     .stream().map(NotificacionEnvio::getDestinatarioId).toList();
-            long omitidos = envioRepository.countByNotificacionIdAndEstado(notificacion.getId(),
-                    EstadoEnvioNotificacion.OMITIDO);
-            contenido = m.construirCopia(notificacion, m.describirDestinatarios(ids), omitidos);
+            contenido = m.construirCopia(notificacion, m.describirDestinatarios(ids), omitidosPorMotivo(notificacion.getId()));
         } else {
             Optional<DestinatarioCorreo> destinatario = m.resolverDestinatario(envio.getDestinatarioId());
             if (destinatario.isEmpty()) {
-                envio.setEstado(EstadoEnvioNotificacion.OMITIDO);
-                log.info("Envío {} OMITIDO: perfil desactivado o sin correo", envio.getId());
+                omitir(envio, MOTIVO_PERFIL_DESACTIVADO);
+                return;
+            }
+            Optional<String> motivo = m.motivoOmision(notificacion, envio.getDestinatarioId());
+            if (motivo.isPresent()) {
+                omitir(envio, motivo.get());
                 return;
             }
             para = destinatario.get().correo();
@@ -171,6 +177,27 @@ public class NotificacionProcesador {
         } catch (CorreoException e) {
             registrarFallo(envio, e.getMotivo().texto(), e.getMotivo().reintentable(), ahora);
         }
+    }
+
+    private void omitir(NotificacionEnvio envio, String motivo) {
+        envio.setEstado(EstadoEnvioNotificacion.OMITIDO);
+        envio.setUltimoError(motivo);
+        log.info("Envío {} OMITIDO: {}", envio.getId(), motivo);
+    }
+
+    /** Omitidos del evento por motivo; los antiguos sin motivo cuentan como perfil desactivado. */
+    private Map<String, Long> omitidosPorMotivo(Long notificacionId) {
+        Map<String, Long> resultado = new LinkedHashMap<>();
+        List<Object[]> filas = envioRepository.contarOmitidosPorMotivo(notificacionId);
+        if (filas == null) {
+            return resultado;
+        }
+        for (Object[] fila : filas) {
+            String motivo = fila[0] == null ? MOTIVO_PERFIL_DESACTIVADO : fila[0].toString();
+            long cantidad = fila[1] instanceof Number n ? n.longValue() : 0L;
+            resultado.merge(motivo, cantidad, Long::sum);
+        }
+        return resultado;
     }
 
     /** Criterio 8: reintenta con espera creciente o deja el envío FALLIDO con su motivo. */
