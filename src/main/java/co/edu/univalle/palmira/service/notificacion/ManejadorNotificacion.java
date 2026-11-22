@@ -5,6 +5,7 @@ import co.edu.univalle.palmira.model.enums.TipoDestinatario;
 import co.edu.univalle.palmira.model.enums.TipoEventoNotificacion;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -36,4 +37,22 @@ public interface ManejadorNotificacion {
 
     /** Copia por evento: resumen y lista de destinatarios. */
     CorreoContenido construirCopia(Notificacion notificacion, List<DestinatarioCorreo> destinatarios, long omitidos);
+
+    /**
+     * Copia con los omitidos separados por motivo (por ejemplo, «Perfil desactivado» o «Asignación
+     * completa»). Por defecto suma todos y usa {@link #construirCopia(Notificacion, List, long)}.
+     */
+    default CorreoContenido construirCopia(Notificacion notificacion, List<DestinatarioCorreo> destinatarios,
+            Map<String, Long> omitidosPorMotivo) {
+        long total = omitidosPorMotivo == null ? 0 : omitidosPorMotivo.values().stream().mapToLong(Long::longValue).sum();
+        return construirCopia(notificacion, destinatarios, total);
+    }
+
+    /**
+     * HU-039 criterio 3: motivo para no enviar a un destinatario activo (por ejemplo, «Asignación
+     * completa»). Vacío si se debe enviar. Se evalúa al momento del envío.
+     */
+    default Optional<String> motivoOmision(Notificacion notificacion, Long destinatarioId) {
+        return Optional.empty();
+    }
 }

@@ -32,6 +32,20 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
 
     long countByPeriodoId(Long periodoId);
 
+    /** HU-039 criterio 3: materias no excluidas de los programas en el período (incluye electivas). */
+    @Query("SELECT COUNT(c) FROM CursoProgramacion c " +
+           "WHERE c.periodo.id = :periodoId AND c.programa.codeProgram IN :codigos " +
+           "AND (c.estado IS NULL OR c.estado <> 'EXCLUIDO')")
+    long contarActivosPorProgramas(@Param("periodoId") Long periodoId,
+                                   @Param("codigos") java.util.Collection<String> codigos);
+
+    /** HU-039 criterio 3: de esas materias, las que siguen sin docente. */
+    @Query("SELECT COUNT(c) FROM CursoProgramacion c " +
+           "WHERE c.periodo.id = :periodoId AND c.programa.codeProgram IN :codigos " +
+           "AND (c.estado IS NULL OR c.estado <> 'EXCLUIDO') AND c.docente IS NULL")
+    long contarSinDocentePorProgramas(@Param("periodoId") Long periodoId,
+                                      @Param("codigos") java.util.Collection<String> codigos);
+
     @Query("SELECT DISTINCT c FROM CursoProgramacion c " +
            "JOIN FETCH c.asignatura " +
            "WHERE c.periodo.id = :periodoId AND c.docente.id = :docenteId " +

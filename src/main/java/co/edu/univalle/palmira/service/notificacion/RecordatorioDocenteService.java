@@ -144,12 +144,7 @@ public class RecordatorioDocenteService implements ManejadorNotificacion {
 
     /** Recordatorio N días antes del cierre, a la misma hora; nunca antes de la apertura ni en el pasado. */
     Optional<Instant> calcularRecordatorio(Instant inicio, Instant fin, Instant ahora) {
-        if (!fin.isAfter(ahora)) {
-            return Optional.empty();
-        }
-        int dias = Math.max(0, propiedades.getRecordatorioDiasAntes());
-        Instant objetivo = fin.atZone(propiedades.zoneId()).minusDays(dias).toInstant();
-        return Optional.of(max(max(objetivo, inicio), ahora));
+        return CalculoAvisos.recordatorio(inicio, fin, ahora, propiedades.getRecordatorioDiasAntes(), propiedades.zoneId());
     }
 
     private void reprogramarOCancelar(List<Notificacion> pendientes, Optional<Instant> nuevaFecha, String motivo) {
@@ -258,6 +253,7 @@ public class RecordatorioDocenteService implements ManejadorNotificacion {
             case RECORDATORIO_CIERRE_DOCENTE -> "Recordatorio: el plazo para registrar su disponibilidad cierra el "
                     + formatear(p.getPlazoDocenteFin());
             case ACTUALIZACION_PLAZO_DOCENTE -> "Cambio en las fechas para registrar su disponibilidad – " + p.getNombre();
+            default -> throw new IllegalArgumentException("Evento no atendido por HU-038: " + n.getTipoEvento());
         };
     }
 
@@ -286,6 +282,7 @@ public class RecordatorioDocenteService implements ManejadorNotificacion {
                 sb.append("Ahora: ").append(formatear(d.inicio())).append(" – ").append(formatear(d.fin())).append('\n');
                 sb.append("(hora de Colombia)\n");
             }
+            default -> throw new IllegalArgumentException("Evento no atendido por HU-038: " + n.getTipoEvento());
         }
         String url = propiedades.getAppUrl();
         if (url != null && !url.isBlank()) {
@@ -309,6 +306,7 @@ public class RecordatorioDocenteService implements ManejadorNotificacion {
             case APERTURA_PLAZO_DOCENTE -> "Apertura del plazo de disponibilidad docente";
             case RECORDATORIO_CIERRE_DOCENTE -> "Recordatorio de cierre del plazo de disponibilidad docente";
             case ACTUALIZACION_PLAZO_DOCENTE -> "Actualización de las fechas del plazo de disponibilidad docente";
+            default -> tipo.name();
         };
     }
 

@@ -64,4 +64,23 @@ public interface CoordinadorRepository extends JpaRepository<Coordinador, Intege
     boolean existsByProgramaCodeProgramAndActivoTrueAndIdNot(String codeProgram, Integer id);
 
     Optional<Coordinador> findFirstByCorreoInstitucionalIgnoreCaseOrderByActivoDescIdAsc(String correoInstitucional);
+
+    /**
+     * HU-039: coordinaciones que reciben correos. Coordinación activa, programa activo, perfil docente
+     * activo, con correo de cuenta y, si la cuenta existe en usuarios, con la cuenta activa.
+     */
+    @Query("""
+            SELECT c FROM Coordinador c
+            JOIN FETCH c.docente d
+            JOIN FETCH c.programa p
+            WHERE c.activo = true
+              AND p.estado = co.edu.univalle.palmira.model.enums.EstadoPrograma.ACTIVO
+              AND d.estado = true
+              AND c.correoInstitucional IS NOT NULL AND TRIM(c.correoInstitucional) <> ''
+              AND NOT EXISTS (SELECT u FROM Usuario u
+                              WHERE LOWER(u.emailInstitucional) = LOWER(c.correoInstitucional)
+                                AND u.activo = false)
+            ORDER BY c.id
+            """)
+    List<Coordinador> findActivosParaNotificacion();
 }

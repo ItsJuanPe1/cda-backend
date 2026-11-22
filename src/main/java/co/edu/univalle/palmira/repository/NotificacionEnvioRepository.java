@@ -20,6 +20,15 @@ public interface NotificacionEnvioRepository extends JpaRepository<NotificacionE
 
     long countByNotificacionIdAndEstado(Long notificacionId, EstadoEnvioNotificacion estado);
 
+    /** HU-039: omitidos de un evento agrupados por motivo (ultimo_error), para la copia. */
+    @Query("""
+            SELECT e.ultimoError, COUNT(e) FROM NotificacionEnvio e
+            WHERE e.notificacionId = :notificacionId
+              AND e.estado = co.edu.univalle.palmira.model.enums.EstadoEnvioNotificacion.OMITIDO
+            GROUP BY e.ultimoError
+            """)
+    List<Object[]> contarOmitidosPorMotivo(@Param("notificacionId") Long notificacionId);
+
     /**
      * Toma el siguiente envío pendiente cuyo intento ya venció y lo bloquea (SKIP LOCKED).
      * Debe llamarse dentro de una transacción.

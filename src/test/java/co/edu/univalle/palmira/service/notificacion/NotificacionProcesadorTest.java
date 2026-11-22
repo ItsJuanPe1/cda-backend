@@ -26,6 +26,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static co.edu.univalle.palmira.model.enums.TipoEventoNotificacion.APERTURA_PLAZO_DOCENTE;
@@ -70,6 +71,7 @@ class NotificacionProcesadorTest {
         when(manejador.eventoVigente(evento)).thenReturn(true);
         when(notificacionRepository.findById(5L)).thenReturn(Optional.of(evento));
         when(manejador.construir(any(), any())).thenReturn(new CorreoContenido("Asunto", "Cuerpo"));
+        when(manejador.motivoOmision(any(), any())).thenReturn(Optional.empty());
     }
 
     private NotificacionEnvio envioDocente(Long destinatarioId, int intentos) {
@@ -151,6 +153,22 @@ class NotificacionProcesadorTest {
         procesador.enviarSiguiente();
 
         assertEquals(EstadoEnvioNotificacion.OMITIDO, e.getEstado());
+        assertEquals(NotificacionProcesador.MOTIVO_PERFIL_DESACTIVADO, e.getUltimoError());
+        verify(correoSender, never()).enviar(any());
+    }
+
+    @Test
+    @DisplayName("HU-039 criterio 3: si el manejador da un motivo de omisión, el envío queda OMITIDO con ese motivo")
+    void hu039MotivoDeOmision() throws Exception {
+        NotificacionEnvio e = envioDocente(3L, 0);
+        when(manejador.resolverDestinatario(3L))
+                .thenReturn(Optional.of(new DestinatarioCorreo(3L, "Coordinación de prueba", "coord.prueba@correounivalle.edu.co")));
+        when(manejador.motivoOmision(evento, 3L)).thenReturn(Optional.of("Asignación completa"));
+
+        procesador.enviarSiguiente();
+
+        assertEquals(EstadoEnvioNotificacion.OMITIDO, e.getEstado());
+        assertEquals("Asignación completa", e.getUltimoError());
         verify(correoSender, never()).enviar(any());
     }
 
@@ -262,10 +280,12 @@ class NotificacionProcesadorTest {
         NotificacionEnvio d2 = NotificacionEnvio.builder().destinatarioId(2L).build();
         when(envioRepository.findByNotificacionIdAndTipoDestinatarioNotOrderByIdAsc(5L, TipoDestinatario.COPIA))
                 .thenReturn(List.of(d1, d2));
-        when(envioRepository.countByNotificacionIdAndEstado(5L, EstadoEnvioNotificacion.OMITIDO)).thenReturn(1L);
+        when(envioRepository.contarOmitidosPorMotivo(5L)).thenReturn(List.<Object[]>of(
+                new Object[]{"Perfil desactivado", 1L}, new Object[]{null, 2L}, new Object[]{"Asignación completa", 3L}));
         List<DestinatarioCorreo> lista = List.of(new DestinatarioCorreo(1L, "Ana Prueba", "ana.prueba@correounivalle.edu.co"));
         when(manejador.describirDestinatarios(List.of(1L, 2L))).thenReturn(lista);
-        when(manejador.construirCopia(evento, lista, 1L)).thenReturn(new CorreoContenido("[Copia] Asunto", "Resumen"));
+        when(manejador.construirCopia(evento, lista, Map.of("Perfil desactivado", 3L, "Asignación completa", 3L)))
+                .thenReturn(new CorreoContenido("[Copia] Asunto", "Resumen"));
         when(correoSender.enviar(any())).thenReturn("msg-copia");
 
         procesador.enviarSiguiente();
