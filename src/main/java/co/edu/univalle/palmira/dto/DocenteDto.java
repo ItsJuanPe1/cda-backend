@@ -12,17 +12,17 @@ import java.time.LocalDateTime;
 public class DocenteDto {
 
     public record CreateRequest(
-            @JsonProperty("codigo") @NotBlank(message = "El código del docente es obligatorio") @Size(max = 20, message = "El código no puede exceder 20 caracteres") String codigo,
+            @JsonProperty("codigo") @Size(max = 20, message = "El código no puede exceder 20 caracteres") String codigo,
 
-            @JsonProperty("nombres") @NotBlank(message = "Los nombres son obligatorios") @Size(max = 30, message = "Los nombres no pueden exceder 30 caracteres") @Pattern(regexp = "^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\\s]+$", message = "Los nombres solo pueden contener letras y espacios") String nombres,
+            @JsonProperty("nombres") @NotBlank(message = "Los nombres son obligatorios") @Size(max = 100, message = "Los nombres no pueden exceder 100 caracteres") @Pattern(regexp = "^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\\s]+$", message = "Los nombres solo pueden contener letras y espacios") String nombres,
 
-            @JsonProperty("apellidos") @NotBlank(message = "Los apellidos son obligatorios") @Size(max = 30, message = "Los apellidos no pueden exceder 30 caracteres") @Pattern(regexp = "^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\\s]+$", message = "Los apellidos solo pueden contener letras y espacios") String apellidos,
+            @JsonProperty("apellidos") @NotBlank(message = "Los apellidos son obligatorios") @Size(max = 100, message = "Los apellidos no pueden exceder 100 caracteres") @Pattern(regexp = "^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\\s]+$", message = "Los apellidos solo pueden contener letras y espacios") String apellidos,
 
             @JsonProperty("tipo_documento") @NotNull(message = "El tipo de documento es obligatorio") TipoDocumento tipoDocumento,
 
-            @JsonProperty("numero_documento") @NotBlank(message = "El número de documento es obligatorio") @Size(max = 11, message = "El número de documento no puede exceder 11 caracteres") @Pattern(regexp = "^[0-9]+$", message = "El número de documento solo puede contener números") String numeroDocumento,
+            @JsonProperty("numero_documento") @NotBlank(message = "El número de documento es obligatorio") @Size(max = 20, message = "El número de documento no puede exceder 20 caracteres") @Pattern(regexp = "^[0-9]+$", message = "El número de documento solo puede contener números") String numeroDocumento,
 
-            @JsonProperty("correo_institucional") @NotBlank(message = "El correo institucional es obligatorio") @Size(max = 50, message = "El correo no puede exceder 50 caracteres") @Email(message = "El correo debe tener un formato válido") @Pattern(regexp = "^[a-zA-Z0-9._%+\\-]+@correounivalle\\.edu\\.co$", message = "El correo debe tener dominio @correounivalle.edu.co") String correoInstitucional,
+            @JsonProperty("correo_institucional") @NotBlank(message = "El correo institucional es obligatorio") @Size(max = 150, message = "El correo no puede exceder 150 caracteres") @Email(message = "El correo debe tener un formato válido") @Pattern(regexp = "^[a-zA-Z0-9._%+\\-]+@correounivalle\\.edu\\.co$", message = "El correo debe tener dominio @correounivalle.edu.co") String correoInstitucional,
 
             @JsonProperty("telefono") @Pattern(regexp = "^\\s*$|^[0-9]{7,10}$", message = "El teléfono solo admite de 7 a 10 dígitos") String telefono,
 
@@ -146,19 +146,32 @@ public class DocenteDto {
             @JsonProperty("direccion")
             @Size(max = 150, message = "La dirección no puede exceder 150 caracteres")
             @Pattern(regexp = "^\\s*$|^[\\p{L}\\p{N}\\s#\\-.,°ºª/]+$", message = "La dirección solo admite letras, números y los signos # - . , / °")
-            String direccion) {
+            String direccion,
+
+            // Escuelas a las que pertenece el docente (opcional: 1 docente puede tener varias escuelas).
+            @JsonProperty("codigos_escuelas")
+            java.util.List<String> codigosEscuelas) {
+
+        public ContactoRequest(String correoPersonal, String telefono, Integer idFacultad, String celular, String direccion) {
+            this(correoPersonal, telefono, idFacultad, celular, direccion, null);
+        }
 
         public ContactoRequest(String correoPersonal, String telefono) {
-            this(correoPersonal, telefono, null, null, null);
+            this(correoPersonal, telefono, null, null, null, null);
         }
 
         public ContactoRequest(String correoPersonal, String telefono, Integer idFacultad) {
-            this(correoPersonal, telefono, idFacultad, null, null);
+            this(correoPersonal, telefono, idFacultad, null, null, null);
         }
 
         public ContactoRequest(String correoPersonal, String telefono, Integer idFacultad, String celular) {
-            this(correoPersonal, telefono, idFacultad, celular, null);
+            this(correoPersonal, telefono, idFacultad, celular, null, null);
         }
+    }
+
+    public record EscuelaItem(
+            @JsonProperty("codigo") String codigo,
+            @JsonProperty("nombre") String nombre) {
     }
 
     public record Response(
@@ -185,7 +198,25 @@ public class DocenteDto {
             @JsonProperty("created_at") LocalDateTime createdAt,
             @JsonProperty("updated_at") LocalDateTime updatedAt,
             @JsonProperty("celular") String celular,
-            @JsonProperty("direccion") String direccion) {
+            @JsonProperty("direccion") String direccion,
+            @JsonProperty("escuelas") java.util.List<EscuelaItem> escuelas) {
+
+        public Response(
+                Long id, String codigo, String nombres, String apellidos,
+                TipoDocumento tipoDocumento, String numeroDocumento,
+                String correoInstitucional, String correoPersonal, String telefono,
+                TipoDocente tipoDocente, CategoriaDocente categoria,
+                Integer idFacultad, String nombreFacultad,
+                String codeProgram, String nombrePrograma, String fotoUrl, Boolean tieneFoto,
+                String evaluacionPeriodo, BigDecimal evaluacionValor,
+                Boolean estado, LocalDateTime createdAt, LocalDateTime updatedAt,
+                String celular, String direccion) {
+            this(id, codigo, nombres, apellidos, tipoDocumento, numeroDocumento,
+                    correoInstitucional, correoPersonal, telefono, tipoDocente, categoria,
+                    idFacultad, nombreFacultad, codeProgram, nombrePrograma, fotoUrl, tieneFoto,
+                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, celular, direccion,
+                    java.util.List.of());
+        }
 
         public Response(
                 Long id, String codigo, String nombres, String apellidos,
@@ -199,7 +230,8 @@ public class DocenteDto {
             this(id, codigo, nombres, apellidos, tipoDocumento, numeroDocumento,
                     correoInstitucional, correoPersonal, telefono, tipoDocente, categoria,
                     idFacultad, nombreFacultad, codeProgram, nombrePrograma, fotoUrl, tieneFoto,
-                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, celular, null);
+                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, celular, null,
+                    java.util.List.of());
         }
 
         public Response(
@@ -213,7 +245,8 @@ public class DocenteDto {
             this(id, codigo, nombres, apellidos, tipoDocumento, numeroDocumento,
                     correoInstitucional, correoPersonal, telefono, tipoDocente, categoria,
                     null, null, codeProgram, nombrePrograma, fotoUrl, tieneFoto,
-                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, null, null);
+                    evaluacionPeriodo, evaluacionValor, estado, createdAt, updatedAt, null, null,
+                    java.util.List.of());
         }
     }
 }

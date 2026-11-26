@@ -8,29 +8,34 @@ import co.edu.univalle.palmira.exception.ConflictException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Docente;
 import co.edu.univalle.palmira.model.entity.CursoProgramacion;
+import co.edu.univalle.palmira.model.entity.Escuela;
 import co.edu.univalle.palmira.model.entity.Facultad;
 import co.edu.univalle.palmira.model.entity.Programa;
 import co.edu.univalle.palmira.model.entity.EvaluacionDocente;
 import co.edu.univalle.palmira.model.entity.PeriodoAcademico;
+import co.edu.univalle.palmira.repository.EscuelaRepository;
 import co.edu.univalle.palmira.repository.EvaluacionDocenteRepository;
 import co.edu.univalle.palmira.repository.PeriodoAcademicoRepository;
 import co.edu.univalle.palmira.repository.CursoProgramacionRepository;
 import co.edu.univalle.palmira.repository.DocenteRepository;
 import co.edu.univalle.palmira.repository.FacultadRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Objects;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DocenteService {
 
@@ -46,6 +51,41 @@ public class DocenteService {
     private final CursoProgramacionRepository cursoProgramacionRepository;
     private final DocenteAsignaturaService docenteAsignaturaService;
     private final UsuarioAccesoService usuarioAccesoService;
+    private final EscuelaRepository escuelaRepository;
+
+    @Autowired
+    public DocenteService(DocenteRepository docenteRepository,
+                          ProgramaRepository programaRepository,
+                          FacultadRepository facultadRepository,
+                          EvaluacionDocenteRepository evaluacionDocenteRepository,
+                          PeriodoAcademicoRepository periodoAcademicoRepository,
+                          CursoProgramacionRepository cursoProgramacionRepository,
+                          DocenteAsignaturaService docenteAsignaturaService,
+                          UsuarioAccesoService usuarioAccesoService,
+                          EscuelaRepository escuelaRepository) {
+        this.docenteRepository = docenteRepository;
+        this.programaRepository = programaRepository;
+        this.facultadRepository = facultadRepository;
+        this.evaluacionDocenteRepository = evaluacionDocenteRepository;
+        this.periodoAcademicoRepository = periodoAcademicoRepository;
+        this.cursoProgramacionRepository = cursoProgramacionRepository;
+        this.docenteAsignaturaService = docenteAsignaturaService;
+        this.usuarioAccesoService = usuarioAccesoService;
+        this.escuelaRepository = escuelaRepository;
+    }
+
+    DocenteService(DocenteRepository docenteRepository,
+                   ProgramaRepository programaRepository,
+                   FacultadRepository facultadRepository,
+                   EvaluacionDocenteRepository evaluacionDocenteRepository,
+                   PeriodoAcademicoRepository periodoAcademicoRepository,
+                   CursoProgramacionRepository cursoProgramacionRepository,
+                   DocenteAsignaturaService docenteAsignaturaService,
+                   UsuarioAccesoService usuarioAccesoService) {
+        this(docenteRepository, programaRepository, facultadRepository, evaluacionDocenteRepository,
+                periodoAcademicoRepository, cursoProgramacionRepository, docenteAsignaturaService,
+                usuarioAccesoService, null);
+    }
 
     // ---------------------------------------------------------------
     // HU-026: Crear perfil de docente
@@ -60,31 +100,21 @@ public class DocenteService {
                             existente.getId());
                 });
 
-        // Código y correo duplicados: 409 sin id existente
-        if (docenteRepository.existsByCodigo(req.codigo())) {
+        // Código (opcional) y correo duplicados: 409 sin id existente
+        String codigo = normalizarOpcional(req.codigo());
+        if (codigo != null && docenteRepository.existsByCodigo(codigo)) {
             throw new ConflictException(
-                    "Ya existe un docente con el código " + req.codigo(), null);
+                    "Ya existe un docente con el código " + codigo, null);
         }
         if (docenteRepository.existsByCorreoInstitucional(req.correoInstitucional())) {
             throw new ConflictException(
                     "Ya existe un docente con el correo " + req.correoInstitucional(), null);
         }
 
-        Facultad facultad = null;
-        Programa programa = null;
-
-        if (req.idFacultad() != null) {
-            facultad = buscarFacultad(req.idFacultad());
-        } else if (req.codeProgram() != null && !req.codeProgram().isBlank()) {
-            programa = buscarPrograma(req.codeProgram());
-            if (programa.getIdFacultadPrograma() != null) {
-                facultad = facultadRepository.findById(programa.getIdFacultadPrograma()).orElse(null);
-            }
-        }
-        // La facultad y el programa son opcionales: pueden completarse después
+        Facultad facultad = req.idFacultad() != null ? buscarFacultad(req.idFacultad()) : null;
 
         Docente docente = Docente.builder()
-                .codigo(req.codigo().trim())
+                .codigo(codigo)
                 .nombres(req.nombres().trim())
                 .apellidos(req.apellidos().trim())
                 .tipoDocumento(req.tipoDocumento())
@@ -96,8 +126,6 @@ public class DocenteService {
                 .tipoDocente(req.tipoDocente())
                 .categoria(req.categoria())
                 .facultad(facultad)
-                .programa(programa)
-                .fotoUrl(req.fotoUrl())
                 .build();
 
         Docente guardado = docenteRepository.save(docente);
@@ -115,11 +143,13 @@ public class DocenteService {
                 .orElseThrow(() -> new ResourceNotFoundException("Docente no encontrado con id " + id));
         String correoAnterior = docente.getCorreoInstitucional();
 
-        if (req.codigo() != null && !req.codigo().equals(docente.getCodigo())) {
-            if (docenteRepository.existsByCodigo(req.codigo())) {
-                throw new ConflictException("Ya existe un docente con el código " + req.codigo(), null);
+        if (req.codigo() != null) {
+            String nuevoCodigo = normalizarOpcional(req.codigo());
+            if (nuevoCodigo != null && !nuevoCodigo.equals(docente.getCodigo())
+                    && docenteRepository.existsByCodigo(nuevoCodigo)) {
+                throw new ConflictException("Ya existe un docente con el código " + nuevoCodigo, null);
             }
-            docente.setCodigo(req.codigo().trim());
+            docente.setCodigo(nuevoCodigo);
         }
 
         if (req.numeroDocumento() != null && !req.numeroDocumento().equals(docente.getNumeroDocumento())) {
@@ -157,13 +187,9 @@ public class DocenteService {
             docente.setTipoDocente(req.tipoDocente());
         if (req.categoria() != null)
             docente.setCategoria(req.categoria());
-        if (req.fotoUrl() != null)
-            docente.setFotoUrl(req.fotoUrl());
 
         if (req.idFacultad() != null) {
             docente.setFacultad(buscarFacultad(req.idFacultad()));
-        } else if (req.codeProgram() != null && !req.codeProgram().isBlank()) {
-            docente.setPrograma(buscarPrograma(req.codeProgram()));
         }
 
         Docente guardado = docenteRepository.save(docente);
@@ -223,17 +249,38 @@ public class DocenteService {
         Integer nuevoIdFacultad = req.idFacultad();
         boolean cambioFacultad = nuevoIdFacultad != null && !Objects.equals(nuevoIdFacultad, idFacultadActual);
 
+        Set<String> escuelasActuales = docente.getEscuelas() == null
+                ? Set.of()
+                : docente.getEscuelas().stream().map(Escuela::getCodigo).collect(Collectors.toSet());
+        Set<String> nuevasEscuelasCodigos = req.codigosEscuelas() == null
+                ? null
+                : req.codigosEscuelas().stream()
+                        .filter(Objects::nonNull)
+                        .map(c -> c.trim().toUpperCase())
+                        .filter(c -> !c.isBlank())
+                        .collect(Collectors.toCollection(LinkedHashSet::new));
+        boolean cambioEscuelas = nuevasEscuelasCodigos != null && !nuevasEscuelasCodigos.equals(escuelasActuales);
+
         boolean cambioContacto = !Objects.equals(correoPersonal, docente.getCorreoPersonal())
                 || !Objects.equals(telefono, docente.getTelefono())
                 || !Objects.equals(celular, docente.getCelular())
                 || !Objects.equals(direccion, docente.getDireccion());
 
-        if (!cambioContacto && !cambioFacultad) {
+        if (!cambioContacto && !cambioFacultad && !cambioEscuelas) {
             throw new BadRequestException(MSG_SIN_CAMBIOS);
         }
 
         if (cambioFacultad) {
             docente.setFacultad(buscarFacultad(nuevoIdFacultad));
+        }
+        if (cambioEscuelas && escuelaRepository != null) {
+            Set<Escuela> escuelasEntidades = new LinkedHashSet<>();
+            for (String cod : nuevasEscuelasCodigos) {
+                Escuela esc = escuelaRepository.findById(cod)
+                        .orElseThrow(() -> new BadRequestException("La escuela no existe: " + cod));
+                escuelasEntidades.add(esc);
+            }
+            docente.setEscuelas(escuelasEntidades);
         }
         docente.setCorreoPersonal(correoPersonal);
         docente.setTelefono(telefono);
@@ -421,10 +468,14 @@ public class DocenteService {
     }
 
     private DocenteDto.Response toResponse(Docente d) {
-        Integer idFacultad = d.getFacultad() != null
-                ? d.getFacultad().getId()
-                : (d.getPrograma() != null ? d.getPrograma().getIdFacultadPrograma() : null);
+        Integer idFacultad = d.getFacultad() != null ? d.getFacultad().getId() : null;
         String nombreFacultad = d.getFacultad() != null ? d.getFacultad().getNombre() : null;
+        List<DocenteDto.EscuelaItem> escuelas = d.getEscuelas() == null
+                ? List.of()
+                : d.getEscuelas().stream()
+                        .sorted(Comparator.comparing(Escuela::getCodigo))
+                        .map(e -> new DocenteDto.EscuelaItem(e.getCodigo(), e.getNombre()))
+                        .toList();
 
         return new DocenteDto.Response(
                 d.getId(),
@@ -440,9 +491,9 @@ public class DocenteService {
                 d.getCategoria(),
                 idFacultad,
                 nombreFacultad,
-                d.getPrograma() != null ? d.getPrograma().getCodeProgram() : null,
-                d.getPrograma() != null ? d.getPrograma().getNameProgram() : null,
-                d.getFotoUrl(),
+                null,
+                null,
+                null,
                 false,
                 null,
                 null,
@@ -450,7 +501,8 @@ public class DocenteService {
                 d.getCreatedAt(),
                 d.getUpdatedAt(),
                 d.getCelular(),
-                d.getDireccion());
+                d.getDireccion(),
+                escuelas);
     }
 
     private EvaluacionDocenteDto toEvaluacionResponse(EvaluacionDocente evaluacion) {

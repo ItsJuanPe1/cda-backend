@@ -19,14 +19,22 @@ public class AsignaturaDto {
             String facultad,
             @JsonProperty("id_facultad") Integer idFacultad,
             Boolean activo,
-            @JsonProperty("horas_semanales") Integer horasSemanales
+            @JsonProperty("horas_semanales") Integer horasSemanales,
+            @JsonProperty("codigo_escuela") String codigoEscuela
     ) {
+        public Response(String codeCourse, String nameCourse, Integer credits, Boolean isElective,
+                        Boolean esComplementaria, Boolean esBasica, String facultad,
+                        Integer idFacultad, Boolean activo, Integer horasSemanales) {
+            this(codeCourse, nameCourse, credits, isElective, esComplementaria, esBasica,
+                    facultad, idFacultad, activo, horasSemanales, null);
+        }
+
         // Compatibilidad con quien construye la respuesta sin horas
         public Response(String codeCourse, String nameCourse, Integer credits, Boolean isElective,
                         Boolean esComplementaria, Boolean esBasica, String facultad,
                         Integer idFacultad, Boolean activo) {
             this(codeCourse, nameCourse, credits, isElective, esComplementaria, esBasica,
-                    facultad, idFacultad, activo, null);
+                    facultad, idFacultad, activo, null, null);
         }
     }
 
@@ -60,14 +68,25 @@ public class AsignaturaDto {
             Integer idFacultad,
 
             @JsonProperty("horas_semanales")
-            @Min(value = 1, message = "Las horas semanales deben estar entre 1 y 20")
-            @Max(value = 20, message = "Las horas semanales deben estar entre 1 y 20")
-            Integer horasSemanales
+            @Min(value = 0, message = "Las horas semanales deben estar entre 0 y 20")
+            @Max(value = 20, message = "Las horas semanales deben estar entre 0 y 20")
+            Integer horasSemanales,
+
+            @JsonProperty("codigo_escuela")
+            @Size(max = 3, message = "El código de escuela no puede exceder 3 caracteres")
+            String codigoEscuela
     ) {
+        public CreateRequest(String codeCourse, String nameCourse, Integer credits, Boolean isElective,
+                             Boolean esComplementaria, Boolean esBasica, String facultad, Integer idFacultad,
+                             Integer horasSemanales) {
+            this(codeCourse, nameCourse, credits, isElective, esComplementaria, esBasica,
+                    facultad, idFacultad, horasSemanales, null);
+        }
+
         public CreateRequest(String codeCourse, String nameCourse, Integer credits, Boolean isElective,
                              Boolean esComplementaria, Boolean esBasica, String facultad, Integer idFacultad) {
             this(codeCourse, nameCourse, credits, isElective, esComplementaria, esBasica,
-                    facultad, idFacultad, null);
+                    facultad, idFacultad, null, null);
         }
     }
 
@@ -96,8 +115,8 @@ public class AsignaturaDto {
             Boolean activo,
 
             @JsonProperty("horas_semanales")
-            @Min(value = 1, message = "Las horas semanales deben estar entre 1 y 20")
-            @Max(value = 20, message = "Las horas semanales deben estar entre 1 y 20")
+            @Min(value = 0, message = "Las horas semanales deben estar entre 0 y 20")
+            @Max(value = 20, message = "Las horas semanales deben estar entre 0 y 20")
             Integer horasSemanales
     ) {
         public UpdateRequest(String nameCourse, Integer credits, Boolean isElective, Boolean esComplementaria,

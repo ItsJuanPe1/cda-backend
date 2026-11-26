@@ -75,16 +75,14 @@ public class ProgramaService {
         }
 
         Jornada jornada = Jornada.valueOf(request.jornada());
-        Integer diurna = jornada == Jornada.NOCTURNA ? null : request.numeroSemestre();
-        Integer nocturna = jornada == Jornada.DIURNA ? null : request.semestresNocturna();
-        validarDuraciones(jornada, diurna, nocturna);
+        Integer duracion = request.numeroSemestre() != null ? request.numeroSemestre() : request.semestresNocturna();
+        validarDuracionYCoherencia(code, jornada, duracion);
 
         Programa programa = Programa.builder()
                 .codeProgram(code)
                 .nameProgram(request.nameProgram().trim())
                 .jornada(jornada)
-                .numeroSemestre(diurna)
-                .semestresNocturna(nocturna)
+                .numeroSemestre(duracion)
                 .ingreso(TipoIngreso.valueOf(request.ingreso()))
                 .estado(request.estado() != null ? EstadoPrograma.valueOf(request.estado()) : EstadoPrograma.ACTIVO)
                 .idFacultadPrograma(request.idFacultadPrograma())
@@ -107,16 +105,9 @@ public class ProgramaService {
         }
 
         Jornada jornada = request.jornada() != null ? Jornada.valueOf(request.jornada()) : programa.getJornada();
-        Integer diurna = request.numeroSemestre() != null ? request.numeroSemestre() : programa.getNumeroSemestre();
-        Integer nocturna = request.semestresNocturna() != null ? request.semestresNocturna()
-                : programa.getSemestresNocturna();
-        // La duración de la jornada que ya no se oferta queda vacía
-        if (jornada == Jornada.DIURNA) {
-            nocturna = null;
-        } else if (jornada == Jornada.NOCTURNA) {
-            diurna = null;
-        }
-        validarDuraciones(jornada, diurna, nocturna);
+        Integer duracion = request.numeroSemestre() != null ? request.numeroSemestre()
+                : (request.semestresNocturna() != null ? request.semestresNocturna() : programa.getNumeroSemestre());
+        validarDuracionYCoherencia(programa.getCodeProgram(), jornada, duracion);
 
         // Se ejecuta dentro de esta misma transacción: si el intercambio falla,
         // también se revierten los cambios de los campos del programa.
@@ -131,8 +122,7 @@ public class ProgramaService {
             programa.setNameProgram(request.nameProgram().trim());
         }
         programa.setJornada(jornada);
-        programa.setNumeroSemestre(diurna);
-        programa.setSemestresNocturna(nocturna);
+        programa.setNumeroSemestre(duracion);
         if (request.ingreso() != null) {
             programa.setIngreso(TipoIngreso.valueOf(request.ingreso()));
         }
@@ -293,12 +283,16 @@ public class ProgramaService {
                 .orElseThrow(() -> new ResourceNotFoundException(MSG_NO_ENCONTRADO));
     }
 
-    private void validarDuraciones(Jornada jornada, Integer diurna, Integer nocturna) {
-        if (jornada != Jornada.NOCTURNA && !enRango(diurna)) {
+    private void validarDuracionYCoherencia(String codeProgram, Jornada jornada, Integer duracion) {
+        if (!enRango(duracion)) {
             throw new BadRequestException(ProgramaDto.MSG_DURACION_DIURNA);
         }
-        if (jornada != Jornada.DIURNA && !enRango(nocturna)) {
-            throw new BadRequestException(ProgramaDto.MSG_DURACION_NOCTURNA);
+        String upper = codeProgram != null ? codeProgram.trim().toUpperCase() : "";
+        if (upper.endsWith("-NOC") && jornada != Jornada.NOCTURNA) {
+            throw new BadRequestException("Un programa terminado en -NOC debe tener jornada NOCTURNA");
+        }
+        if (upper.endsWith("-DIU") && jornada != Jornada.DIURNA) {
+            throw new BadRequestException("Un programa terminado en -DIU debe tener jornada DIURNA");
         }
     }
 
@@ -316,7 +310,7 @@ public class ProgramaService {
                 p.getNameProgram(),
                 p.getJornada(),
                 p.getNumeroSemestre(),
-                p.getSemestresNocturna(),
+                null,
                 p.getIngreso(),
                 p.getEstado(),
                 p.getIdFacultadPrograma(),

@@ -1,7 +1,6 @@
 package co.edu.univalle.palmira.service;
 
 import co.edu.univalle.palmira.constant.AuthConstants;
-import co.edu.univalle.palmira.dto.CatalogoItemDto;
 import co.edu.univalle.palmira.dto.CoordinadorDto;
 import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ConflictException;
@@ -31,8 +30,6 @@ public class CoordinadorService {
     private final CoordinadorRepository coordinadorRepository;
     private final DocenteRepository docenteRepository;
     private final ProgramaRepository programaRepository;
-    private final CategoriaRepository categoriaRepository;
-    private final TipoContratoRepository tipoContratoRepository;
     private final UsuarioAccesoService usuarioAccesoService;
 
     @Transactional(readOnly = true)
@@ -64,22 +61,6 @@ public class CoordinadorService {
         return coordinadorRepository.findByProgramaCodeProgram(normalizedCode)
                 .stream()
                 .map(this::toResponse)
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<CatalogoItemDto> getCategorias() {
-        return categoriaRepository.findAllByOrderByNombreAsc()
-                .stream()
-                .map(cat -> new CatalogoItemDto(cat.getId(), cat.getNombre()))
-                .toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<CatalogoItemDto> getTiposContrato() {
-        return tipoContratoRepository.findAllByOrderByNombreAsc()
-                .stream()
-                .map(tc -> new CatalogoItemDto(tc.getId(), tc.getNombre()))
                 .toList();
     }
 

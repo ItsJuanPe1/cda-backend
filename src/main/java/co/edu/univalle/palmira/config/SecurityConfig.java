@@ -123,12 +123,13 @@ public class SecurityConfig {
                         // 4. Asignaturas, mallas, programas, catálogos, cohortes y programación:
                         // Coordinadores solo pueden consultar (GET)
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
-                                "/api/programas/**", "/api/catalogos/**", "/api/categorias", "/api/tipos-contrato",
+                                "/api/programas/**", "/api/catalogos/**",
                                 "/api/cohortes/**", "/api/programacion/**")
                         .hasAnyAuthority(ADMIN_Y_COORDINADOR)
 
-                        // Facultades: Administradores, Coordinadores y Docentes pueden consultar
-                        .requestMatchers(HttpMethod.GET, "/api/facultades", "/api/facultades/**")
+                        // Escuelas y Facultades: Administradores, Coordinadores y Docentes pueden consultar
+                        .requestMatchers(HttpMethod.GET, "/api/docentes-asignaturas/escuelas",
+                                "/api/facultades", "/api/facultades/**")
                         .hasAnyAuthority("ROLE_ADMIN", "ADMIN", "ROLE_COORDINADOR", "COORDINADOR", "ROLE_DOCENTE", "DOCENTE")
 
                         // Coordinadores conservan acceso operativo a las mallas curriculares.

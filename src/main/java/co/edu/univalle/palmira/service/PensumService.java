@@ -265,9 +265,7 @@ public class PensumService {
             return programaRepository.findById(targetCode).orElseGet(() -> {
                 Integer numSem = request.numeroSemestre() != null
                         ? request.numeroSemestre()
-                        : (sourcePrograma.getSemestresNocturna() != null
-                           ? sourcePrograma.getSemestresNocturna()
-                           : sourcePrograma.getNumeroSemestre());
+                        : sourcePrograma.getNumeroSemestre();
                 Programa instanciaNocturna = Programa.builder()
                         .codeProgram(targetCode)
                         .nameProgram(request.nameProgram() != null && !request.nameProgram().isBlank()
@@ -275,7 +273,6 @@ public class PensumService {
                                 : sourcePrograma.getNameProgram())
                         .jornada(Jornada.NOCTURNA)
                         .numeroSemestre(numSem)
-                        .semestresNocturna(numSem)
                         .ingreso(sourcePrograma.getIngreso() != null ? sourcePrograma.getIngreso() : TipoIngreso.SEMESTRAL)
                         .estado(EstadoPrograma.ACTIVO)
                         .idFacultadPrograma(sourcePrograma.getIdFacultadPrograma())
@@ -683,7 +680,6 @@ public class PensumService {
         }
 
         if (programa.getJornada() == Jornada.NOCTURNA) {
-            programa.setSemestresNocturna(maxSem);
             programa.setNumeroSemestre(maxSem);
             modified = true;
         } else if (request.nameProgram() != null || request.numeroSemestre() != null

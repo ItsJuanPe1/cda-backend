@@ -125,14 +125,13 @@ public class AvanceProgramacionService {
 
     private AvanceProgramacionDto.DocenteSinDisponibilidad toDocenteSinDisponibilidad(Docente docente) {
         String facultad = docente.getFacultad() != null ? docente.getFacultad().getNombre() : null;
-        String programa = docente.getPrograma() != null ? docente.getPrograma().getNameProgram() : null;
         return new AvanceProgramacionDto.DocenteSinDisponibilidad(
                 docente.getId(),
                 docente.getCodigo(),
                 (docente.getNombres() + " " + docente.getApellidos()).trim(),
                 docente.getCorreoInstitucional(),
                 facultad,
-                programa);
+                null);
     }
 
     private AvanceProgramacionDto.CursoPendiente toCursoPendiente(Object[] row) {

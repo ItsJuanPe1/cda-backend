@@ -58,8 +58,7 @@ public class CohorteService {
         PeriodoAcademico periodo = validarPeriodo(periodoId);
         Programa programa = validarPrograma(codeProgram);
 
-        int duracionDiurna = programa.getNumeroSemestre() != null ? programa.getNumeroSemestre() : 10;
-        int duracionNocturna = programa.getSemestresNocturna() != null ? programa.getSemestresNocturna() : duracionDiurna;
+        int duracionPermitida = programa.getNumeroSemestre() != null ? programa.getNumeroSemestre() : 10;
 
         List<CohortePeriodo> nuevasCohortes = new ArrayList<>();
         Set<String> unicos = new HashSet<>();
@@ -70,7 +69,6 @@ public class CohorteService {
                 throw new BadRequestException("No puede haber cohortes duplicadas para el semestre " + req.getSemestre() + " y jornada " + req.getJornada());
             }
 
-            int duracionPermitida = req.getJornada() == Jornada.NOCTURNA ? duracionNocturna : duracionDiurna;
             if (req.getSemestre() > duracionPermitida) {
                 throw new BadRequestException("El semestre " + req.getSemestre() + " supera la duración máxima permitida (" + duracionPermitida + ") para la jornada " + req.getJornada());
             }
@@ -150,7 +148,7 @@ public class CohorteService {
 
         for (Programa prog : programasActivos) {
             int duracionDiurna = prog.getNumeroSemestre() != null ? prog.getNumeroSemestre() : 10;
-            int duracionNocturna = prog.getSemestresNocturna() != null ? prog.getSemestresNocturna() : duracionDiurna;
+            int duracionNocturna = duracionDiurna;
 
             // Obtener resolución vigente de la malla más reciente
             List<PensumAcademico> vigentePensum = pensumRepository.findByIdCodeProgramAndVigenteTrue(prog.getCodeProgram());

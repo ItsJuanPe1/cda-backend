@@ -419,13 +419,7 @@ public class DocenteAsignaturaService {
     }
 
     private Facultad resolverFacultadOpcional(Docente docente, Map<Integer, Facultad> facultades) {
-        if (docente.getFacultad() != null) {
-            return docente.getFacultad();
-        }
-        if (docente.getPrograma() != null) {
-            return buscarFacultad(docente.getPrograma().getIdFacultadPrograma(), facultades);
-        }
-        return null;
+        return docente.getFacultad();
     }
 
     private Facultad buscarFacultad(Integer idFacultad, Map<Integer, Facultad> facultades) {
@@ -464,10 +458,6 @@ public class DocenteAsignaturaService {
     private Facultad resolverFacultad(Docente docente) {
         if (docente.getFacultad() != null) {
             return docente.getFacultad();
-        }
-        if (docente.getPrograma() != null && docente.getPrograma().getIdFacultadPrograma() != null) {
-            return facultadRepository.findById(docente.getPrograma().getIdFacultadPrograma())
-                    .orElseThrow(() -> new BadRequestException(MSG_SIN_FACULTAD));
         }
         throw new BadRequestException(MSG_SIN_FACULTAD);
     }

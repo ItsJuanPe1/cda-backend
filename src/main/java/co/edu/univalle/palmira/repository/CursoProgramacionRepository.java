@@ -55,8 +55,6 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
 
     @Query("SELECT c FROM CursoProgramacion c " +
            "JOIN FETCH c.docente d " +
-           "LEFT JOIN FETCH d.facultad " +
-           "LEFT JOIN FETCH d.programa " +
            "JOIN FETCH c.asignatura " +
            "JOIN FETCH c.programa " +
            "JOIN FETCH c.periodo " +
@@ -155,7 +153,7 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
                              AND (
                                  UPPER(COALESCE(c.code_course_espacio, '')) IN ('COMPLEMENTARIA', 'ELE-PROF-COMPLEMENTARIA')
                                  OR COALESCE(a.es_complementaria, FALSE) = TRUE
-                                 OR da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                                 OR da.id_facultad = COALESCE(p.id_facultad_programa, ua.id_facultad)
                              )
                        )
                    ) AS pendientes_asignacion,
@@ -169,7 +167,7 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
                              AND (
                                  UPPER(COALESCE(c.code_course_espacio, '')) IN ('COMPLEMENTARIA', 'ELE-PROF-COMPLEMENTARIA')
                                  OR COALESCE(a.es_complementaria, FALSE) = TRUE
-                                 OR da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                                 OR da.id_facultad = COALESCE(p.id_facultad_programa, ua.id_facultad)
                              )
                        )
                    ) AS pendientes_contratacion,
@@ -178,6 +176,7 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
             LEFT JOIN cursos_programacion c
                    ON c.code_program = p.code_program AND c.periodo_id = :periodoId
             LEFT JOIN asignaturas a ON a.code_course = c.code_course
+            LEFT JOIN unidades_academicas ua ON ua.codigo = a.codigo_unidad_academica
             WHERE p.estado = 'ACTIVO' OR c.id IS NOT NULL
             GROUP BY p.code_program, p.name_program, p.id_facultad_programa
             ORDER BY p.name_program ASC
@@ -202,12 +201,13 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
                          AND (
                              UPPER(COALESCE(c.code_course_espacio, '')) IN ('COMPLEMENTARIA', 'ELE-PROF-COMPLEMENTARIA')
                              OR COALESCE(a.es_complementaria, FALSE) = TRUE
-                             OR da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                             OR da.id_facultad = COALESCE(p.id_facultad_programa, ua.id_facultad)
                          )
                    ) THEN 'PENDIENTE_ASIGNACION' ELSE 'PENDIENTE_CONTRATACION' END AS tipo_pendiente
             FROM cursos_programacion c
             JOIN programas p ON p.code_program = c.code_program
             JOIN asignaturas a ON a.code_course = c.code_course
+            LEFT JOIN unidades_academicas ua ON ua.codigo = a.codigo_unidad_academica
             WHERE c.periodo_id = :periodoId
               AND c.estado <> 'EXCLUIDO'
               AND c.id_docente IS NULL

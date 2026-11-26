@@ -7,10 +7,12 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 /**
- * Entidad JPA que vincula un {@link Docente} existente como coordinador de un {@link Programa},
+ * Entidad JPA que vincula un {@link Docente} existente como coordinador de un
+ * {@link Programa},
  * junto con el correo institucional de coordinación del programa.
  * <p>
- * Los datos personales (identificación, nombre, teléfono, categoría, vinculación) se derivan
+ * Los datos personales (identificación, nombre, teléfono, categoría,
+ * vinculación) se derivan
  * directamente del docente asociado para evitar duplicidad de personas.
  * </p>
  */
@@ -50,7 +52,10 @@ public class Coordinador {
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    /** Campos transitorios de respaldo solo para compatibilidad con constructores de pruebas unitarias. */
+    /**
+     * Campos transitorios de respaldo solo para compatibilidad con constructores de
+     * pruebas unitarias.
+     */
     @Transient
     private String nombreCompleto;
 
@@ -112,6 +117,8 @@ public class Coordinador {
         }
         return switch (docente.getTipoDocente()) {
             case NOMBRADO -> "Nombrado";
+            case OCASIONAL -> "Ocasional";
+            case CATEDRA -> "Cátedra";
             case HORA_CATEDRA -> "Hora Cátedra";
         };
     }

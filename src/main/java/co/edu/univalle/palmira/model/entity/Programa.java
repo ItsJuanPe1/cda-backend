@@ -23,8 +23,8 @@ public class Programa {
     @Column(name = "name_program", length = 100, nullable = false)
     private String nameProgram;
 
-    // Duración en jornada diurna. Vacía si el programa solo se oferta en nocturna.
-    @Column(name = "numero_semestre")
+    // Duración del programa en semestres (cada jornada tiene su propia fila: -DIU / -NOC).
+    @Column(name = "numero_semestre", nullable = false)
     private Integer numeroSemestre;
 
     @Column(name = "id_facultad_programa")
@@ -34,10 +34,6 @@ public class Programa {
     @Column(name = "jornada", length = 10, nullable = false)
     @Builder.Default
     private Jornada jornada = Jornada.DIURNA;
-
-    // Duración en jornada nocturna. Vacía si el programa solo se oferta en diurna.
-    @Column(name = "semestres_nocturna")
-    private Integer semestresNocturna;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "ingreso", length = 10, nullable = false)

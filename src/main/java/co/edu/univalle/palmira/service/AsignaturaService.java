@@ -5,7 +5,8 @@ import co.edu.univalle.palmira.exception.BadRequestException;
 import co.edu.univalle.palmira.exception.ResourceNotFoundException;
 import co.edu.univalle.palmira.model.entity.Asignatura;
 import co.edu.univalle.palmira.repository.AsignaturaRepository;
-import lombok.RequiredArgsConstructor;
+import co.edu.univalle.palmira.repository.EscuelaRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,10 +20,20 @@ import java.util.List;
  * </p>
  */
 @Service
-@RequiredArgsConstructor
 public class AsignaturaService {
 
     private final AsignaturaRepository asignaturaRepository;
+    private final EscuelaRepository escuelaRepository;
+
+    @Autowired
+    public AsignaturaService(AsignaturaRepository asignaturaRepository, EscuelaRepository escuelaRepository) {
+        this.asignaturaRepository = asignaturaRepository;
+        this.escuelaRepository = escuelaRepository;
+    }
+
+    AsignaturaService(AsignaturaRepository asignaturaRepository) {
+        this(asignaturaRepository, null);
+    }
 
     @Transactional(readOnly = true)
     public List<AsignaturaDto.Response> getAll() {
@@ -53,6 +64,8 @@ public class AsignaturaService {
             throw new BadRequestException("Ya existe una asignatura con el nombre: " + normalizedName);
         }
 
+        String codigoEscuela = resolverCodigoEscuela(request.codigoEscuela(), normalizedCode);
+
         Asignatura asignatura = Asignatura.builder()
                 .codeCourse(normalizedCode)
                 .nameCourse(normalizedName)
@@ -60,6 +73,7 @@ public class AsignaturaService {
                 .isElective(Boolean.TRUE.equals(request.isElective()))
                 .esComplementaria(Boolean.TRUE.equals(request.esComplementaria()))
                 .esBasica(Boolean.TRUE.equals(request.esBasica()))
+                .codigoEscuela(codigoEscuela)
                 .facultad(request.facultad() != null ? request.facultad().trim() : null)
                 .idFacultad(request.idFacultad())
                 .horasSemanales(request.horasSemanales() != null ? Math.max(0, request.horasSemanales()) : 0)
@@ -145,6 +159,23 @@ public class AsignaturaService {
         }
     }
 
+    private String resolverCodigoEscuela(String codigoExplicito, String codeCourse) {
+        if (codigoExplicito != null && !codigoExplicito.isBlank()) {
+            String limpio = codigoExplicito.trim().toUpperCase();
+            if (escuelaRepository != null && !escuelaRepository.existsById(limpio)) {
+                throw new BadRequestException("La escuela no existe: " + limpio);
+            }
+            return limpio;
+        }
+        if (escuelaRepository != null && codeCourse != null && codeCourse.length() >= 3) {
+            String prefijo = codeCourse.substring(0, 3);
+            if (escuelaRepository.existsById(prefijo)) {
+                return prefijo;
+            }
+        }
+        return null;
+    }
+
     private AsignaturaDto.Response toResponse(Asignatura a) {
         return new AsignaturaDto.Response(
                 a.getCodeCourse(),
@@ -156,7 +187,8 @@ public class AsignaturaService {
                 a.getFacultad(),
                 a.getIdFacultad(),
                 a.getActivo() != null ? a.getActivo() : true,
-                a.getHorasSemanales()
+                a.getHorasSemanales(),
+                a.getCodigoEscuela()
         );
     }
 }

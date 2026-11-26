@@ -1,13 +1,16 @@
 package co.edu.univalle.palmira.model.entity;
 
+import co.edu.univalle.palmira.model.converter.CategoriaDocenteConverter;
+import co.edu.univalle.palmira.model.converter.TipoDocenteConverter;
 import co.edu.univalle.palmira.model.enums.CategoriaDocente;
 import co.edu.univalle.palmira.model.enums.TipoDocente;
 import co.edu.univalle.palmira.model.enums.TipoDocumento;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 @Entity
 @Table(name = "docentes")
@@ -22,23 +25,23 @@ public class Docente {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "codigo", length = 20, nullable = false, unique = true)
+    @Column(name = "codigo", length = 20, unique = true)
     private String codigo;
 
-    @Column(name = "nombres", length = 30, nullable = false)
+    @Column(name = "nombres", length = 100, nullable = false)
     private String nombres;
 
-    @Column(name = "apellidos", length = 30, nullable = false)
+    @Column(name = "apellidos", length = 100, nullable = false)
     private String apellidos;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "tipo_documento", length = 10, nullable = false)
     private TipoDocumento tipoDocumento;
 
-    @Column(name = "numero_documento", length = 11, nullable = false, unique = true)
+    @Column(name = "numero_documento", length = 20, nullable = false, unique = true)
     private String numeroDocumento;
 
-    @Column(name = "correo_institucional", length = 50, nullable = false, unique = true)
+    @Column(name = "correo_institucional", length = 150, nullable = false, unique = true)
     private String correoInstitucional;
 
     // HU-015: dato de contacto opcional que edita el propio docente
@@ -48,38 +51,49 @@ public class Docente {
     @Column(name = "telefono", length = 20)
     private String telefono;
 
-    // HU-015 (2026-11-10): celular opcional, distinto del teléfono, de 7 a 10 dígitos (V31)
+    // HU-015: celular opcional, distinto del teléfono, de 7 a 10 dígitos
     @Column(name = "celular", length = 10)
     private String celular;
 
-    // Dirección de vivienda, opcional: la edita el docente en «Mi perfil» y el administrador en Plantilla (V39)
+    // Dirección de vivienda, opcional: la edita el docente en «Mi perfil» y el administrador en Plantilla
     @Column(name = "direccion", length = 150)
     private String direccion;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = TipoDocenteConverter.class)
     @Column(name = "tipo_docente", length = 20)
     private TipoDocente tipoDocente;
 
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = CategoriaDocenteConverter.class)
     @Column(name = "categoria", length = 30)
     private CategoriaDocente categoria;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_facultad")
+    /** Relación N:M: un docente puede pertenecer a varias unidades académicas (gestionadas desde su perfil). */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "docente_unidades_academicas",
+            joinColumns = @JoinColumn(name = "docente_id"),
+            inverseJoinColumns = @JoinColumn(name = "codigo_unidad_academica")
+    )
+    @Builder.Default
+    private Set<Escuela> escuelas = new LinkedHashSet<>();
+
+    /** Derivado de las escuelas del docente (transitorio, sin columna en BD). */
+    @Transient
     private Facultad facultad;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "code_program")
-    private Programa programa;
-
-    @Column(name = "foto_url")
-    private String fotoUrl;
-
-    @Column(name = "evaluacion_periodo", length = 10)
-    private String evaluacionPeriodo;
-
-    @Column(name = "evaluacion_valor", precision = 4, scale = 2)
-    private BigDecimal evaluacionValor;
+    public Facultad getFacultad() {
+        if (facultad != null) {
+            return facultad;
+        }
+        if (escuelas != null) {
+            for (Escuela e : escuelas) {
+                if (e != null && e.getFacultad() != null) {
+                    return e.getFacultad();
+                }
+            }
+        }
+        return null;
+    }
 
     @Column(name = "estado", nullable = false)
     @Builder.Default

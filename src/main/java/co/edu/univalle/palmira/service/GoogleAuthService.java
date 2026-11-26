@@ -476,8 +476,8 @@ public class GoogleAuthService {
                     MotivoRechazoIngreso.PERFIL_DESACTIVADO, docente.getCorreoInstitucional());
         }
 
-        String codeProgram = docente.getPrograma() != null ? docente.getPrograma().getCodeProgram() : null;
-        String nombrePrograma = docente.getPrograma() != null ? docente.getPrograma().getNameProgram() : null;
+        String codeProgram = null;
+        String nombrePrograma = null;
 
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);

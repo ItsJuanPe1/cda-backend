@@ -14,7 +14,7 @@ import java.util.Optional;
 @Repository
 public interface DocenteRepository extends JpaRepository<Docente, Long> {
 
-    @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa ORDER BY d.apellidos ASC, d.nombres ASC")
+    @Query("SELECT DISTINCT d FROM Docente d LEFT JOIN FETCH d.escuelas e LEFT JOIN FETCH e.facultad ORDER BY d.apellidos ASC, d.nombres ASC")
     List<Docente> findAllWithPrograma();
 
     List<Docente> findAllByOrderByApellidosAscNombresAsc();
@@ -23,7 +23,7 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
 
     Optional<Docente> findByCorreoInstitucional(String correoInstitucional);
 
-    @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa WHERE LOWER(d.correoInstitucional) = LOWER(:correoInstitucional) AND d.estado = true")
+    @Query("SELECT DISTINCT d FROM Docente d LEFT JOIN FETCH d.escuelas e LEFT JOIN FETCH e.facultad WHERE LOWER(d.correoInstitucional) = LOWER(:correoInstitucional) AND d.estado = true")
     Optional<Docente> findByCorreoInstitucionalAndEstadoTrue(@Param("correoInstitucional") String correoInstitucional);
 
     boolean existsByNumeroDocumento(String numeroDocumento);
@@ -31,9 +31,9 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
     boolean existsByCorreoInstitucional(String correoInstitucional);
 
     @Query("""
-            SELECT d FROM Docente d
-            LEFT JOIN FETCH d.facultad
-            LEFT JOIN FETCH d.programa
+            SELECT DISTINCT d FROM Docente d
+            LEFT JOIN FETCH d.escuelas e
+            LEFT JOIN FETCH e.facultad
             WHERE d.estado = true
               AND NOT EXISTS (
                   SELECT 1 FROM DisponibilidadDocente dd
@@ -43,10 +43,10 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
             """)
     List<Docente> findActivosSinDisponibilidad(@Param("periodoId") Long periodoId);
 
-    @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa WHERE LOWER(d.correoInstitucional) = LOWER(:correo)")
+    @Query("SELECT DISTINCT d FROM Docente d LEFT JOIN FETCH d.escuelas e LEFT JOIN FETCH e.facultad WHERE LOWER(d.correoInstitucional) = LOWER(:correo)")
     Optional<Docente> findByCorreoInstitucionalWithDetails(@Param("correo") String correo);
 
-    @Query("SELECT d FROM Docente d LEFT JOIN FETCH d.facultad LEFT JOIN FETCH d.programa WHERE d.id = :id")
+    @Query("SELECT DISTINCT d FROM Docente d LEFT JOIN FETCH d.escuelas e LEFT JOIN FETCH e.facultad WHERE d.id = :id")
     Optional<Docente> findByIdWithDetails(@Param("id") Long id);
 
     /**

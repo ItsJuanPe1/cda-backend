@@ -35,11 +35,12 @@ public class Asignatura {
     @Builder.Default
     private Boolean esBasica = false;
 
-    @Column(length = 150)
-    private String facultad;
+    @Column(name = "codigo_unidad_academica", length = 3)
+    private String codigoEscuela;
 
-    @Column(name = "id_facultad")
-    private Integer idFacultad;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "codigo_unidad_academica", insertable = false, updatable = false)
+    private Escuela escuela;
 
     @Column(nullable = false)
     @Builder.Default
@@ -48,4 +49,25 @@ public class Asignatura {
     /** Carga docente: horas semanales de la asignatura; null hasta que el admin las defina. */
     @Column(name = "horas_semanales")
     private Integer horasSemanales;
+
+    /** Campos transitorios derivados de la escuela para compatibilidad con DTOs y pruebas. */
+    @Transient
+    private String facultad;
+
+    @Transient
+    private Integer idFacultad;
+
+    public Integer getIdFacultad() {
+        if (escuela != null && escuela.getFacultad() != null) {
+            return escuela.getFacultad().getId();
+        }
+        return idFacultad;
+    }
+
+    public String getFacultad() {
+        if (escuela != null && escuela.getFacultad() != null) {
+            return escuela.getFacultad().getNombre();
+        }
+        return facultad;
+    }
 }

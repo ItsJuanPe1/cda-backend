@@ -64,7 +64,6 @@ class DocenteAsignaturaServiceTest {
                 .numeroDocumento("123456789")
                 .estado(true)
                 .facultad(facultad)
-                .programa(programa)
                 .build();
         asignatura = Asignatura.builder()
                 .codeCourse("MAT101")
@@ -156,34 +155,15 @@ class DocenteAsignaturaServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 3: rechaza al docente sin facultad ni programa")
+    @DisplayName("Criterio 3: rechaza al docente sin facultad")
     void criterio3_rechazaDocenteSinFacultad() {
         docente.setFacultad(null);
-        docente.setPrograma(null);
         when(docenteRepository.findByIdWithDetails(7L)).thenReturn(Optional.of(docente));
 
         BadRequestException ex = assertThrows(BadRequestException.class, () -> service.asociar(
                 new DocenteAsignaturaDto.CreateRequest(7L, "MAT101")));
 
         assertEquals(DocenteAsignaturaService.MSG_SIN_FACULTAD, ex.getMessage());
-    }
-
-    @Test
-    @DisplayName("Criterio 3: deriva la facultad desde el programa del docente")
-    void criterio3_derivaFacultadDelPrograma() {
-        docente.setFacultad(null);
-        when(docenteRepository.findByIdWithDetails(7L)).thenReturn(Optional.of(docente));
-        when(facultadRepository.findById(1)).thenReturn(Optional.of(facultad));
-        when(asignaturaRepository.findById("MAT101")).thenReturn(Optional.of(asignatura));
-        when(asociacionRepository.findByDocenteIdAndAsignaturaCodeCourseAndFacultadId(7L, "MAT101", 1))
-                .thenReturn(Optional.empty());
-        guardarDevuelveLoMismo();
-
-        DocenteAsignaturaDto.Response response = service.asociar(
-                new DocenteAsignaturaDto.CreateRequest(7L, "MAT101"));
-
-        assertEquals(1, response.idFacultad());
-        assertEquals("Facultad de Ingeniería", response.nombreFacultad());
     }
 
     @Test

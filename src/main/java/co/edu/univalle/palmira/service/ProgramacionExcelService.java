@@ -225,6 +225,8 @@ public class ProgramacionExcelService {
         if (tipo == null) return "";
         return switch (tipo) {
             case NOMBRADO -> "Nombrado";
+            case OCASIONAL -> "Ocasional";
+            case CATEDRA -> "Cátedra";
             case HORA_CATEDRA -> "Hora Cátedra";
         };
     }

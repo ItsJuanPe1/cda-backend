@@ -36,8 +36,6 @@ public interface EvaluacionDocenteRepository extends JpaRepository<EvaluacionDoc
 
     @Query("SELECT e FROM EvaluacionDocente e " +
             "JOIN FETCH e.docente d " +
-            "LEFT JOIN FETCH d.facultad " +
-            "LEFT JOIN FETCH d.programa " +
             "JOIN FETCH e.asignatura " +
             "JOIN FETCH e.periodo")
     List<EvaluacionDocente> findAllWithDetails();

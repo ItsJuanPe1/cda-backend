@@ -94,7 +94,7 @@ class ProgramaServiceTest {
         assertEquals("Programa Nuevo", r.nameProgram());
         assertEquals(Jornada.AMBAS, r.jornada());
         assertEquals(10, r.numeroSemestre());
-        assertEquals(11, r.semestresNocturna());
+        assertNull(r.semestresNocturna());
         assertEquals(TipoIngreso.ANUAL, r.ingreso());
         assertEquals(EstadoPrograma.ACTIVO, r.estado(), "Sin estado, el programa se crea activo");
     }
@@ -138,26 +138,15 @@ class ProgramaServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 2: jornada ambas sin duración nocturna no se guarda")
-    void criterio2_ambasSinDuracionNocturna() {
-        when(programaRepository.existsById("9002")).thenReturn(false);
-
-        BadRequestException ex = assertThrows(BadRequestException.class,
-                () -> programaService.create(crear("AMBAS", 10, null, null)));
-
-        assertEquals(ProgramaDto.MSG_DURACION_NOCTURNA, ex.getMessage());
-    }
-
-    @Test
-    @DisplayName("Criterio 1: en jornada nocturna se guarda solo la duración nocturna")
-    void criterio1_nocturnaGuardaSoloDuracionNocturna() {
+    @DisplayName("Criterio 1: en jornada nocturna guarda la duración en numeroSemestre")
+    void criterio1_nocturnaGuardaDuracionEnNumeroSemestre() {
         when(programaRepository.existsById("9002")).thenReturn(false);
         guardarDevuelveLoMismo();
 
-        ProgramaDto.Response r = programaService.create(crear("NOCTURNA", 10, 11, null));
+        ProgramaDto.Response r = programaService.create(crear("NOCTURNA", null, 11, null));
 
-        assertNull(r.numeroSemestre());
-        assertEquals(11, r.semestresNocturna());
+        assertEquals(11, r.numeroSemestre());
+        assertNull(r.semestresNocturna());
     }
 
     // Criterio 4: editar mantiene mallas, cohortes y coordinador
@@ -170,13 +159,13 @@ class ProgramaServiceTest {
         when(pensumAcademicoRepository.countByIdCodeProgram("9001")).thenReturn(40L);
 
         ProgramaDto.Response r = programaService.update("9001",
-                editar(null, "Programa Renombrado", "AMBAS", null, 11, null));
+                editar(null, "Programa Renombrado", "AMBAS", null, null, null));
 
         assertEquals("9001", r.codeProgram());
         assertEquals("Programa Renombrado", r.nameProgram());
         assertEquals(Jornada.AMBAS, r.jornada());
-        assertEquals(10, r.numeroSemestre(), "Conserva la duración diurna que no se envió");
-        assertEquals(11, r.semestresNocturna());
+        assertEquals(10, r.numeroSemestre(), "Conserva la duración que no se envió");
+        assertNull(r.semestresNocturna());
         assertEquals(40L, r.totalAsignaturas(), "La malla sigue asociada");
         verify(pensumAcademicoRepository, never()).deleteAll();
     }
@@ -220,10 +209,9 @@ class ProgramaServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 4: al pasar a diurna se vacía la duración nocturna")
-    void criterio4_pasarADiurnaVaciaNocturna() {
+    @DisplayName("Criterio 4: al pasar a diurna conserva numeroSemestre")
+    void criterio4_pasarADiurnaConservaDuracion() {
         existente.setJornada(Jornada.AMBAS);
-        existente.setSemestresNocturna(11);
         when(programaRepository.findById("9001")).thenReturn(Optional.of(existente));
         guardarDevuelveLoMismo();
 
@@ -234,14 +222,15 @@ class ProgramaServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 2: al pasar a ambas sin duración nocturna no se guarda")
-    void criterio2_pasarAAmbasSinNocturna() {
-        when(programaRepository.findById("9001")).thenReturn(Optional.of(existente));
+    @DisplayName("Coherencia código-jornada: un código -NOC con jornada DIURNA se rechaza")
+    void coherenciaCodigoNocConJornadaDiurna() {
+        when(programaRepository.existsById("3841-NOC")).thenReturn(false);
 
         BadRequestException ex = assertThrows(BadRequestException.class,
-                () -> programaService.update("9001", editar(null, null, "AMBAS", null, null, null)));
+                () -> programaService.create(new ProgramaDto.CreateRequest(
+                        "3841-NOC", "Contaduría Pública", "DIURNA", 10, null, "SEMESTRAL", "ACTIVO", 8, "SEMESTRAL", "RES-240-2020")));
 
-        assertEquals(ProgramaDto.MSG_DURACION_NOCTURNA, ex.getMessage());
+        assertTrue(ex.getMessage().contains("-NOC"));
     }
 
     @Test
