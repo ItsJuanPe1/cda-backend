@@ -77,9 +77,6 @@ public interface CoordinadorRepository extends JpaRepository<Coordinador, Intege
               AND p.estado = co.edu.univalle.palmira.model.enums.EstadoPrograma.ACTIVO
               AND d.estado = true
               AND c.correoInstitucional IS NOT NULL AND TRIM(c.correoInstitucional) <> ''
-              AND NOT EXISTS (SELECT u FROM Usuario u
-                              WHERE LOWER(u.emailInstitucional) = LOWER(c.correoInstitucional)
-                                AND u.activo = false)
             ORDER BY c.id
             """)
     List<Coordinador> findActivosParaNotificacion();

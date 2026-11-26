@@ -456,25 +456,22 @@ public class ElectivaProgramadaService {
 
     /** Complementarias activas; las ya propuestas (generales) en el período llevan el programa que las propuso. */
     private List<ElectivaProgramadaDto.AsignaturaItem> bancoComplementarias(Long periodoId) {
+        Map<String, String> programadaPor = new HashMap<>();
+        for (CursoProgramacion c : cursoRepository.findPropuestasComplementarias(periodoId)) {
+            if (!c.isExcluido() && esPropuesta(c.getCodeCourseEspacio()) && c.getAsignatura() != null) {
+                String nombreProg = c.getPrograma().getNameProgram() != null
+                        ? c.getPrograma().getNameProgram() : c.getPrograma().getCodeProgram();
+                programadaPor.putIfAbsent(c.getAsignatura().getCodeCourse().toUpperCase(), nombreProg);
+            }
+        }
         return asignaturaRepository.findAll().stream()
                 .filter(a -> Boolean.TRUE.equals(a.getActivo()) && Boolean.TRUE.equals(a.getIsElective())
                         && Boolean.TRUE.equals(a.getEsComplementaria()))
-                .sorted(java.util.Comparator.comparing(Asignatura::getNameCourse,
-                        java.util.Comparator.nullsLast(String::compareToIgnoreCase)))
+                .sorted(Comparator.comparing(Asignatura::getNameCourse,
+                        Comparator.nullsLast(String::compareToIgnoreCase)))
                 .map(a -> new ElectivaProgramadaDto.AsignaturaItem(a.getCodeCourse(), a.getNameCourse(),
-                        a.getCredits(), programaQueLaTiene(periodoId, a.getCodeCourse())))
+                        a.getCredits(), programadaPor.get(a.getCodeCourse().toUpperCase())))
                 .toList();
-    }
-
-    /** Nombre del programa que ya programó la complementaria en el período; null si nadie la ha programado. */
-    private String programaQueLaTiene(Long periodoId, String codeCourse) {
-        return cursoRepository.findByPeriodoAndAsignatura(periodoId, codeCourse).stream()
-                .filter(c -> !c.isExcluido())
-                .filter(c -> esPropuesta(c.getCodeCourseEspacio()))
-                .findFirst()
-                .map(c -> c.getPrograma().getNameProgram() != null
-                        ? c.getPrograma().getNameProgram() : c.getPrograma().getCodeProgram())
-                .orElse(null);
     }
 
     /**

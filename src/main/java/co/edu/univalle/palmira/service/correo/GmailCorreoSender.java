@@ -245,15 +245,22 @@ public class GmailCorreoSender implements CorreoSender {
         return actual;
     }
 
-    /** Cliente de Gmail API con credenciales de usuario (refresh token). */
+    private static final int TIMEOUT_HTTP_MS = 10_000;
+
+    /** Cliente de Gmail API con credenciales de usuario (refresh token) y timeouts explícitos. */
     protected Gmail crearCliente() {
         UserCredentials credenciales = UserCredentials.newBuilder()
                 .setClientId(gmail.getClientId().trim())
                 .setClientSecret(gmail.getClientSecret().trim())
                 .setRefreshToken(gmail.getRefreshToken().trim())
                 .build();
-        return new Gmail.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance(),
-                new HttpCredentialsAdapter(credenciales))
+        HttpCredentialsAdapter adapter = new HttpCredentialsAdapter(credenciales);
+        com.google.api.client.http.HttpRequestInitializer initializer = request -> {
+            adapter.initialize(request);
+            request.setConnectTimeout(TIMEOUT_HTTP_MS);
+            request.setReadTimeout(TIMEOUT_HTTP_MS);
+        };
+        return new Gmail.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance(), initializer)
                 .setApplicationName(APLICACION)
                 .build();
     }

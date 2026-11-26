@@ -102,6 +102,7 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
            "JOIN FETCH c.asignatura " +
            "JOIN FETCH c.programa " +
            "WHERE c.docente.id = :docenteId AND c.periodo.id = :periodoId " +
+           "AND c.estado <> 'EXCLUIDO' " +
            "ORDER BY c.programa.nameProgram ASC, c.nombreAsignatura ASC, c.grupo ASC")
     List<CursoProgramacion> findByDocenteYPeriodo(@Param("docenteId") Long docenteId,
                                                   @Param("periodoId") Long periodoId);
@@ -109,6 +110,7 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
     @Query("SELECT COALESCE(SUM(a.horasSemanales), 0) FROM CursoProgramacion c " +
            "JOIN c.asignatura a " +
            "WHERE c.docente.id = :docenteId AND c.periodo.id = :periodoId " +
+           "AND c.estado <> 'EXCLUIDO' " +
            "AND c.id <> :cursoIdExcluido")
     Long sumarHorasExcluyendo(@Param("docenteId") Long docenteId,
                               @Param("periodoId") Long periodoId,
@@ -118,6 +120,7 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
            "SUM(CASE WHEN a.horasSemanales IS NULL THEN 1 ELSE 0 END) " +
            "FROM CursoProgramacion c JOIN c.asignatura a " +
            "WHERE c.periodo.id = :periodoId AND c.docente IS NOT NULL " +
+           "AND c.estado <> 'EXCLUIDO' " +
            "GROUP BY c.docente.id")
     List<Object[]> totalesPorDocente(@Param("periodoId") Long periodoId);
     @Query("SELECT COUNT(c) FROM CursoProgramacion c " +
@@ -146,18 +149,28 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
                        WHERE c.estado <> 'EXCLUIDO' AND c.id_docente IS NULL AND EXISTS (
                            SELECT 1
                            FROM docente_asignatura da
+                           JOIN docentes d ON d.id = da.docente_id AND d.estado = TRUE
                            WHERE da.code_course = c.code_course
-                             AND da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
                              AND da.activo = TRUE
+                             AND (
+                                 UPPER(COALESCE(c.code_course_espacio, '')) IN ('COMPLEMENTARIA', 'ELE-PROF-COMPLEMENTARIA')
+                                 OR COALESCE(a.es_complementaria, FALSE) = TRUE
+                                 OR da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                             )
                        )
                    ) AS pendientes_asignacion,
                    COUNT(c.id) FILTER (
                        WHERE c.estado <> 'EXCLUIDO' AND c.id_docente IS NULL AND NOT EXISTS (
                            SELECT 1
                            FROM docente_asignatura da
+                           JOIN docentes d ON d.id = da.docente_id AND d.estado = TRUE
                            WHERE da.code_course = c.code_course
-                             AND da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
                              AND da.activo = TRUE
+                             AND (
+                                 UPPER(COALESCE(c.code_course_espacio, '')) IN ('COMPLEMENTARIA', 'ELE-PROF-COMPLEMENTARIA')
+                                 OR COALESCE(a.es_complementaria, FALSE) = TRUE
+                                 OR da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                             )
                        )
                    ) AS pendientes_contratacion,
                    COUNT(c.id) FILTER (WHERE c.estado = 'EXCLUIDO') AS excluidos
@@ -183,9 +196,14 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
                    CASE WHEN EXISTS (
                        SELECT 1
                        FROM docente_asignatura da
+                       JOIN docentes d ON d.id = da.docente_id AND d.estado = TRUE
                        WHERE da.code_course = c.code_course
-                         AND da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
                          AND da.activo = TRUE
+                         AND (
+                             UPPER(COALESCE(c.code_course_espacio, '')) IN ('COMPLEMENTARIA', 'ELE-PROF-COMPLEMENTARIA')
+                             OR COALESCE(a.es_complementaria, FALSE) = TRUE
+                             OR da.id_facultad = COALESCE(p.id_facultad_programa, a.id_facultad)
+                         )
                    ) THEN 'PENDIENTE_ASIGNACION' ELSE 'PENDIENTE_CONTRATACION' END AS tipo_pendiente
             FROM cursos_programacion c
             JOIN programas p ON p.code_program = c.code_program
@@ -206,4 +224,10 @@ public interface CursoProgramacionRepository extends JpaRepository<CursoPrograma
            "ORDER BY c.semestre ASC, c.codeCourseEspacio ASC")
     List<CursoProgramacion> findElectivasProgramadas(@Param("periodoId") Long periodoId,
                                                  @Param("codeProgram") String codeProgram);
+
+    @Query("SELECT c FROM CursoProgramacion c " +
+           "JOIN FETCH c.programa JOIN FETCH c.asignatura " +
+           "WHERE c.periodo.id = :periodoId " +
+           "AND UPPER(c.codeCourseEspacio) = 'COMPLEMENTARIA' AND c.estado <> 'EXCLUIDO'")
+    List<CursoProgramacion> findPropuestasComplementarias(@Param("periodoId") Long periodoId);
 }

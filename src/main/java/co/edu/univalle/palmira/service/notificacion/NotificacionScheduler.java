@@ -16,6 +16,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class NotificacionScheduler {
 
+    private static final int MAX_ERRORES_CONSECUTIVOS = 3;
+
     private final NotificacionProcesador procesador;
     private final NotificacionesProperties propiedades;
 
@@ -28,6 +30,7 @@ public class NotificacionScheduler {
 
     int procesarEventos() {
         int procesados = 0;
+        int erroresConsecutivos = 0;
         int lote = Math.max(1, propiedades.getLote());
         for (int i = 0; i < lote; i++) {
             try {
@@ -35,8 +38,14 @@ public class NotificacionScheduler {
                     break;
                 }
                 procesados++;
+                erroresConsecutivos = 0;
             } catch (RuntimeException e) {
+                erroresConsecutivos++;
                 log.error("No se pudo procesar un evento de notificación: {}", e.getClass().getSimpleName());
+                if (erroresConsecutivos >= MAX_ERRORES_CONSECUTIVOS) {
+                    log.warn("Se detiene el lote de eventos tras {} errores consecutivos", erroresConsecutivos);
+                    break;
+                }
             }
         }
         return procesados;
@@ -44,6 +53,7 @@ public class NotificacionScheduler {
 
     int enviarPendientes() {
         int enviados = 0;
+        int erroresConsecutivos = 0;
         int lote = Math.max(1, propiedades.getLote());
         for (int i = 0; i < lote; i++) {
             try {
@@ -51,8 +61,14 @@ public class NotificacionScheduler {
                     break;
                 }
                 enviados++;
+                erroresConsecutivos = 0;
             } catch (RuntimeException e) {
+                erroresConsecutivos++;
                 log.error("No se pudo procesar un envío de notificación: {}", e.getClass().getSimpleName());
+                if (erroresConsecutivos >= MAX_ERRORES_CONSECUTIVOS) {
+                    log.warn("Se detiene el lote de envíos tras {} errores consecutivos", erroresConsecutivos);
+                    break;
+                }
             }
         }
         return enviados;

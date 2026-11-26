@@ -681,7 +681,7 @@ class ElectivaProgramadaServiceTest {
         when(cursoRepository.findElectivasProgramadas(7L, PROGRAMA))
                 .thenReturn(List.of(cursoElectiva(5L, 50), propuesta));
         // la ya programada sigue en el banco, pero marcada con el programa que la tiene
-        when(cursoRepository.findByPeriodoAndAsignatura(7L, COMPLEMENTARIA)).thenReturn(List.of(propuesta));
+        when(cursoRepository.findPropuestasComplementarias(7L)).thenReturn(List.of(propuesta));
 
         ElectivaProgramadaDto.ListaResponse r = service.listar(PROGRAMA);
         assertEquals(1, r.electivas().size());

@@ -41,8 +41,4 @@ public class Usuario {
     @Column(name = "detalle_docente", columnDefinition = "TEXT",
             nullable = true)
     private String detalleDocente;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean activo = true;
 }

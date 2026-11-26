@@ -191,10 +191,14 @@ public class ProgramaService {
         }
 
         List<Coordinador> propietariosActualesIniciales = coordinadorRepository
-                .findByProgramaCodeProgram(codigoActual);
+                .findByProgramaCodeProgram(codigoActual).stream()
+                .filter(c -> Boolean.TRUE.equals(c.getActivo()))
+                .toList();
         List<Coordinador> propietariosAnterioresIniciales = codigoAnteriorInicial == null
                 ? List.of()
-                : coordinadorRepository.findByProgramaCodeProgram(codigoAnteriorInicial);
+                : coordinadorRepository.findByProgramaCodeProgram(codigoAnteriorInicial).stream()
+                        .filter(c -> Boolean.TRUE.equals(c.getActivo()))
+                        .toList();
 
         Set<Integer> idsBloqueados = new TreeSet<>();
         idsBloqueados.add(idCoordinadorNuevo);
@@ -221,7 +225,8 @@ public class ProgramaService {
         }
 
         List<Coordinador> propietariosActuales = coordinadoresBloqueados.stream()
-                .filter(c -> c.getPrograma() != null
+                .filter(c -> Boolean.TRUE.equals(c.getActivo())
+                        && c.getPrograma() != null
                         && codigoActual.equals(c.getPrograma().getCodeProgram()))
                 .toList();
         if (propietariosActuales.size() > 1) {
@@ -232,7 +237,8 @@ public class ProgramaService {
         if (codigoAnteriorElegido != null) {
             List<Coordinador> propietariosProgramaAnterior =
                     coordinadoresBloqueados.stream()
-                            .filter(c -> c.getPrograma() != null
+                            .filter(c -> Boolean.TRUE.equals(c.getActivo())
+                                    && c.getPrograma() != null
                                     && codigoAnteriorElegido.equals(
                                     c.getPrograma().getCodeProgram()))
                             .toList();

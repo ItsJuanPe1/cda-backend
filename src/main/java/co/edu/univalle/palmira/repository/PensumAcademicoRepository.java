@@ -47,7 +47,9 @@ public interface PensumAcademicoRepository extends JpaRepository<PensumAcademico
 
     List<PensumAcademico> findByIdCodeProgramAndVigenteFalseOrderByFechaDesactivacionDesc(String codeProgram);
 
-    List<PensumAcademico> findByIdCodeProgramAndIdVersion(String codeProgram, Integer version);
+    @Query("SELECT p FROM PensumAcademico p JOIN FETCH p.asignatura JOIN FETCH p.programa WHERE p.id.codeProgram = :codeProgram AND p.id.version = :version ORDER BY p.semestre ASC, p.asignatura.nameCourse ASC")
+    List<PensumAcademico> findByIdCodeProgramAndIdVersion(@Param("codeProgram") String codeProgram,
+                                                          @Param("version") Integer version);
 
     @Query("SELECT COALESCE(MAX(p.id.version), 0) FROM PensumAcademico p WHERE p.id.codeProgram = :codeProgram")
     Integer findMaxVersion(@Param("codeProgram") String codeProgram);

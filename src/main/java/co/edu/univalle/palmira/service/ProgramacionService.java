@@ -283,13 +283,31 @@ public class ProgramacionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Período académico no encontrado con ID: " + periodoId));
 
         AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
-        String programaFiltrar = alcance.admin() ? codeProgram : alcance.codeProgram();
-
         List<CursoProgramacion> cursos;
-        if (programaFiltrar != null && !programaFiltrar.isBlank()) {
-            cursos = cursoRepository.findByPeriodoIdAndCodeProgramWithDetails(periodoId, programaFiltrar.trim());
+        if (alcance.admin()) {
+            cursos = (codeProgram != null && !codeProgram.isBlank())
+                    ? cursoRepository.findByPeriodoIdAndCodeProgramWithDetails(periodoId, codeProgram.trim())
+                    : cursoRepository.findByPeriodoIdWithDetails(periodoId);
+        } else if (codeProgram != null && !codeProgram.isBlank()
+                && ((alcance.codeProgram() != null && alcance.codeProgram().equalsIgnoreCase(codeProgram.trim()))
+                        || accesoProgramaService.tieneAccesoAPrograma(codeProgram.trim()))) {
+            cursos = cursoRepository.findByPeriodoIdAndCodeProgramWithDetails(periodoId, codeProgram.trim());
         } else {
-            cursos = cursoRepository.findByPeriodoIdWithDetails(periodoId);
+            Set<String> permitidos = accesoProgramaService.programasPermitidos();
+            if (permitidos != null && permitidos.size() > 1) {
+                cursos = cursoRepository.findByPeriodoIdWithDetails(periodoId).stream()
+                        .filter(c -> c.getPrograma() != null
+                                && c.getPrograma().getCodeProgram() != null
+                                && permitidos.contains(c.getPrograma().getCodeProgram().trim().toUpperCase()))
+                        .toList();
+            } else {
+                String programaFiltrar = (permitidos != null && !permitidos.isEmpty())
+                        ? permitidos.iterator().next()
+                        : alcance.codeProgram();
+                cursos = (programaFiltrar != null && !programaFiltrar.isBlank())
+                        ? cursoRepository.findByPeriodoIdAndCodeProgramWithDetails(periodoId, programaFiltrar.trim())
+                        : List.of();
+            }
         }
 
         List<CursoProgramacion> activos = new ArrayList<>();
@@ -381,6 +399,13 @@ public class ProgramacionService {
         objetivo.setEstado(CursoProgramacion.ESTADO_EXCLUIDO);
         objetivo.setGrupo(null);
         objetivo.setDocente(null);
+        objetivo.setDia(null);
+        objetivo.setHoraInicio(null);
+        objetivo.setHoraFin(null);
+        objetivo.setDia2(null);
+        objetivo.setHoraInicio2(null);
+        objetivo.setHoraFin2(null);
+        objetivo.setHorario(null);
         objetivo.setJustificacionExclusion(justificacion);
         objetivo.setExcluidoPor(correoSesion());
         objetivo.setFechaExclusion(Instant.now());
@@ -953,9 +978,8 @@ public class ProgramacionService {
                 // Validar que el docente no tenga otro curso activo en el mismo período y
                 // horario en sesión 1 o sesión 2
                 List<CursoProgramacion> cursosDocente = cursoRepository
-                        .findByPeriodoIdWithDetails(curso.getPeriodo().getId()).stream()
-                        .filter(c -> c.getDocente() != null && c.getDocente().getId().equals(idDocente)
-                                && !c.getId().equals(curso.getId()) && !c.isExcluido())
+                        .findByPeriodoIdAndDocenteId(curso.getPeriodo().getId(), idDocente).stream()
+                        .filter(c -> !c.getId().equals(curso.getId()) && !c.isExcluido())
                         .toList();
 
                 for (CursoProgramacion otro : cursosDocente) {
@@ -982,9 +1006,8 @@ public class ProgramacionService {
                 // Validar que el docente no tenga otro curso activo en el mismo período y
                 // horario
                 List<CursoProgramacion> cursosDocente = cursoRepository
-                        .findByPeriodoIdWithDetails(curso.getPeriodo().getId()).stream()
-                        .filter(c -> c.getDocente() != null && c.getDocente().getId().equals(idDocente)
-                                && !c.getId().equals(curso.getId()) && !c.isExcluido())
+                        .findByPeriodoIdAndDocenteId(curso.getPeriodo().getId(), idDocente).stream()
+                        .filter(c -> !c.getId().equals(curso.getId()) && !c.isExcluido())
                         .toList();
                 for (CursoProgramacion otro : cursosDocente) {
                     validarCruceHorario(dia, horaInicio, horaFin, otro, "el horario seleccionado");

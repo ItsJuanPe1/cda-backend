@@ -159,6 +159,27 @@ public class GoogleAuthService {
         return new IngresoRechazadoException(status, mensaje, motivo, correo);
     }
 
+    private volatile GoogleIdTokenVerifier cachedVerifier;
+
+    private GoogleIdTokenVerifier obtenerVerificador() {
+        if (this.tokenVerifier != null) {
+            return this.tokenVerifier;
+        }
+        GoogleIdTokenVerifier actual = this.cachedVerifier;
+        if (actual == null) {
+            synchronized (this) {
+                actual = this.cachedVerifier;
+                if (actual == null) {
+                    actual = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
+                            .setAudience(List.of(googleClientId))
+                            .build();
+                    this.cachedVerifier = actual;
+                }
+            }
+        }
+        return actual;
+    }
+
     private LoginResponse autenticar(String credential, Integer rolEsperado) {
         if (credential == null || credential.isBlank()) {
             throw rechazo(HttpStatus.UNAUTHORIZED, AuthConstants.ERROR_LOGIN_FALLIDO,
@@ -173,10 +194,7 @@ public class GoogleAuthService {
         // 1. Verificación del token de Google
         GoogleIdToken.Payload payload;
         try {
-            GoogleIdTokenVerifier verifier = this.tokenVerifier != null ? this.tokenVerifier
-                    : new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
-                      .setAudience(List.of(googleClientId))
-                      .build();
+            GoogleIdTokenVerifier verifier = obtenerVerificador();
 
             GoogleIdToken idToken = verifier.verify(credential);
             if (idToken == null) {
@@ -280,10 +298,6 @@ public class GoogleAuthService {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_COORDINADOR,
                     MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
-        if (usuarioOpt.isPresent() && Boolean.FALSE.equals(usuarioOpt.get().getActivo())) {
-            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA,
-                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, email);
-        }
 
         Optional<Coordinador> coordinadorOpt = coordinadorRepository.findByCorreoInstitucionalWithDetails(email);
         if (coordinadorOpt.isPresent()) {
@@ -354,10 +368,6 @@ public class GoogleAuthService {
     }
 
     private LoginResponse emitirSesionUsuarioRol(Usuario usuario, int rol, String roleAuthority, String shortAuthority) {
-        if (Boolean.FALSE.equals(usuario.getActivo())) {
-            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
-                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
-        }
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 
@@ -531,11 +541,6 @@ public class GoogleAuthService {
     }
 
     private LoginResponse emitirSesionAdmin(Usuario usuario) {
-        if (Boolean.FALSE.equals(usuario.getActivo())) {
-            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA,
-                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
-        }
-
         if (usuario.getRol() == null || usuario.getRol() != AuthConstants.ROL_ADMIN) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN,
                     MotivoRechazoIngreso.SIN_PERFIL_ROL, usuario.getEmailInstitucional());

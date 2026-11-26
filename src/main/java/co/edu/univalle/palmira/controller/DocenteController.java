@@ -83,7 +83,7 @@ public class DocenteController {
      * @return resumen detallado de los registros procesados
      */
     @PostMapping(value = "/evaluaciones/importar-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN', 'ROLE_COORDINADOR', 'COORDINADOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ADMIN')")
     @Operation(summary = "Importar calificaciones docentes desde archivo Excel")
     public ResponseEntity<EvaluacionDocenteDto.ImportacionExcelResponse> importarEvaluacionesExcel(
             @RequestParam("periodoId") Long periodoId,

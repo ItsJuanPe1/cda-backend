@@ -93,7 +93,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/docentes", "/api/docentes/evaluaciones")
                         .hasAnyAuthority(ADMIN_Y_COORDINADOR)
                         .requestMatchers(HttpMethod.POST, "/api/docentes/evaluaciones/importar-excel")
-                        .hasAnyAuthority(ADMIN_Y_COORDINADOR)
+                        .hasAnyAuthority(ADMIN)
                         .requestMatchers(HttpMethod.GET, "/api/docentes/*/evaluaciones").hasAnyAuthority(ADMIN)
                         .requestMatchers("/api/docentes/**").hasAnyAuthority(ADMIN)
 
@@ -123,7 +123,7 @@ public class SecurityConfig {
                         // 4. Asignaturas, mallas, programas, catálogos, cohortes y programación:
                         // Coordinadores solo pueden consultar (GET)
                         .requestMatchers(HttpMethod.GET, "/api/asignaturas/**", "/api/pensum/**",
-                                "/api/programas/**", "/api/catalogos/**",
+                                "/api/programas/**", "/api/catalogos/**", "/api/categorias", "/api/tipos-contrato",
                                 "/api/cohortes/**", "/api/programacion/**")
                         .hasAnyAuthority(ADMIN_Y_COORDINADOR)
 

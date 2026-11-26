@@ -97,11 +97,18 @@ public class RecordatorioDocenteService implements ManejadorNotificacion {
     public void alCambiarPlazo(PeriodoAcademico periodo, Instant inicioAnterior, Instant finAnterior) {
         Instant inicio = periodo.getPlazoDocenteInicio();
         Instant fin = periodo.getPlazoDocenteFin();
-        if (inicio.equals(inicioAnterior) && fin.equals(finAnterior)) {
+        if (java.util.Objects.equals(inicio, inicioAnterior) && java.util.Objects.equals(fin, finAnterior)) {
+            return;
+        }
+        Long periodoId = periodo.getId();
+        if (inicio == null || fin == null) {
+            reprogramarOCancelar(notificacionService.pendientes(periodoId, APERTURA_PLAZO_DOCENTE),
+                    Optional.empty(), MOTIVO_PLAZO_CERRADO);
+            reprogramarOCancelar(notificacionService.pendientes(periodoId, RECORDATORIO_CIERRE_DOCENTE),
+                    Optional.empty(), MOTIVO_PLAZO_CERRADO);
             return;
         }
         Instant ahora = clock.instant();
-        Long periodoId = periodo.getId();
 
         // Apertura: solo si el plazo aún no ha abierto. Si ya abrió (o ya se envió), basta el correo de
         // actualización: así no llegan dos correos a la vez (decisión del 2026-11-21).
@@ -136,7 +143,7 @@ public class RecordatorioDocenteService implements ManejadorNotificacion {
 
     /** Apertura en el inicio del plazo; de inmediato si ya abrió; nada si ya cerró. */
     static Optional<Instant> calcularApertura(Instant inicio, Instant fin, Instant ahora) {
-        if (!fin.isAfter(ahora)) {
+        if (inicio == null || fin == null || !fin.isAfter(ahora)) {
             return Optional.empty();
         }
         return Optional.of(max(inicio, ahora));
@@ -182,7 +189,7 @@ public class RecordatorioDocenteService implements ManejadorNotificacion {
         }
         PeriodoAcademico p = periodo.get();
         if (notificacion.getTipoEvento() != ACTUALIZACION_PLAZO_DOCENTE
-                && !p.getPlazoDocenteFin().isAfter(clock.instant())) {
+                && (p.getPlazoDocenteFin() == null || !p.getPlazoDocenteFin().isAfter(clock.instant()))) {
             return false;
         }
         return true;

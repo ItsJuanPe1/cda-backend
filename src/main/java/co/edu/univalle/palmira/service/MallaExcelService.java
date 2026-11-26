@@ -71,7 +71,10 @@ public class MallaExcelService {
         String codigo = codeProgram == null ? "" : codeProgram.trim().toUpperCase();
 
         AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
-        if (!alcance.admin() && !alcance.codeProgram().equalsIgnoreCase(codigo)) {
+        boolean autorizado = alcance.admin()
+                || (alcance.codeProgram() != null && alcance.codeProgram().equalsIgnoreCase(codigo))
+                || accesoProgramaService.tieneAccesoAPrograma(codigo);
+        if (!autorizado) {
             throw new AccessDeniedException(MSG_FUERA_DE_PROGRAMA);
         }
 

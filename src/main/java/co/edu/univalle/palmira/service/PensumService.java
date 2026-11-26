@@ -14,7 +14,7 @@ import co.edu.univalle.palmira.model.enums.TipoIngreso;
 import co.edu.univalle.palmira.repository.AsignaturaRepository;
 import co.edu.univalle.palmira.repository.PensumAcademicoRepository;
 import co.edu.univalle.palmira.repository.ProgramaRepository;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,7 +30,6 @@ import java.util.stream.Collectors;
  * </p>
  */
 @Service
-@RequiredArgsConstructor
 public class PensumService {
 
     private static final String META_PREFIX = "META|";
@@ -38,6 +37,30 @@ public class PensumService {
     private final PensumAcademicoRepository pensumRepository;
     private final ProgramaRepository programaRepository;
     private final AsignaturaRepository asignaturaRepository;
+    private final AccesoProgramaService accesoProgramaService;
+
+    @Autowired
+    public PensumService(PensumAcademicoRepository pensumRepository,
+                         ProgramaRepository programaRepository,
+                         AsignaturaRepository asignaturaRepository,
+                         AccesoProgramaService accesoProgramaService) {
+        this.pensumRepository = pensumRepository;
+        this.programaRepository = programaRepository;
+        this.asignaturaRepository = asignaturaRepository;
+        this.accesoProgramaService = accesoProgramaService;
+    }
+
+    PensumService(PensumAcademicoRepository pensumRepository,
+                  ProgramaRepository programaRepository,
+                  AsignaturaRepository asignaturaRepository) {
+        this(pensumRepository, programaRepository, asignaturaRepository, null);
+    }
+
+    private void exigirAccesoPrograma(String codeProgram) {
+        if (accesoProgramaService != null) {
+            accesoProgramaService.exigirProgramaPropio(codeProgram);
+        }
+    }
 
     @Transactional(readOnly = true)
     public List<PensumItemDto.Response> getAll() {
@@ -63,6 +86,7 @@ public class PensumService {
     @Transactional
     public PensumItemDto.Response addCourseToPensum(PensumItemDto.AddRequest request) {
         String progCode = request.codeProgram().trim().toUpperCase();
+        exigirAccesoPrograma(progCode);
         String courseCode = request.codeCourse().trim().toUpperCase();
         int semestre = request.semestre();
 
@@ -108,6 +132,7 @@ public class PensumService {
     @Transactional
     public PensumItemDto.Response updateCourseSemester(PensumItemDto.UpdateSemesterRequest request) {
         String progCode = request.codeProgram().trim().toUpperCase();
+        exigirAccesoPrograma(progCode);
         String courseCode = request.codeCourse().trim().toUpperCase();
         int semestre = request.semestre();
 
@@ -131,6 +156,7 @@ public class PensumService {
     @Transactional
     public PensumItemDto.Response cambiarEstado(String codeProgram, String codeCourse, Boolean activo) {
         String progCode = codeProgram.trim().toUpperCase();
+        exigirAccesoPrograma(progCode);
         String courseCode = codeCourse.trim().toUpperCase();
         int version = currentVersion(progCode);
         PensumId id = new PensumId(progCode, courseCode, version);
@@ -147,6 +173,7 @@ public class PensumService {
     @Transactional
     public void removeCourseFromPensum(String codeProgram, String codeCourse) {
         String progCode = codeProgram.trim().toUpperCase();
+        exigirAccesoPrograma(progCode);
         String courseCode = codeCourse.trim().toUpperCase();
         int version = currentVersion(progCode);
         PensumId id = new PensumId(progCode, courseCode, version);
@@ -163,12 +190,16 @@ public class PensumService {
     @Transactional
     public List<PensumItemDto.Response> saveVersion(PensumItemDto.SaveRequest request) {
         String sourceCode = normalize(request.codeProgram());
+        exigirAccesoPrograma(sourceCode);
         Programa sourcePrograma = programaRepository.findById(sourceCode)
                 .orElseThrow(() -> new ResourceNotFoundException("Programa no encontrado: " + sourceCode));
 
         validarSolicitudMalla(request);
         Programa programa = resolverProgramaPorJornada(sourcePrograma, request);
         String programCode = normalize(programa.getCodeProgram());
+        if (!programCode.equalsIgnoreCase(sourceCode)) {
+            exigirAccesoPrograma(programCode);
+        }
         actualizarDatosPrograma(programa, request);
 
         List<PensumAcademico> lockedRows = pensumRepository.lockByProgram(programCode);
@@ -289,6 +320,7 @@ public class PensumService {
     @Transactional
     public List<PensumItemDto.Response> updateActiveVersion(String codeProgram, PensumItemDto.SaveRequest request) {
         String programCode = normalize(codeProgram);
+        exigirAccesoPrograma(programCode);
         if (!programCode.equalsIgnoreCase(normalize(request.codeProgram()))) {
             throw new BadRequestException("El programa de la ruta no coincide con el cuerpo de la solicitud");
         }
@@ -443,6 +475,7 @@ public class PensumService {
     @Transactional
     public void deactivateCurrent(String codeProgram) {
         String normalized = normalize(codeProgram);
+        exigirAccesoPrograma(normalized);
         List<PensumAcademico> rows = pensumRepository.lockByProgram(normalized).stream()
                 .filter(row -> Boolean.TRUE.equals(row.getVigente()))
                 .toList();
@@ -459,6 +492,7 @@ public class PensumService {
     @Transactional
     public List<PensumItemDto.Response> reactivate(String codeProgram, Integer version) {
         String normalized = normalize(codeProgram);
+        exigirAccesoPrograma(normalized);
         List<PensumAcademico> allRows = pensumRepository.lockByProgram(normalized);
         List<PensumAcademico> target = allRows.stream()
                 .filter(row -> row.getId().getVersion().equals(version))

@@ -5,6 +5,7 @@ import co.edu.univalle.palmira.service.DisponibilidadDocenteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.List;
  * El ID de la ruta siempre corresponde a docentes.id, no a usuarios.id.
  */
 @RestController
+@Validated
 @RequestMapping("/api/admin/docentes/{docenteId}/disponibilidades")
 @RequiredArgsConstructor
 public class AdminDisponibilidadDocenteController {

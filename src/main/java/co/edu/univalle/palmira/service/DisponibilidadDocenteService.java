@@ -174,12 +174,14 @@ public class DisponibilidadDocenteService {
         }
 
         List<DisponibilidadDocenteDto.Request> lista = requests == null ? List.of() : requests;
+        for (DisponibilidadDocenteDto.Request req : lista) {
+            validarHorario(req);
+        }
         for (int i = 0; i < lista.size(); i++) {
             DisponibilidadDocenteDto.Request req = lista.get(i);
-            validarHorario(req);
             for (int j = i + 1; j < lista.size(); j++) {
                 DisponibilidadDocenteDto.Request otro = lista.get(j);
-                if (otro != null && req.dia().equals(otro.dia())
+                if (req.dia().equals(otro.dia())
                         && req.horaInicio().isBefore(otro.horaFin())
                         && req.horaFin().isAfter(otro.horaInicio())) {
                     throw new BadRequestException("El horario se cruza con otro intervalo enviado ("

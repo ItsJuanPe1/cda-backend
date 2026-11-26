@@ -86,6 +86,28 @@ public class AccesoProgramaService {
                 .anyMatch(c -> c.getPrograma().getCodeProgram().equalsIgnoreCase(codeProgram));
     }
 
+    /** Códigos (en mayúsculas) de todos los programas activos que coordina el usuario autenticado (vacío para admin). */
+    @Transactional(readOnly = true)
+    public Set<String> programasPermitidos() {
+        Alcance alcance = alcanceActual();
+        if (alcance.admin()) {
+            return Set.of();
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String correo = auth != null && auth.getPrincipal() instanceof Jwt jwt ? jwt.getClaimAsString("email") : null;
+        if (correo != null && !correo.isBlank()) {
+            Set<String> codigos = buscarCoordinacionesActivas(correo).stream()
+                    .map(c -> c.getPrograma().getCodeProgram().trim().toUpperCase())
+                    .collect(Collectors.toSet());
+            if (!codigos.isEmpty()) {
+                return codigos;
+            }
+        }
+        return alcance.codeProgram() != null
+                ? Set.of(alcance.codeProgram().trim().toUpperCase())
+                : Set.of();
+    }
+
     /** El admin pasa siempre; el coordinador solo si el programa es uno de los suyos. */
     @Transactional(readOnly = true)
     public void exigirProgramaPropio(String codeProgram) {

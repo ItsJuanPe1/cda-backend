@@ -65,13 +65,22 @@ public class CargaDocenteService {
     public CargaDocenteDto.Detalle consultar(Long docenteId, Long periodoId) {
         validarExistencia(docenteId, periodoId);
         AccesoProgramaService.Alcance alcance = accesoProgramaService.alcanceActual();
+        java.util.Set<String> permitidos = alcance.admin() ? java.util.Set.of() : accesoProgramaService.programasPermitidos();
 
         List<CursoProgramacion> cursos = cursoRepository.findByDocenteYPeriodo(docenteId, periodoId);
         int total = cursos.stream().mapToInt(CargaDocenteService::horasDe).sum();
 
         List<CargaDocenteDto.CursoCarga> visibles = cursos.stream()
-                .filter(c -> alcance.admin()
-                        || c.getPrograma().getCodeProgram().equalsIgnoreCase(alcance.codeProgram()))
+                .filter(c -> {
+                    if (alcance.admin()) {
+                        return true;
+                    }
+                    String cod = c.getPrograma().getCodeProgram();
+                    if (permitidos != null && !permitidos.isEmpty()) {
+                        return cod != null && permitidos.contains(cod.trim().toUpperCase());
+                    }
+                    return alcance.codeProgram() != null && alcance.codeProgram().equalsIgnoreCase(cod);
+                })
                 .map(CargaDocenteService::toCursoCarga)
                 .toList();
         int horasVisibles = visibles.stream().mapToInt(CargaDocenteDto.CursoCarga::horas).sum();

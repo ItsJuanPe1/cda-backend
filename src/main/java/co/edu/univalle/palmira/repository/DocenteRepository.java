@@ -68,9 +68,6 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
             SELECT d.id FROM Docente d
             WHERE d.estado = true
               AND d.correoInstitucional IS NOT NULL AND TRIM(d.correoInstitucional) <> ''
-              AND NOT EXISTS (SELECT u FROM Usuario u
-                              WHERE LOWER(u.emailInstitucional) = LOWER(d.correoInstitucional)
-                                AND u.activo = false)
             ORDER BY d.id
             """)
     List<Long> findIdsDestinatariosNotificacion();
@@ -81,9 +78,6 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
             WHERE d.id = :id
               AND d.estado = true
               AND d.correoInstitucional IS NOT NULL AND TRIM(d.correoInstitucional) <> ''
-              AND NOT EXISTS (SELECT u FROM Usuario u
-                              WHERE LOWER(u.emailInstitucional) = LOWER(d.correoInstitucional)
-                                AND u.activo = false)
             """)
     Optional<Docente> findDestinatarioNotificacion(@Param("id") Long id);
 }

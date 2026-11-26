@@ -96,7 +96,6 @@ class GoogleAuthServiceTest {
                 .emailInstitucional("admin.sistema@correounivalle.edu.co")
                 .emailPersonal("admin@gmail.com")
                 .rol(AuthConstants.ROL_ADMIN)
-                .activo(true)
                 .build();
 
         when(usuarioRepository.buscarPorCorreoInstitucional("admin.sistema@correounivalle.edu.co"))
@@ -178,7 +177,7 @@ class GoogleAuthServiceTest {
     }
 
     @Test
-    @DisplayName("Criterio 2.3: Cuenta desactivada de administrador")
+    @DisplayName("Criterio 2.3: Docente con estado inactivo no puede iniciar sesión")
     void login_Error_CuentaDesactivada() throws GeneralSecurityException, IOException {
         String tokenStr = "deactivated-google-credential";
         GoogleIdToken.Payload payload = new GoogleIdToken.Payload();
@@ -188,24 +187,31 @@ class GoogleAuthServiceTest {
         when(tokenVerifier.verify(tokenStr)).thenReturn(googleIdToken);
         when(googleIdToken.getPayload()).thenReturn(payload);
 
-        Usuario usuarioInactivo = Usuario.builder()
+        Usuario usuarioDocente = Usuario.builder()
                 .id(2)
                 .nombre("Inactivo")
                 .apellido("Usuario")
                 .emailInstitucional("inactivo@correounivalle.edu.co")
-                .rol(AuthConstants.ROL_ADMIN)
-                .activo(false)
+                .rol(AuthConstants.ROL_DOCENTE)
                 .build();
 
         when(usuarioRepository.buscarPorCorreoInstitucional("inactivo@correounivalle.edu.co"))
-                .thenReturn(Optional.of(usuarioInactivo));
+                .thenReturn(Optional.of(usuarioDocente));
+        when(docenteRepository.findByCorreoInstitucionalWithDetails("inactivo@correounivalle.edu.co"))
+                .thenReturn(Optional.of(Docente.builder()
+                        .id(20L)
+                        .nombres("Inactivo")
+                        .apellidos("Usuario")
+                        .correoInstitucional("inactivo@correounivalle.edu.co")
+                        .estado(false)
+                        .build()));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->
                 googleAuthService.login(tokenStr)
         );
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
-        assertEquals(AuthConstants.ERROR_CUENTA_DESACTIVADA, ex.getReason());
+        assertEquals(AuthConstants.ERROR_PERFIL_DESACTIVADO, ex.getReason());
     }
 
     @Test
@@ -239,7 +245,6 @@ class GoogleAuthServiceTest {
                 .apellido("Prueba")
                 .emailInstitucional("docente@correounivalle.edu.co")
                 .rol(AuthConstants.ROL_DOCENTE) // Rol 3 no es admin
-                .activo(true)
                 .build();
 
         when(usuarioRepository.buscarPorCorreoInstitucional("docente@correounivalle.edu.co"))
@@ -328,7 +333,7 @@ class GoogleAuthServiceTest {
         when(googleIdToken.getPayload()).thenReturn(payload);
         Usuario coordinador = Usuario.builder()
                 .id(25).nombre("Ana").apellido("López").emailInstitucional(email)
-                .rol(AuthConstants.ROL_COORDINADOR).activo(true).build();
+                .rol(AuthConstants.ROL_COORDINADOR).build();
         when(usuarioRepository.buscarPorCorreoInstitucional(email)).thenReturn(Optional.of(coordinador));
         // Simula que también existe el perfil académico, pero ese registro no cambia el rol de la sesión.
         lenient().when(docenteRepository.findByCorreoInstitucionalWithDetails(email))
@@ -357,7 +362,7 @@ class GoogleAuthServiceTest {
         when(googleIdToken.getPayload()).thenReturn(payload);
         Usuario docente = Usuario.builder()
                 .id(26).nombre("Luis").apellido("Pérez").emailInstitucional(email)
-                .rol(AuthConstants.ROL_DOCENTE).activo(true).build();
+                .rol(AuthConstants.ROL_DOCENTE).build();
         when(usuarioRepository.buscarPorCorreoInstitucional(email)).thenReturn(Optional.of(docente));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () ->

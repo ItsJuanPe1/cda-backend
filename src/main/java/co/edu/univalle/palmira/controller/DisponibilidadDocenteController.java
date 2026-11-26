@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ import java.util.Map;
  * </p>
  */
 @RestController
+@Validated
 @RequestMapping("/api/disponibilidades")
 @Tag(name = "Disponibilidad Docente", description = "Endpoints para el registro y consulta de franjas horarias de docentes")
 public class DisponibilidadDocenteController {

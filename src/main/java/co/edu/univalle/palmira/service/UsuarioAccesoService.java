@@ -61,21 +61,16 @@ public class UsuarioAccesoService {
         usuario.setEmailInstitucional(email);
         usuario.setEmailPersonal(normalizar(correoPersonal)); // opcional: sin correo personal queda vacío
         usuario.setCelular(soloDigitos(celular));
-        usuario.setActivo(activo);
         return usuarioRepository.save(usuario);
     }
 
-    /** Activa o desactiva el usuario de un perfil (si el perfil no tiene usuario todavía, no hace nada). */
+    /**
+     * Conservado por compatibilidad; el estado activo/inactivo se gestiona en {@code docentes.estado}
+     * y {@code coordinadores.activo} (la columna {@code usuarios.activo} fue eliminada en V47).
+     */
     @Transactional
     public void cambiarEstado(String correoInstitucional, boolean activo) {
-        String email = normalizar(correoInstitucional);
-        if (email == null) {
-            return;
-        }
-        usuarioRepository.buscarPorCorreoInstitucional(email).ifPresent(u -> {
-            u.setActivo(activo);
-            usuarioRepository.save(u);
-        });
+        // Sin efecto en usuarios: el estado vive en el perfil correspondiente.
     }
 
     /**

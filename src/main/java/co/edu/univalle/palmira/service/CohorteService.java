@@ -195,7 +195,9 @@ public class CohorteService {
                     int siguienteSemestre = anterior.getSemestre() + 1;
 
                     if (siguienteSemestre <= duracionMax) {
-                        boolean enExtincion = !anterior.getNumeroResolucion().equalsIgnoreCase(resolucionVigente);
+                        String resAnterior = anterior.getNumeroResolucion();
+                        boolean enExtincion = resolucionVigente != null && !resolucionVigente.isBlank()
+                                && (resAnterior == null || !resAnterior.equalsIgnoreCase(resolucionVigente));
                         itemsPropuestos.add(CohorteDto.PropuestaCohorteItem.builder()
                                 .semestre(siguienteSemestre)
                                 .jornada(anterior.getJornada())

@@ -264,8 +264,9 @@ public class DocenteService {
         PeriodoAcademico actual = periodoAcademicoRepository.findById(periodoId)
                 .orElseThrow(() -> new BadRequestException("El período académico no existe"));
 
-        List<EvaluacionDocente> evaluaciones = evaluacionDocenteRepository
-                .findAllByAsignaturaBeforePeriodo(codeCourse, actual.getFechaInicioSemestre());
+        List<EvaluacionDocente> evaluaciones = actual.getFechaInicioSemestre() != null
+                ? evaluacionDocenteRepository.findAllByAsignaturaBeforePeriodo(codeCourse, actual.getFechaInicioSemestre())
+                : List.of();
         if (evaluaciones.isEmpty()) {
             evaluaciones = evaluacionDocenteRepository
                     .findAllByPeriodoIdAndAsignaturaCodeCourse(periodoId, codeCourse);
@@ -289,6 +290,14 @@ public class DocenteService {
         if (anterior == null) {
             return List.of();
         }
+        Map<String, EvaluacionDocente> evaluacionesPorCurso = evaluacionDocenteRepository
+                .findAllByDocenteIdAndPeriodoId(docenteId, anterior.getId())
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ev -> ev.getAsignatura().getCodeCourse(),
+                        ev -> ev,
+                        (first, ignored) -> first));
+
         return cursoProgramacionRepository.findByPeriodoIdAndDocenteId(anterior.getId(), docenteId)
                 .stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -298,10 +307,7 @@ public class DocenteService {
                 .values()
                 .stream()
                 .map(curso -> {
-                    EvaluacionDocente evaluacion = evaluacionDocenteRepository
-                            .findByDocenteIdAndAsignaturaCodeCourseAndPeriodoId(
-                                    docenteId, curso.getAsignatura().getCodeCourse(), anterior.getId())
-                            .orElse(null);
+                    EvaluacionDocente evaluacion = evaluacionesPorCurso.get(curso.getAsignatura().getCodeCourse());
                     return new EvaluacionDocenteDto.Curso(
                             docenteId,
                             anterior.getId(),
@@ -364,6 +370,9 @@ public class DocenteService {
     private PeriodoAcademico buscarPeriodoAnterior(Long periodoId) {
         PeriodoAcademico actual = periodoAcademicoRepository.findById(periodoId)
                 .orElseThrow(() -> new BadRequestException("El período académico no existe"));
+        if (actual.getFechaInicioSemestre() == null) {
+            return null;
+        }
         return periodoAcademicoRepository.findAllByOrderByFechaInicioSemestreDesc()
                 .stream()
                 .filter(p -> p.getFechaInicioSemestre() != null
