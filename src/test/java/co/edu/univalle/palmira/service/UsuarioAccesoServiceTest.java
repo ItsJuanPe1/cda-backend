@@ -38,7 +38,6 @@ class UsuarioAccesoServiceTest {
         assertEquals("ana@gmail.com", u.getValue().getEmailPersonal());
         assertEquals("3001234567", u.getValue().getCelular());
         assertEquals(3, u.getValue().getRol());
-        assertTrue(u.getValue().getActivo());
     }
 
     @Test
@@ -76,7 +75,7 @@ class UsuarioAccesoServiceTest {
     @Test
     void siYaExiste_laActualiza_yNoCreaOtra_sinCambiarElRol() {
         Usuario existente = Usuario.builder().id(7).nombre("Ana").apellido("Pérez").rol(AuthConstants.ROL_DOCENTE)
-                .emailInstitucional("ana@correounivalle.edu.co").emailPersonal("a@x.com").activo(true).build();
+                .emailInstitucional("ana@correounivalle.edu.co").emailPersonal("a@x.com").build();
         when(repo.buscarPorCorreoInstitucional("ana@correounivalle.edu.co")).thenReturn(Optional.of(existente));
 
         service.sincronizar(null, "Ana María", "Pérez Gómez", "ana@correounivalle.edu.co", "nuevo@x.com",
@@ -92,7 +91,7 @@ class UsuarioAccesoServiceTest {
     @Test
     void siCambiaElCorreoInstitucional_siguePorElCorreoAnterior() {
         Usuario existente = Usuario.builder().id(7).nombre("Ana").apellido("Pérez").rol(AuthConstants.ROL_DOCENTE)
-                .emailInstitucional("viejo@correounivalle.edu.co").activo(true).build();
+                .emailInstitucional("viejo@correounivalle.edu.co").build();
         when(repo.buscarPorCorreoInstitucional("viejo@correounivalle.edu.co")).thenReturn(Optional.of(existente));
 
         service.sincronizar("viejo@correounivalle.edu.co", "Ana", "Pérez", "nuevo@correounivalle.edu.co", null, null,
@@ -105,7 +104,7 @@ class UsuarioAccesoServiceTest {
     @Test
     void quitarElCorreoPersonal_loBorraDeUsuarios() {
         Usuario existente = Usuario.builder().id(7).nombre("Ana").apellido("Pérez").rol(AuthConstants.ROL_DOCENTE)
-                .emailInstitucional("ana@correounivalle.edu.co").emailPersonal("a@x.com").activo(true).build();
+                .emailInstitucional("ana@correounivalle.edu.co").emailPersonal("a@x.com").build();
         when(repo.buscarPorCorreoInstitucional("ana@correounivalle.edu.co")).thenReturn(Optional.of(existente));
         service.sincronizar(null, "Ana", "Pérez", "ana@correounivalle.edu.co", "", null,
                 AuthConstants.ROL_DOCENTE, true);
@@ -113,15 +112,9 @@ class UsuarioAccesoServiceTest {
     }
 
     @Test
-    void cambiarEstado_desactivaYReactivaLaFila() {
-        Usuario u = Usuario.builder().id(1).rol(AuthConstants.ROL_COORDINADOR)
-                .emailInstitucional("c@correounivalle.edu.co").activo(true).build();
-        when(repo.buscarPorCorreoInstitucional("c@correounivalle.edu.co")).thenReturn(Optional.of(u));
-
-        service.cambiarEstado("C@correounivalle.edu.co", false);
-        assertFalse(u.getActivo());
-        service.cambiarEstado("c@correounivalle.edu.co", true);
-        assertTrue(u.getActivo());
+    void cambiarEstado_noModificaUsuariosTrasV47() {
+        service.cambiarEstado("c@correounivalle.edu.co", false);
+        verify(repo, never()).save(any());
     }
 
     @Test

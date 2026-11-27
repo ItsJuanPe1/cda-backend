@@ -2,11 +2,15 @@ package co.edu.univalle.palmira.controller;
 
 import co.edu.univalle.palmira.dto.PeriodoAcademicoDto;
 import co.edu.univalle.palmira.service.PeriodoAcademicoService;
+import co.edu.univalle.palmira.service.PeriodoCalendarioPdfService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -15,6 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PeriodoAcademicoController {
     private final PeriodoAcademicoService service;
+    private final PeriodoCalendarioPdfService pdfService;
 
     @GetMapping
     public List<PeriodoAcademicoDto.Response> listar() { return service.listar(); }
@@ -45,5 +50,18 @@ public class PeriodoAcademicoController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void desactivar(@PathVariable("id") Long id) {
         service.desactivar(id);
+    }
+
+    @PostMapping(value = "/extraer-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public PeriodoAcademicoDto.PdfPreviewResponse extraerDesdePdf(@RequestParam("file") MultipartFile file) {
+        return pdfService.extraerDesdeArchivo(file);
+    }
+
+    @PostMapping("/extraer-pdf-url")
+    @PreAuthorize("hasRole('ADMIN')")
+    public PeriodoAcademicoDto.PdfPreviewResponse extraerDesdeUrl(
+            @Valid @RequestBody PeriodoAcademicoDto.PdfUrlRequest request) {
+        return pdfService.extraerDesdeUrl(request.url());
     }
 }

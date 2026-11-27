@@ -634,16 +634,17 @@ public class ProgramacionService {
                         prog.getCodeProgram(), cohorte.getSemestre());
             }
 
-            // Excluir electivas profesionales
+            if (materiasMalla.isEmpty() && estricta) {
+                throw new BadRequestException("La cohorte de semestre " + cohorte.getSemestre() + " del programa " +
+                        prog.getNameProgram() + " con resolución '" + cohorte.getNumeroResolucion()
+                        + "' no tiene asignaturas registradas en la malla.");
+            }
+
+            // Excluir electivas profesionales (un semestre puede estar compuesto solo por electivas,
+            // que luego programa manualmente el coordinador).
             List<PensumAcademico> obligatorias = materiasMalla.stream()
                     .filter(p -> p.getIsElective() == null || !p.getIsElective())
                     .collect(Collectors.toList());
-
-            if (obligatorias.isEmpty() && estricta) {
-                throw new BadRequestException("La cohorte de semestre " + cohorte.getSemestre() + " del programa " +
-                        prog.getNameProgram() + " con resolución '" + cohorte.getNumeroResolucion()
-                        + "' no tiene asignaturas obligatorias en la malla.");
-            }
 
             for (PensumAcademico pensum : obligatorias) {
                 // Los espacios «Electiva Profesional N» (y la complementaria) son el esqueleto

@@ -38,4 +38,28 @@ public final class PeriodoAcademicoDto {
             Instant plazoCoordinadorInicio, Instant plazoCoordinadorFin,
             String enlaceResolucion, boolean vigente, String estado, long version
     ) {}
+
+    public record PdfUrlRequest(
+            @NotBlank(message = "El enlace del PDF es obligatorio")
+            @Size(max = 2048, message = "El enlace es demasiado largo")
+            String url
+    ) {}
+
+    public record PdfPreviewResponse(
+            String nombre,
+            String numeroResolucion,
+            LocalDate fechaResolucion,
+            LocalDate fechaInicioSemestre,
+            LocalDate fechaFinSemestre,
+            LocalDate fechaAdicionInicio,
+            LocalDate fechaAdicionFin,
+            LocalDate fechaCancelacionInicio,
+            LocalDate fechaCancelacionFin,
+            Instant plazoDocenteInicio,
+            Instant plazoDocenteFin,
+            Instant plazoCoordinadorInicio,
+            Instant plazoCoordinadorFin,
+            String enlaceResolucion,
+            java.util.List<String> advertencias
+    ) {}
 }

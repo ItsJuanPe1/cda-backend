@@ -79,22 +79,18 @@ class NotificacionesPostgresIT {
     }
 
     @Test
-    @DisplayName("Criterio 5 y HU-030: solo reciben los docentes activos cuya cuenta, si existe, también está activa")
+    @DisplayName("Criterio 5 y HU-030: solo reciben los docentes activos (estado en docentes tras V47)")
     void criterio5Destinatarios() {
         Docente activo = docente("IT0381", "it.activo.038@correounivalle.edu.co", true);
         Docente inactivo = docente("IT0382", "it.inactivo.038@correounivalle.edu.co", false);
-        Docente cuentaInactiva = docente("IT0383", "it.cuenta.038@correounivalle.edu.co", true);
-        usuarioRepository.save(Usuario.builder().nombre("Prueba").apellido("IT")
-                .emailInstitucional("IT.CUENTA.038@correounivalle.edu.co").rol(3).activo(false).build());
         entityManager.flush();
 
         List<Long> ids = docenteRepository.findIdsDestinatariosNotificacion();
 
         assertTrue(ids.contains(activo.getId()));
         assertFalse(ids.contains(inactivo.getId()));
-        assertFalse(ids.contains(cuentaInactiva.getId()));
         assertTrue(docenteRepository.findDestinatarioNotificacion(activo.getId()).isPresent());
-        assertTrue(docenteRepository.findDestinatarioNotificacion(cuentaInactiva.getId()).isEmpty());
+        assertTrue(docenteRepository.findDestinatarioNotificacion(inactivo.getId()).isEmpty());
     }
 
     @Test

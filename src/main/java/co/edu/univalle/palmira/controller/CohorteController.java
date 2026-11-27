@@ -39,6 +39,14 @@ public class CohorteController {
         return ResponseEntity.ok(cohorteService.guardarCohortes(periodoId, codeProgram, request.getCohortes()));
     }
 
+    @PostMapping("/lote")
+    @Operation(summary = "Guardar o actualizar cohortes de múltiples programas en un período en una sola transacción")
+    public ResponseEntity<List<CohorteDto.Response>> guardarCohortesLote(
+            @RequestParam("periodoId") Long periodoId,
+            @Valid @RequestBody CohorteDto.SaveBulkRequest request) {
+        return ResponseEntity.ok(cohorteService.guardarCohortesLote(periodoId, request.getProgramas()));
+    }
+
     @GetMapping("/propuesta")
     @Operation(summary = "Obtener propuesta automática de cohortes para el siguiente período")
     public ResponseEntity<List<CohorteDto.PropuestaResponse>> proponerSiguientePeriodo(
