@@ -60,17 +60,13 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
     boolean existsByCodigo(String codigo);
 
     /**
-     * HU-038 criterio 5 y HU-030: docentes que reciben correos. Perfil docente activo, con correo
-     * institucional y, si tienen cuenta en usuarios (mismo correo), con la cuenta activa. Incluye
-     * administradores y coordinadores con perfil docente.
+     * HU-038 criterio 5 y HU-030: docentes que reciben correos. Perfil docente activo con correo
+     * institucional (el estado vive en docentes.estado tras V47).
      */
     @Query("""
             SELECT d.id FROM Docente d
             WHERE d.estado = true
               AND d.correoInstitucional IS NOT NULL AND TRIM(d.correoInstitucional) <> ''
-              AND NOT EXISTS (SELECT u FROM Usuario u
-                              WHERE LOWER(u.emailInstitucional) = LOWER(d.correoInstitucional)
-                                AND u.activo = false)
             ORDER BY d.id
             """)
     List<Long> findIdsDestinatariosNotificacion();
@@ -81,9 +77,6 @@ public interface DocenteRepository extends JpaRepository<Docente, Long> {
             WHERE d.id = :id
               AND d.estado = true
               AND d.correoInstitucional IS NOT NULL AND TRIM(d.correoInstitucional) <> ''
-              AND NOT EXISTS (SELECT u FROM Usuario u
-                              WHERE LOWER(u.emailInstitucional) = LOWER(d.correoInstitucional)
-                                AND u.activo = false)
             """)
     Optional<Docente> findDestinatarioNotificacion(@Param("id") Long id);
 }

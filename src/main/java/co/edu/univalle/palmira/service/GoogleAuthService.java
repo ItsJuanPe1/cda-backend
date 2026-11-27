@@ -36,11 +36,15 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Servicio de autenticación institucional basado en Google OAuth2 y emisión de JWT.
+ * Servicio de autenticación institucional basado en Google OAuth2 y emisión de
+ * JWT.
  * <p>
- * Verifica la validez del token ID de Google, valida el dominio @correounivalle.edu.co,
- * comprueba la existencia y estado activo del usuario en la base de datos (según roles:
- * ADMIN, COORDINADOR, DOCENTE), genera el token JWT con los roles (authorities) y registra
+ * Verifica la validez del token ID de Google, valida el
+ * dominio @correounivalle.edu.co,
+ * comprueba la existencia y estado activo del usuario en la base de datos
+ * (según roles:
+ * ADMIN, COORDINADOR, DOCENTE), genera el token JWT con los roles (authorities)
+ * y registra
  * los intentos aceptados o rechazados en la bitácora de auditoría.
  * </p>
  */
@@ -55,17 +59,20 @@ public class GoogleAuthService {
     private final String googleClientId;
     private final long expirationMinutes;
     private GoogleIdTokenVerifier tokenVerifier;
-    /** HU-058. Se inyecta en producción; los constructores de prueba antiguos lo dejan en null. */
+    /**
+     * HU-058. Se inyecta en producción; los constructores de prueba antiguos lo
+     * dejan en null.
+     */
     private BitacoraService bitacoraService;
 
     @Autowired
     public GoogleAuthService(UsuarioRepository usuarioRepository,
-                             CoordinadorRepository coordinadorRepository,
-                             DocenteRepository docenteRepository,
-                             JwtEncoder jwtEncoder,
-                             BitacoraService bitacoraService,
-                             @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
-                             @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
+            CoordinadorRepository coordinadorRepository,
+            DocenteRepository docenteRepository,
+            JwtEncoder jwtEncoder,
+            BitacoraService bitacoraService,
+            @Value("${auth.google.client-id:699612946028-er8cpcrvspuh60933qvur66dqi07jgn4.apps.googleusercontent.com}") String googleClientId,
+            @Value("${auth.jwt.expiration-minutes:60}") long expirationMinutes) {
         this.usuarioRepository = usuarioRepository;
         this.coordinadorRepository = coordinadorRepository;
         this.docenteRepository = docenteRepository;
@@ -78,12 +85,12 @@ public class GoogleAuthService {
     }
 
     public GoogleAuthService(UsuarioRepository usuarioRepository,
-                             CoordinadorRepository coordinadorRepository,
-                             DocenteRepository docenteRepository,
-                             JwtEncoder jwtEncoder,
-                             String googleClientId,
-                             long expirationMinutes,
-                             GoogleIdTokenVerifier tokenVerifier) {
+            CoordinadorRepository coordinadorRepository,
+            DocenteRepository docenteRepository,
+            JwtEncoder jwtEncoder,
+            String googleClientId,
+            long expirationMinutes,
+            GoogleIdTokenVerifier tokenVerifier) {
         this.usuarioRepository = usuarioRepository;
         this.coordinadorRepository = coordinadorRepository;
         this.docenteRepository = docenteRepository;
@@ -97,10 +104,10 @@ public class GoogleAuthService {
 
     // Sobrecarga para mantener retrocompatibilidad con tests existentes
     public GoogleAuthService(UsuarioRepository usuarioRepository,
-                             JwtEncoder jwtEncoder,
-                             String googleClientId,
-                             long expirationMinutes,
-                             GoogleIdTokenVerifier tokenVerifier) {
+            JwtEncoder jwtEncoder,
+            String googleClientId,
+            long expirationMinutes,
+            GoogleIdTokenVerifier tokenVerifier) {
         this(usuarioRepository, null, null, jwtEncoder, googleClientId, expirationMinutes, tokenVerifier);
     }
 
@@ -124,8 +131,10 @@ public class GoogleAuthService {
     }
 
     /**
-     * HU-058 criterio 2: todo intento de ingreso queda en la bitácora, aceptado o rechazado.
-     * No se registra el token. Si no se puede registrar un ingreso aceptado, no se emite la sesión.
+     * HU-058 criterio 2: todo intento de ingreso queda en la bitácora, aceptado o
+     * rechazado.
+     * No se registra el token. Si no se puede registrar un ingreso aceptado, no se
+     * emite la sesión.
      */
     public LoginResponse login(String credential, Integer rolEsperado) {
         LoginResponse respuesta;
@@ -148,14 +157,15 @@ public class GoogleAuthService {
         try {
             bitacoraService.registrarIngreso(ex.getCorreo(), rolEsperado, ResultadoIngreso.RECHAZADO, ex.getMotivo());
         } catch (RuntimeException fallo) {
-            // El ingreso ya está rechazado; se conserva el mensaje original para el usuario.
+            // El ingreso ya está rechazado; se conserva el mensaje original para el
+            // usuario.
             // No se registran datos personales en el log.
             log.error("No se pudo registrar en la bitácora un ingreso rechazado (motivo {})", ex.getMotivo(), fallo);
         }
     }
 
     private static IngresoRechazadoException rechazo(HttpStatus status, String mensaje,
-                                                     MotivoRechazoIngreso motivo, String correo) {
+            MotivoRechazoIngreso motivo, String correo) {
         return new IngresoRechazadoException(status, mensaje, motivo, correo);
     }
 
@@ -175,8 +185,8 @@ public class GoogleAuthService {
         try {
             GoogleIdTokenVerifier verifier = this.tokenVerifier != null ? this.tokenVerifier
                     : new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), GsonFactory.getDefaultInstance())
-                      .setAudience(List.of(googleClientId))
-                      .build();
+                            .setAudience(List.of(googleClientId))
+                            .build();
 
             GoogleIdToken idToken = verifier.verify(credential);
             if (idToken == null) {
@@ -228,7 +238,8 @@ public class GoogleAuthService {
         }
 
         // 4. Sin rol explícito, usuarios.rol es la fuente de verdad. Los perfiles
-        // independientes se conservan como fallback para cuentas legadas sin fila en usuarios.
+        // independientes se conservan como fallback para cuentas legadas sin fila en
+        // usuarios.
         Optional<Usuario> usuarioOpt = usuarioRepository != null
                 ? usuarioRepository.buscarPorCorreoInstitucional(cleanEmail)
                 : Optional.empty();
@@ -280,10 +291,6 @@ public class GoogleAuthService {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_COORDINADOR,
                     MotivoRechazoIngreso.SIN_PERFIL_ROL, email);
         }
-        if (usuarioOpt.isPresent() && Boolean.FALSE.equals(usuarioOpt.get().getActivo())) {
-            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA,
-                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, email);
-        }
 
         Optional<Coordinador> coordinadorOpt = coordinadorRepository.findByCorreoInstitucionalWithDetails(email);
         if (coordinadorOpt.isPresent()) {
@@ -291,7 +298,8 @@ public class GoogleAuthService {
         }
 
         if (usuarioOpt.isPresent()) {
-            return emitirSesionUsuarioRol(usuarioOpt.get(), AuthConstants.ROL_COORDINADOR, "ROLE_COORDINADOR", "COORDINADOR");
+            return emitirSesionUsuarioRol(usuarioOpt.get(), AuthConstants.ROL_COORDINADOR, "ROLE_COORDINADOR",
+                    "COORDINADOR");
         }
 
         boolean existeEnOtroRol = usuarioOpt.isPresent()
@@ -342,7 +350,7 @@ public class GoogleAuthService {
 
         boolean existeEnOtroRol = usuarioOpt.isPresent()
                 || (coordinadorRepository != null
-                && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email));
+                        && coordinadorRepository.existsByCorreoInstitucionalIgnoreCase(email));
 
         if (existeEnOtroRol) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERFIL_DOCENTE,
@@ -353,16 +361,14 @@ public class GoogleAuthService {
                 MotivoRechazoIngreso.CUENTA_NO_REGISTRADA, email);
     }
 
-    private LoginResponse emitirSesionUsuarioRol(Usuario usuario, int rol, String roleAuthority, String shortAuthority) {
-        if (Boolean.FALSE.equals(usuario.getActivo())) {
-            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_PERFIL_DESACTIVADO,
-                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
-        }
+    private LoginResponse emitirSesionUsuarioRol(Usuario usuario, int rol, String roleAuthority,
+            String shortAuthority) {
         Instant now = Instant.now();
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 
         // No se agregan autoridades de otros perfiles por la mera existencia de filas
-        // relacionadas. El rol 2 sigue siendo coordinador aunque también tenga docentes.id.
+        // relacionadas. El rol 2 sigue siendo coordinador aunque también tenga
+        // docentes.id.
         List<String> authorities = new ArrayList<>(List.of(roleAuthority, shortAuthority));
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
@@ -424,8 +430,10 @@ public class GoogleAuthService {
         Instant expiresAt = now.plus(expirationMinutes, ChronoUnit.MINUTES);
 
         // El rol funcional lo determina la sesión de usuarios (rol 2).
-        // Tener además una fila en docentes permite asignar ese perfil académico a cursos,
-        // pero no concede permisos ni pantallas de autoservicio exclusivos del rol docente.
+        // Tener además una fila en docentes permite asignar ese perfil académico a
+        // cursos,
+        // pero no concede permisos ni pantallas de autoservicio exclusivos del rol
+        // docente.
         List<String> authorities = new ArrayList<>(List.of("ROLE_COORDINADOR", "COORDINADOR"));
 
         JwtClaimsSet.Builder claimsBuilder = JwtClaimsSet.builder()
@@ -531,11 +539,6 @@ public class GoogleAuthService {
     }
 
     private LoginResponse emitirSesionAdmin(Usuario usuario) {
-        if (Boolean.FALSE.equals(usuario.getActivo())) {
-            throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_CUENTA_DESACTIVADA,
-                    MotivoRechazoIngreso.PERFIL_DESACTIVADO, usuario.getEmailInstitucional());
-        }
-
         if (usuario.getRol() == null || usuario.getRol() != AuthConstants.ROL_ADMIN) {
             throw rechazo(HttpStatus.FORBIDDEN, AuthConstants.ERROR_SIN_PERMISOS_ADMIN,
                     MotivoRechazoIngreso.SIN_PERFIL_ROL, usuario.getEmailInstitucional());

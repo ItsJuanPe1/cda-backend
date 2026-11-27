@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -21,6 +22,10 @@ public interface CohortePeriodoRepository extends JpaRepository<CohortePeriodo, 
     @Modifying
     @Query("DELETE FROM CohortePeriodo c WHERE c.periodo.id = :periodoId AND c.programa.codeProgram = :codeProgram")
     void deleteByPeriodoIdAndCodeProgram(@Param("periodoId") Long periodoId, @Param("codeProgram") String codeProgram);
+
+    @Modifying
+    @Query("DELETE FROM CohortePeriodo c WHERE c.periodo.id = :periodoId AND c.programa.codeProgram IN :codePrograms")
+    void deleteByPeriodoIdAndCodeProgramIn(@Param("periodoId") Long periodoId, @Param("codePrograms") Collection<String> codePrograms);
 
     @Query("SELECT c FROM CohortePeriodo c JOIN FETCH c.programa WHERE c.periodo.id = :periodoId AND c.confirmada = true ORDER BY c.programa.codeProgram ASC, c.semestre ASC")
     List<CohortePeriodo> findByPeriodoIdAndConfirmadaTrue(@Param("periodoId") Long periodoId);

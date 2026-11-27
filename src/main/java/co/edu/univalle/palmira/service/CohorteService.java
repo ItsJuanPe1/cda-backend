@@ -132,6 +132,89 @@ public class CohorteService {
         return guardadas.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
+    @Transactional
+    public List<CohorteDto.Response> guardarCohortesLote(Long periodoId, List<CohorteDto.ProgramBatchItem> items) {
+        PeriodoAcademico periodo = validarPeriodo(periodoId);
+        if (items == null || items.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<String> codePrograms = items.stream()
+                .map(CohorteDto.ProgramBatchItem::getCodeProgram)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        Map<String, Programa> programasByCode = programaRepository.findAllById(codePrograms).stream()
+                .collect(Collectors.toMap(Programa::getCodeProgram, p -> p));
+
+        // 1 sola consulta de pensum activo para todos los programas del lote
+        Map<String, Map<Integer, Set<String>>> pensumPorProgramaSemestre = new HashMap<>();
+        for (Object[] row : pensumRepository.findActiveSemestreResolucionByCodePrograms(codePrograms)) {
+            String cp = (String) row[0];
+            Integer sem = (Integer) row[1];
+            String res = (String) row[2];
+            pensumPorProgramaSemestre
+                    .computeIfAbsent(cp, k -> new HashMap<>())
+                    .computeIfAbsent(sem, k -> new LinkedHashSet<>())
+                    .add(res);
+        }
+
+        List<CohortePeriodo> todasLasNuevas = new ArrayList<>();
+        for (CohorteDto.ProgramBatchItem item : items) {
+            String codeProgram = item.getCodeProgram();
+            Programa programa = programasByCode.get(codeProgram);
+            if (programa == null) {
+                throw new ResourceNotFoundException("Programa académico no encontrado con código: " + codeProgram);
+            }
+
+            int duracionDiurna = programa.getNumeroSemestre() != null ? programa.getNumeroSemestre() : 10;
+            int duracionNocturna = programa.getSemestresNocturna() != null ? programa.getSemestresNocturna() : duracionDiurna;
+            Map<Integer, Set<String>> semestresActivos = pensumPorProgramaSemestre.getOrDefault(codeProgram, Collections.emptyMap());
+            Set<String> unicos = new HashSet<>();
+
+            for (CohorteDto.Request req : item.getCohortes()) {
+                String clave = req.getSemestre() + "-" + req.getJornada();
+                if (!unicos.add(clave)) {
+                    throw new BadRequestException("No puede haber cohortes duplicadas para el semestre " + req.getSemestre() + " y jornada " + req.getJornada());
+                }
+                int duracionPermitida = req.getJornada() == Jornada.NOCTURNA ? duracionNocturna : duracionDiurna;
+                if (req.getSemestre() > duracionPermitida) {
+                    throw new BadRequestException("El semestre " + req.getSemestre() + " supera la duración máxima permitida (" + duracionPermitida + ") para la jornada " + req.getJornada());
+                }
+
+                Set<String> resolucionesSemestre = semestresActivos.get(req.getSemestre());
+                if (resolucionesSemestre == null || resolucionesSemestre.isEmpty()) {
+                    throw new BadRequestException(
+                            "No hay asignaturas activas para el semestre " + req.getSemestre()
+                            + " del programa '" + programa.getNameProgram() + "'. "
+                            + "Verifique que la malla curricular esté configurada correctamente.");
+                }
+
+                String resolucionFinal = req.getNumeroResolucion();
+                if (resolucionFinal == null || resolucionFinal.isBlank() || !resolucionesSemestre.contains(resolucionFinal)) {
+                    resolucionFinal = resolucionesSemestre.stream()
+                            .filter(Objects::nonNull)
+                            .findFirst()
+                            .orElse(programa.getNumeroResolucion());
+                }
+
+                todasLasNuevas.add(CohortePeriodo.builder()
+                        .periodo(periodo)
+                        .programa(programa)
+                        .semestre(req.getSemestre())
+                        .jornada(req.getJornada())
+                        .numeroResolucion(resolucionFinal)
+                        .confirmada(req.getConfirmada() != null ? req.getConfirmada() : true)
+                        .build());
+            }
+        }
+
+        cohorteRepository.deleteByPeriodoIdAndCodeProgramIn(periodoId, codePrograms);
+        List<CohortePeriodo> guardadas = cohorteRepository.saveAll(todasLasNuevas);
+        return guardadas.stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
     @Transactional(readOnly = true)
     public List<CohorteDto.PropuestaResponse> proponerSiguientePeriodo(Long periodoActualId, Long periodoAnteriorId, boolean confirmarAvanceForzado) {
         validarPeriodo(periodoActualId);
@@ -146,25 +229,29 @@ public class CohorteService {
         }
 
         List<Programa> programasActivos = programaRepository.findByEstadoOrderByNameProgramAsc(EstadoPrograma.ACTIVO);
+
+        // Precargar en lote resoluciones vigentes y cohortes del período anterior (2 consultas en lugar de 2*N)
+        Map<String, String> resolucionVigentePorPrograma = new HashMap<>();
+        if (advertenciaPeriodoAnterior == null) {
+            for (Object[] row : pensumRepository.findResolucionesVigentesPorPrograma()) {
+                resolucionVigentePorPrograma.putIfAbsent((String) row[0], (String) row[1]);
+            }
+        }
+
+        Map<String, List<CohortePeriodo>> cohortesAnterioresPorPrograma = Collections.emptyMap();
+        if (advertenciaPeriodoAnterior == null && periodoAnteriorId != null) {
+            cohortesAnterioresPorPrograma = cohorteRepository.findByPeriodoIdWithPrograma(periodoAnteriorId).stream()
+                    .collect(Collectors.groupingBy(c -> c.getPrograma().getCodeProgram()));
+        }
+
         List<CohorteDto.PropuestaResponse> propuestas = new ArrayList<>();
 
         for (Programa prog : programasActivos) {
             int duracionDiurna = prog.getNumeroSemestre() != null ? prog.getNumeroSemestre() : 10;
             int duracionNocturna = prog.getSemestresNocturna() != null ? prog.getSemestresNocturna() : duracionDiurna;
 
-            // Obtener resolución vigente de la malla más reciente
-            List<PensumAcademico> vigentePensum = pensumRepository.findByIdCodeProgramAndVigenteTrue(prog.getCodeProgram());
-            String resolucionVigente = vigentePensum.stream()
-                    .map(PensumAcademico::getNumeroResolucion)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElseGet(() -> {
-                        // Fallback 1: resolución registrada en el programa
-                        if (prog.getNumeroResolucion() != null) return prog.getNumeroResolucion();
-                        // Fallback 2: buscar en encabezados de pensum vigente
-                        List<String> vigentes = pensumRepository.findResolucionVigenteByCodeProgram(prog.getCodeProgram());
-                        return vigentes.isEmpty() ? null : vigentes.get(0);
-                    });
+            String resolucionVigente = resolucionVigentePorPrograma.getOrDefault(
+                    prog.getCodeProgram(), prog.getNumeroResolucion());
 
             List<CohorteDto.PropuestaCohorteItem> itemsPropuestos = new ArrayList<>();
 
@@ -183,10 +270,8 @@ public class CohorteService {
                 continue;
             }
 
-            // Buscar cohortes del periodo anterior para este programa
-            List<CohortePeriodo> cohortesAnteriores = periodoAnteriorId != null
-                    ? cohorteRepository.findByPeriodoIdAndCodeProgram(periodoAnteriorId, prog.getCodeProgram())
-                    : Collections.emptyList();
+            List<CohortePeriodo> cohortesAnteriores = cohortesAnterioresPorPrograma.getOrDefault(
+                    prog.getCodeProgram(), Collections.emptyList());
 
             if (!cohortesAnteriores.isEmpty()) {
                 // Rotación de cohortes: c -> c + 1

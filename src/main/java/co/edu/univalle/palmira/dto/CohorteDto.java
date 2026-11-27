@@ -47,6 +47,29 @@ public class CohorteDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    public static class ProgramBatchItem {
+        @NotBlank(message = "El código de programa es obligatorio")
+        private String codeProgram;
+
+        @NotNull(message = "La lista de cohortes es obligatoria")
+        private List<Request> cohortes;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class SaveBulkRequest {
+        @NotNull(message = "La lista de programas es obligatoria")
+        private List<ProgramBatchItem> programas;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class Response {
         private Long id;
         private Long periodoId;

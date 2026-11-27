@@ -69,7 +69,7 @@ class GoogleAuthBitacoraTest {
     void criterio2_ingresoExitosoQuedaRegistrado() throws Exception {
         tokenGoogle(ADMIN);
         Usuario admin = Usuario.builder().id(1).nombre("Admin").apellido("Prueba")
-                .emailInstitucional(ADMIN).rol(AuthConstants.ROL_ADMIN).activo(true).build();
+                .emailInstitucional(ADMIN).rol(AuthConstants.ROL_ADMIN).build();
         when(usuarioRepository.buscarPorCorreoInstitucional(ADMIN)).thenReturn(Optional.of(admin));
         Jwt jwt = mock(Jwt.class);
         when(jwt.getTokenValue()).thenReturn("jwt-de-prueba");
@@ -89,7 +89,7 @@ class GoogleAuthBitacoraTest {
     void criterio2_sinRegistroNoHaySesion() throws Exception {
         tokenGoogle(ADMIN);
         Usuario admin = Usuario.builder().id(1).nombre("Admin").apellido("Prueba")
-                .emailInstitucional(ADMIN).rol(AuthConstants.ROL_ADMIN).activo(true).build();
+                .emailInstitucional(ADMIN).rol(AuthConstants.ROL_ADMIN).build();
         when(usuarioRepository.buscarPorCorreoInstitucional(ADMIN)).thenReturn(Optional.of(admin));
         Jwt jwt = mock(Jwt.class);
         when(jwt.getTokenValue()).thenReturn("jwt-de-prueba");

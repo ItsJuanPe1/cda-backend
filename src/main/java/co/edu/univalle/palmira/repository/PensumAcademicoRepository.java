@@ -80,4 +80,10 @@ public interface PensumAcademicoRepository extends JpaRepository<PensumAcademico
      */
     @Query("SELECT p.numeroResolucion FROM PensumAcademico p WHERE p.id.codeProgram = :codeProgram AND p.vigente = true AND p.numeroResolucion IS NOT NULL ORDER BY p.id.version DESC")
     List<String> findResolucionVigenteByCodeProgram(@Param("codeProgram") String codeProgram);
+
+    @Query("SELECT DISTINCT p.id.codeProgram, p.numeroResolucion FROM PensumAcademico p WHERE p.vigente = true AND p.numeroResolucion IS NOT NULL")
+    List<Object[]> findResolucionesVigentesPorPrograma();
+
+    @Query("SELECT DISTINCT p.id.codeProgram, p.semestre, p.numeroResolucion FROM PensumAcademico p WHERE p.id.codeProgram IN :codePrograms AND p.activo = true")
+    List<Object[]> findActiveSemestreResolucionByCodePrograms(@Param("codePrograms") Collection<String> codePrograms);
 }

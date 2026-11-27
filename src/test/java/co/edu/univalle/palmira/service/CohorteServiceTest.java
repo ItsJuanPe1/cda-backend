@@ -176,7 +176,7 @@ class CohorteServiceTest {
                 .numeroResolucion("Res. 084")
                 .build();
 
-        when(cohorteRepository.findByPeriodoIdAndCodeProgram(1L, "2711"))
+        when(cohorteRepository.findByPeriodoIdWithPrograma(1L))
                 .thenReturn(List.of(cohorte1, cohorte3, cohorte5));
 
         List<CohorteDto.PropuestaResponse> propuestas = cohorteService.proponerSiguientePeriodo(2L, 1L, false);
